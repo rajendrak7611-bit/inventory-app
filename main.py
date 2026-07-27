@@ -60,6 +60,15 @@ class PartOperationResponse(PartOperationBase):
     class Config:
         from_attributes = True
 
+class BulkImportPart(BaseModel):
+    family: str
+    forge_pn: str
+    partno: str
+    operations: List[PartOperationBase]
+
+class BulkImportPayload(BaseModel):
+    parts: List[BulkImportPart]
+
 class MachineBase(BaseModel):
     name: str
 
@@ -180,6 +189,31 @@ def update_part_operations(part_id: int, operations: List[PartOperationCreate], 
     
     db.commit()
     return {"message": "Operations updated successfully"}
+
+@app.post("/api/partmaster/bulk_import")
+def bulk_import_partmaster(payload: BulkImportPayload, db: Session = Depends(get_db)):
+    for part_data in payload.parts:
+        # Overwrite existing part if partno matches
+        existing_part = db.query(PartMaster).filter(PartMaster.partno == part_data.partno).first()
+        if existing_part:
+            existing_part.family = part_data.family
+            existing_part.forge_pn = part_data.forge_pn
+            db.query(PartOperation).filter(PartOperation.part_id == existing_part.id).delete()
+            db.commit()
+            part_id = existing_part.id
+        else:
+            new_part = PartMaster(family=part_data.family, forge_pn=part_data.forge_pn, partno=part_data.partno)
+            db.add(new_part)
+            db.commit()
+            db.refresh(new_part)
+            part_id = new_part.id
+            
+        for op_data in part_data.operations:
+            new_op = PartOperation(**op_data.model_dump(), part_id=part_id)
+            db.add(new_op)
+            
+    db.commit()
+    return {"message": "Import successful"}
 
 # --- Machine API Routes ---
 
