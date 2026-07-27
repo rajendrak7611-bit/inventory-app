@@ -6,8 +6,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Tabs
     const tabProducts = document.getElementById('tabProducts');
     const tabPartMaster = document.getElementById('tabPartMaster');
+    const tabMachines = document.getElementById('tabMachines');
+    const tabOperators = document.getElementById('tabOperators');
+    
     const productsSection = document.getElementById('productsSection');
     const partMasterSection = document.getElementById('partMasterSection');
+    const machinesSection = document.getElementById('machinesSection');
+    const operatorsSection = document.getElementById('operatorsSection');
 
     // Products Elements
     const productsBody = document.getElementById('productsBody');
@@ -25,33 +30,75 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelPartBtn = document.getElementById('cancelPartBtn');
     const partModalTitle = document.getElementById('partModalTitle');
 
+    // Machine Elements
+    const machinesBody = document.getElementById('machinesBody');
+    const machineModal = document.getElementById('machineModal');
+    const machineForm = document.getElementById('machineForm');
+    const closeMachineBtn = document.getElementById('closeMachineModalBtn');
+    const cancelMachineBtn = document.getElementById('cancelMachineBtn');
+    const machineModalTitle = document.getElementById('machineModalTitle');
+
+    // Operator Elements
+    const operatorsBody = document.getElementById('operatorsBody');
+    const operatorModal = document.getElementById('operatorModal');
+    const operatorForm = document.getElementById('operatorForm');
+    const closeOperatorBtn = document.getElementById('closeOperatorModalBtn');
+    const cancelOperatorBtn = document.getElementById('cancelOperatorBtn');
+    const operatorModalTitle = document.getElementById('operatorModalTitle');
+
+    function hideAllSections() {
+        productsSection.style.display = 'none';
+        partMasterSection.style.display = 'none';
+        machinesSection.style.display = 'none';
+        operatorsSection.style.display = 'none';
+        tabProducts.classList.remove('active');
+        tabPartMaster.classList.remove('active');
+        tabMachines.classList.remove('active');
+        tabOperators.classList.remove('active');
+    }
+
     // Tab Logic
     tabProducts.addEventListener('click', () => {
         currentTab = 'products';
+        hideAllSections();
         tabProducts.classList.add('active');
-        tabPartMaster.classList.remove('active');
         productsSection.style.display = 'block';
-        partMasterSection.style.display = 'none';
         addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Tool`;
         fetchProducts();
     });
 
     tabPartMaster.addEventListener('click', () => {
         currentTab = 'partmaster';
+        hideAllSections();
         tabPartMaster.classList.add('active');
-        tabProducts.classList.remove('active');
         partMasterSection.style.display = 'block';
-        productsSection.style.display = 'none';
         addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Part`;
         fetchPartMasters();
     });
 
+    tabMachines.addEventListener('click', () => {
+        currentTab = 'machines';
+        hideAllSections();
+        tabMachines.classList.add('active');
+        machinesSection.style.display = 'block';
+        addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Machine`;
+        fetchMachines();
+    });
+
+    tabOperators.addEventListener('click', () => {
+        currentTab = 'operators';
+        hideAllSections();
+        tabOperators.classList.add('active');
+        operatorsSection.style.display = 'block';
+        addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Operator`;
+        fetchOperators();
+    });
+
     addBtn.addEventListener('click', () => {
-        if (currentTab === 'products') {
-            openProductModal(false);
-        } else {
-            openPartModal(false);
-        }
+        if (currentTab === 'products') openProductModal(false);
+        else if (currentTab === 'partmaster') openPartModal(false);
+        else if (currentTab === 'machines') openMachineModal(false);
+        else if (currentTab === 'operators') openOperatorModal(false);
     });
 
     // --- PRODUCTS LOGIC ---
@@ -59,101 +106,60 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch('/api/products');
             const products = await response.json();
-            renderProductsTable(products);
-        } catch (error) {
-            console.error('Error fetching products:', error);
-        }
+            productsBody.innerHTML = '';
+            if (products.length === 0) {
+                productsBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">No tools found. Add one!</td></tr>';
+                return;
+            }
+            products.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${p.id}</td><td>${p.family}</td><td>${p.spec}</td><td>${p.make}</td>
+                    <td>${p.stock}</td><td>Rs ${p.price.toFixed(2)}</td>
+                    <td class="actions">
+                        <button class="btn btn-edit" onclick="editProduct(${p.id})">Edit</button>
+                        <button class="btn btn-danger" onclick="deleteProduct(${p.id})">Delete</button>
+                    </td>`;
+                productsBody.appendChild(tr);
+            });
+        } catch (e) { console.error(e); }
     }
 
-    function renderProductsTable(products) {
-        productsBody.innerHTML = '';
-        if (products.length === 0) {
-            productsBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">No tools found. Add one!</td></tr>';
-            return;
-        }
-
-        products.forEach(product => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${product.id}</td>
-                <td>${product.family}</td>
-                <td>${product.spec}</td>
-                <td>${product.make}</td>
-                <td>${product.stock}</td>
-                <td>Rs ${product.price.toFixed(2)}</td>
-                <td class="actions">
-                    <button class="btn btn-edit" onclick="editProduct(${product.id})">Edit</button>
-                    <button class="btn btn-danger" onclick="deleteProduct(${product.id})">Delete</button>
-                </td>
-            `;
-            productsBody.appendChild(tr);
-        });
-    }
-
-    function openProductModal(isEdit = false) {
+    function openProductModal(isEdit) {
         productModal.classList.add('show');
         productModalTitle.textContent = isEdit ? 'Edit Tool' : 'Add Tool';
     }
-
-    function closeProductModal() {
-        productModal.classList.remove('show');
-        productForm.reset();
-        document.getElementById('productId').value = '';
-    }
-
-    closeProductBtn.addEventListener('click', closeProductModal);
-    cancelProductBtn.addEventListener('click', closeProductModal);
+    function closeProductModal() { productModal.classList.remove('show'); productForm.reset(); document.getElementById('productId').value = ''; }
+    closeProductBtn.addEventListener('click', closeProductModal); cancelProductBtn.addEventListener('click', closeProductModal);
 
     productForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('productId').value;
         const data = {
-            family: document.getElementById('family').value,
-            spec: document.getElementById('spec').value,
-            make: document.getElementById('make').value,
-            stock: parseInt(document.getElementById('stock').value),
+            family: document.getElementById('family').value, spec: document.getElementById('spec').value,
+            make: document.getElementById('make').value, stock: parseInt(document.getElementById('stock').value),
             price: parseFloat(document.getElementById('price').value)
         };
-        const isEdit = id !== '';
-        const url = isEdit ? `/api/products/${id}` : '/api/products';
-        
-        try {
-            const response = await fetch(url, {
-                method: isEdit ? 'PUT' : 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            if (response.ok) {
-                closeProductModal();
-                fetchProducts();
-            }
-        } catch (error) { console.error(error); }
+        const url = id ? `/api/products/${id}` : '/api/products';
+        await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        closeProductModal(); fetchProducts();
     });
 
     window.deleteProduct = async (id) => {
-        if (confirm('Are you sure you want to delete this tool?')) {
-            try {
-                const response = await fetch(`/api/products/${id}`, { method: 'DELETE' });
-                if (response.ok) fetchProducts();
-            } catch (error) { console.error(error); }
+        if (confirm('Delete this tool?')) {
+            await fetch(`/api/products/${id}`, { method: 'DELETE' });
+            fetchProducts();
         }
     };
-
     window.editProduct = async (id) => {
-        try {
-            const response = await fetch('/api/products');
-            const products = await response.json();
-            const product = products.find(p => p.id === id);
-            if (product) {
-                document.getElementById('productId').value = product.id;
-                document.getElementById('family').value = product.family;
-                document.getElementById('spec').value = product.spec;
-                document.getElementById('make').value = product.make;
-                document.getElementById('stock').value = product.stock;
-                document.getElementById('price').value = product.price;
-                openProductModal(true);
-            }
-        } catch (error) { console.error(error); }
+        const res = await fetch('/api/products'); const data = await res.json();
+        const p = data.find(x => x.id === id);
+        if (p) {
+            document.getElementById('productId').value = p.id; document.getElementById('family').value = p.family;
+            document.getElementById('spec').value = p.spec; document.getElementById('make').value = p.make;
+            document.getElementById('stock').value = p.stock; document.getElementById('price').value = p.price;
+            openProductModal(true);
+        }
     };
 
     // --- PART MASTER LOGIC ---
@@ -161,95 +167,167 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch('/api/partmaster');
             const parts = await response.json();
-            renderPartMasterTable(parts);
-        } catch (error) {
-            console.error('Error fetching part masters:', error);
-        }
+            partMasterBody.innerHTML = '';
+            if (parts.length === 0) {
+                partMasterBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">No part masters found.</td></tr>';
+                return;
+            }
+            parts.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${p.id}</td><td>${p.family}</td><td>${p.forge_pn}</td><td>${p.partno}</td>
+                    <td class="actions">
+                        <button class="btn btn-edit" onclick="editPartMaster(${p.id})">Edit</button>
+                        <button class="btn btn-danger" onclick="deletePartMaster(${p.id})">Delete</button>
+                    </td>`;
+                partMasterBody.appendChild(tr);
+            });
+        } catch (e) { console.error(e); }
     }
 
-    function renderPartMasterTable(parts) {
-        partMasterBody.innerHTML = '';
-        if (parts.length === 0) {
-            partMasterBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">No part masters found. Add one!</td></tr>';
-            return;
-        }
-
-        parts.forEach(part => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${part.id}</td>
-                <td>${part.family}</td>
-                <td>${part.forge_pn}</td>
-                <td>${part.partno}</td>
-                <td class="actions">
-                    <button class="btn btn-edit" onclick="editPartMaster(${part.id})">Edit</button>
-                    <button class="btn btn-danger" onclick="deletePartMaster(${part.id})">Delete</button>
-                </td>
-            `;
-            partMasterBody.appendChild(tr);
-        });
-    }
-
-    function openPartModal(isEdit = false) {
+    function openPartModal(isEdit) {
         partModal.classList.add('show');
-        partModalTitle.textContent = isEdit ? 'Edit Part Master' : 'Add Part Master';
+        partModalTitle.textContent = isEdit ? 'Edit Part' : 'Add Part';
     }
-
-    function closePartModal() {
-        partModal.classList.remove('show');
-        partForm.reset();
-        document.getElementById('partId').value = '';
-    }
-
-    closePartBtn.addEventListener('click', closePartModal);
-    cancelPartBtn.addEventListener('click', closePartModal);
+    function closePartModal() { partModal.classList.remove('show'); partForm.reset(); document.getElementById('partId').value = ''; }
+    closePartBtn.addEventListener('click', closePartModal); cancelPartBtn.addEventListener('click', closePartModal);
 
     partForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('partId').value;
         const data = {
-            family: document.getElementById('partFamily').value,
-            forge_pn: document.getElementById('forgePn').value,
+            family: document.getElementById('partFamily').value, forge_pn: document.getElementById('forgePn').value,
             partno: document.getElementById('partno').value
         };
-        const isEdit = id !== '';
-        const url = isEdit ? `/api/partmaster/${id}` : '/api/partmaster';
-        
-        try {
-            const response = await fetch(url, {
-                method: isEdit ? 'PUT' : 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            if (response.ok) {
-                closePartModal();
-                fetchPartMasters();
-            }
-        } catch (error) { console.error(error); }
+        const url = id ? `/api/partmaster/${id}` : '/api/partmaster';
+        await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        closePartModal(); fetchPartMasters();
     });
 
     window.deletePartMaster = async (id) => {
-        if (confirm('Are you sure you want to delete this part master?')) {
-            try {
-                const response = await fetch(`/api/partmaster/${id}`, { method: 'DELETE' });
-                if (response.ok) fetchPartMasters();
-            } catch (error) { console.error(error); }
+        if (confirm('Delete this part master?')) {
+            await fetch(`/api/partmaster/${id}`, { method: 'DELETE' });
+            fetchPartMasters();
+        }
+    };
+    window.editPartMaster = async (id) => {
+        const res = await fetch('/api/partmaster'); const data = await res.json();
+        const p = data.find(x => x.id === id);
+        if (p) {
+            document.getElementById('partId').value = p.id; document.getElementById('partFamily').value = p.family;
+            document.getElementById('forgePn').value = p.forge_pn; document.getElementById('partno').value = p.partno;
+            openPartModal(true);
         }
     };
 
-    window.editPartMaster = async (id) => {
+    // --- MACHINES LOGIC ---
+    async function fetchMachines() {
         try {
-            const response = await fetch('/api/partmaster');
-            const parts = await response.json();
-            const part = parts.find(p => p.id === id);
-            if (part) {
-                document.getElementById('partId').value = part.id;
-                document.getElementById('partFamily').value = part.family;
-                document.getElementById('forgePn').value = part.forge_pn;
-                document.getElementById('partno').value = part.partno;
-                openPartModal(true);
+            const response = await fetch('/api/machines');
+            const machines = await response.json();
+            machinesBody.innerHTML = '';
+            if (machines.length === 0) {
+                machinesBody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted)">No machines found.</td></tr>';
+                return;
             }
-        } catch (error) { console.error(error); }
+            machines.forEach(m => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${m.id}</td><td>${m.name}</td>
+                    <td class="actions">
+                        <button class="btn btn-edit" onclick="editMachine(${m.id})">Edit</button>
+                        <button class="btn btn-danger" onclick="deleteMachine(${m.id})">Delete</button>
+                    </td>`;
+                machinesBody.appendChild(tr);
+            });
+        } catch (e) { console.error(e); }
+    }
+
+    function openMachineModal(isEdit) {
+        machineModal.classList.add('show');
+        machineModalTitle.textContent = isEdit ? 'Edit Machine' : 'Add Machine';
+    }
+    function closeMachineModal() { machineModal.classList.remove('show'); machineForm.reset(); document.getElementById('machineId').value = ''; }
+    closeMachineBtn.addEventListener('click', closeMachineModal); cancelMachineBtn.addEventListener('click', closeMachineModal);
+
+    machineForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('machineId').value;
+        const data = { name: document.getElementById('machineName').value };
+        const url = id ? `/api/machines/${id}` : '/api/machines';
+        await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        closeMachineModal(); fetchMachines();
+    });
+
+    window.deleteMachine = async (id) => {
+        if (confirm('Delete this machine?')) {
+            await fetch(`/api/machines/${id}`, { method: 'DELETE' });
+            fetchMachines();
+        }
+    };
+    window.editMachine = async (id) => {
+        const res = await fetch('/api/machines'); const data = await res.json();
+        const m = data.find(x => x.id === id);
+        if (m) {
+            document.getElementById('machineId').value = m.id; document.getElementById('machineName').value = m.name;
+            openMachineModal(true);
+        }
+    };
+
+    // --- OPERATORS LOGIC ---
+    async function fetchOperators() {
+        try {
+            const response = await fetch('/api/operators');
+            const operators = await response.json();
+            operatorsBody.innerHTML = '';
+            if (operators.length === 0) {
+                operatorsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No operators found.</td></tr>';
+                return;
+            }
+            operators.forEach(o => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${o.id}</td><td>${o.name}</td><td>${o.department}</td>
+                    <td class="actions">
+                        <button class="btn btn-edit" onclick="editOperator(${o.id})">Edit</button>
+                        <button class="btn btn-danger" onclick="deleteOperator(${o.id})">Delete</button>
+                    </td>`;
+                operatorsBody.appendChild(tr);
+            });
+        } catch (e) { console.error(e); }
+    }
+
+    function openOperatorModal(isEdit) {
+        operatorModal.classList.add('show');
+        operatorModalTitle.textContent = isEdit ? 'Edit Operator' : 'Add Operator';
+    }
+    function closeOperatorModal() { operatorModal.classList.remove('show'); operatorForm.reset(); document.getElementById('operatorId').value = ''; }
+    closeOperatorBtn.addEventListener('click', closeOperatorModal); cancelOperatorBtn.addEventListener('click', closeOperatorModal);
+
+    operatorForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('operatorId').value;
+        const data = { name: document.getElementById('operatorName').value, department: document.getElementById('operatorDepartment').value };
+        const url = id ? `/api/operators/${id}` : '/api/operators';
+        await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        closeOperatorModal(); fetchOperators();
+    });
+
+    window.deleteOperator = async (id) => {
+        if (confirm('Delete this operator?')) {
+            await fetch(`/api/operators/${id}`, { method: 'DELETE' });
+            fetchOperators();
+        }
+    };
+    window.editOperator = async (id) => {
+        const res = await fetch('/api/operators'); const data = await res.json();
+        const o = data.find(x => x.id === id);
+        if (o) {
+            document.getElementById('operatorId').value = o.id; 
+            document.getElementById('operatorName').value = o.name;
+            document.getElementById('operatorDepartment').value = o.department;
+            openOperatorModal(true);
+        }
     };
 
     // Initial fetch

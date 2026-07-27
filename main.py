@@ -6,7 +6,7 @@ from typing import List
 from pydantic import BaseModel
 
 from database import engine, get_db, Base
-from models import Product, PartMaster
+from models import Product, PartMaster, Machine, Operator
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -39,6 +39,31 @@ class PartMasterCreate(PartMasterBase):
     pass
 
 class PartMasterResponse(PartMasterBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+class MachineBase(BaseModel):
+    name: str
+
+class MachineCreate(MachineBase):
+    pass
+
+class MachineResponse(MachineBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+class OperatorBase(BaseModel):
+    name: str
+    department: str
+
+class OperatorCreate(OperatorBase):
+    pass
+
+class OperatorResponse(OperatorBase):
     id: int
 
     class Config:
@@ -116,6 +141,74 @@ def delete_partmaster(part_id: int, db: Session = Depends(get_db)):
     db.delete(db_part)
     db.commit()
     return {"message": "Part deleted successfully"}
+
+# --- Machine API Routes ---
+
+@app.get("/api/machines", response_model=List[MachineResponse])
+def read_machines(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return db.query(Machine).offset(skip).limit(limit).all()
+
+@app.post("/api/machines", response_model=MachineResponse)
+def create_machine(machine: MachineCreate, db: Session = Depends(get_db)):
+    db_machine = Machine(**machine.model_dump())
+    db.add(db_machine)
+    db.commit()
+    db.refresh(db_machine)
+    return db_machine
+
+@app.put("/api/machines/{machine_id}", response_model=MachineResponse)
+def update_machine(machine_id: int, machine: MachineCreate, db: Session = Depends(get_db)):
+    db_machine = db.query(Machine).filter(Machine.id == machine_id).first()
+    if not db_machine:
+        raise HTTPException(status_code=404, detail="Machine not found")
+    for key, value in machine.model_dump().items():
+        setattr(db_machine, key, value)
+    db.commit()
+    db.refresh(db_machine)
+    return db_machine
+
+@app.delete("/api/machines/{machine_id}")
+def delete_machine(machine_id: int, db: Session = Depends(get_db)):
+    db_machine = db.query(Machine).filter(Machine.id == machine_id).first()
+    if not db_machine:
+        raise HTTPException(status_code=404, detail="Machine not found")
+    db.delete(db_machine)
+    db.commit()
+    return {"message": "Machine deleted successfully"}
+
+# --- Operator API Routes ---
+
+@app.get("/api/operators", response_model=List[OperatorResponse])
+def read_operators(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return db.query(Operator).offset(skip).limit(limit).all()
+
+@app.post("/api/operators", response_model=OperatorResponse)
+def create_operator(operator: OperatorCreate, db: Session = Depends(get_db)):
+    db_operator = Operator(**operator.model_dump())
+    db.add(db_operator)
+    db.commit()
+    db.refresh(db_operator)
+    return db_operator
+
+@app.put("/api/operators/{operator_id}", response_model=OperatorResponse)
+def update_operator(operator_id: int, operator: OperatorCreate, db: Session = Depends(get_db)):
+    db_operator = db.query(Operator).filter(Operator.id == operator_id).first()
+    if not db_operator:
+        raise HTTPException(status_code=404, detail="Operator not found")
+    for key, value in operator.model_dump().items():
+        setattr(db_operator, key, value)
+    db.commit()
+    db.refresh(db_operator)
+    return db_operator
+
+@app.delete("/api/operators/{operator_id}")
+def delete_operator(operator_id: int, db: Session = Depends(get_db)):
+    db_operator = db.query(Operator).filter(Operator.id == operator_id).first()
+    if not db_operator:
+        raise HTTPException(status_code=404, detail="Operator not found")
+    db.delete(db_operator)
+    db.commit()
+    return {"message": "Operator deleted successfully"}
 
 # Serve static files (frontend)
 app.mount("/static", StaticFiles(directory="static"), name="static")

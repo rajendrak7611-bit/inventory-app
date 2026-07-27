@@ -24,6 +24,8 @@
             <div class="tabs">
                 <button class="tab-btn active" id="tabProducts">Tools</button>
                 <button class="tab-btn" id="tabPartMaster">Part Master</button>
+                <button class="tab-btn" id="tabMachines">Machines</button>
+                <button class="tab-btn" id="tabOperators">Operators</button>
             </div>
 
             <div class="table-container" id="productsSection">
@@ -57,6 +59,37 @@
                         </tr>
                     </thead>
                     <tbody id="partMasterBody">
+                        <!-- Data will be populated here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="table-container" id="machinesSection" style="display: none;">
+                <table id="machinesTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Machine Name</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="machinesBody">
+                        <!-- Data will be populated here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="table-container" id="operatorsSection" style="display: none;">
+                <table id="operatorsTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Operator Name</th>
+                            <th>Department</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="operatorsBody">
                         <!-- Data will be populated here by JavaScript -->
                     </tbody>
                 </table>
@@ -136,6 +169,52 @@
                 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" id="cancelPartBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Details</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Machine Add/Edit -->
+    <div id="machineModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="machineModalTitle">Add Machine</h2>
+                <button class="close-btn" id="closeMachineModalBtn">&times;</button>
+            </div>
+            <form id="machineForm">
+                <input type="hidden" id="machineId">
+                <div class="form-group">
+                    <label for="machineName">Machine Name</label>
+                    <input type="text" id="machineName" required placeholder="e.g. CNC-1">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="cancelMachineBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Details</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Operator Add/Edit -->
+    <div id="operatorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="operatorModalTitle">Add Operator</h2>
+                <button class="close-btn" id="closeOperatorModalBtn">&times;</button>
+            </div>
+            <form id="operatorForm">
+                <input type="hidden" id="operatorId">
+                <div class="form-group">
+                    <label for="operatorName">Operator Name</label>
+                    <input type="text" id="operatorName" required placeholder="e.g. John Doe">
+                </div>
+                <div class="form-group">
+                    <label for="operatorDepartment">Department</label>
+                    <input type="text" id="operatorDepartment" required placeholder="e.g. Welding">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="cancelOperatorBtn">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Details</button>
                 </div>
             </form>
