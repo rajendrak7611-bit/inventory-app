@@ -1,15 +1,15 @@
 :root {
-    --bg-color: #0f172a;
-    --card-bg: #1e293b;
-    --text-main: #f8fafc;
-    --text-muted: #94a3b8;
+    --bg-color: #e0f2fe; /* Light blue background */
+    --card-bg: #ffffff; /* White cards for contrast */
+    --text-main: #0f172a; /* Dark text */
+    --text-muted: #475569;
     --primary: #3b82f6;
     --primary-hover: #2563eb;
     --danger: #ef4444;
     --danger-hover: #dc2626;
-    --border-color: #334155;
-    --glass-bg: rgba(30, 41, 59, 0.7);
-    --glass-border: rgba(255, 255, 255, 0.1);
+    --border-color: #cbd5e1;
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.5);
 }
 
 * {
@@ -24,8 +24,8 @@ body {
     color: var(--text-main);
     min-height: 100vh;
     background-image: 
-        radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15), transparent 25%),
-        radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.15), transparent 25%);
+        radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.1), transparent 25%),
+        radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.1), transparent 25%);
 }
 
 .app-container {
