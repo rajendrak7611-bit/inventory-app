@@ -21,7 +21,12 @@
         </header>
 
         <main>
-            <div class="table-container">
+            <div class="tabs">
+                <button class="tab-btn active" id="tabProducts">Products</button>
+                <button class="tab-btn" id="tabPartMaster">Part Master</button>
+            </div>
+
+            <div class="table-container" id="productsSection">
                 <table id="productsTable">
                     <thead>
                         <tr>
@@ -35,6 +40,23 @@
                         </tr>
                     </thead>
                     <tbody id="productsBody">
+                        <!-- Data will be populated here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="table-container" id="partMasterSection" style="display: none;">
+                <table id="partMasterTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Family</th>
+                            <th>Forge PN</th>
+                            <th>Part No</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="partMasterBody">
                         <!-- Data will be populated here by JavaScript -->
                     </tbody>
                 </table>
@@ -81,6 +103,39 @@
                 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" id="cancelBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Details</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Part Master Add/Edit -->
+    <div id="partModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="partModalTitle">Add Part Master</h2>
+                <button class="close-btn" id="closePartModalBtn">&times;</button>
+            </div>
+            <form id="partForm">
+                <input type="hidden" id="partId">
+                
+                <div class="form-group">
+                    <label for="partFamily">Family</label>
+                    <input type="text" id="partFamily" required placeholder="e.g. Engine">
+                </div>
+                
+                <div class="form-group">
+                    <label for="forgePn">Forge PN</label>
+                    <input type="text" id="forgePn" required placeholder="e.g. FG-100">
+                </div>
+                
+                <div class="form-group">
+                    <label for="partno">Part No</label>
+                    <input type="text" id="partno" required placeholder="e.g. PN-200">
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="cancelPartBtn">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Details</button>
                 </div>
             </form>

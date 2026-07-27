@@ -1,27 +1,74 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const tableBody = document.getElementById('productsBody');
-    const modal = document.getElementById('productModal');
+    // Shared
     const addBtn = document.getElementById('addBtn');
-    const closeBtn = document.getElementById('closeModalBtn');
-    const cancelBtn = document.getElementById('cancelBtn');
-    const form = document.getElementById('productForm');
-    const modalTitle = document.getElementById('modalTitle');
-    
-    // Fetch and display products
+    let currentTab = 'products';
+
+    // Tabs
+    const tabProducts = document.getElementById('tabProducts');
+    const tabPartMaster = document.getElementById('tabPartMaster');
+    const productsSection = document.getElementById('productsSection');
+    const partMasterSection = document.getElementById('partMasterSection');
+
+    // Products Elements
+    const productsBody = document.getElementById('productsBody');
+    const productModal = document.getElementById('productModal');
+    const productForm = document.getElementById('productForm');
+    const closeProductBtn = document.getElementById('closeModalBtn');
+    const cancelProductBtn = document.getElementById('cancelBtn');
+    const productModalTitle = document.getElementById('modalTitle');
+
+    // Part Master Elements
+    const partMasterBody = document.getElementById('partMasterBody');
+    const partModal = document.getElementById('partModal');
+    const partForm = document.getElementById('partForm');
+    const closePartBtn = document.getElementById('closePartModalBtn');
+    const cancelPartBtn = document.getElementById('cancelPartBtn');
+    const partModalTitle = document.getElementById('partModalTitle');
+
+    // Tab Logic
+    tabProducts.addEventListener('click', () => {
+        currentTab = 'products';
+        tabProducts.classList.add('active');
+        tabPartMaster.classList.remove('active');
+        productsSection.style.display = 'block';
+        partMasterSection.style.display = 'none';
+        addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Product`;
+        fetchProducts();
+    });
+
+    tabPartMaster.addEventListener('click', () => {
+        currentTab = 'partmaster';
+        tabPartMaster.classList.add('active');
+        tabProducts.classList.remove('active');
+        partMasterSection.style.display = 'block';
+        productsSection.style.display = 'none';
+        addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Part`;
+        fetchPartMasters();
+    });
+
+    addBtn.addEventListener('click', () => {
+        if (currentTab === 'products') {
+            openProductModal(false);
+        } else {
+            openPartModal(false);
+        }
+    });
+
+    // --- PRODUCTS LOGIC ---
     async function fetchProducts() {
         try {
             const response = await fetch('/api/products');
             const products = await response.json();
-            renderTable(products);
+            renderProductsTable(products);
         } catch (error) {
             console.error('Error fetching products:', error);
         }
     }
 
-    function renderTable(products) {
-        tableBody.innerHTML = '';
+    function renderProductsTable(products) {
+        productsBody.innerHTML = '';
         if (products.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">No products found. Add one!</td></tr>';
+            productsBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">No products found. Add one!</td></tr>';
             return;
         }
 
@@ -39,85 +86,64 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button class="btn btn-danger" onclick="deleteProduct(${product.id})">Delete</button>
                 </td>
             `;
-            tableBody.appendChild(tr);
+            productsBody.appendChild(tr);
         });
     }
 
-    // Modal Logic
-    function openModal(isEdit = false) {
-        modal.classList.add('show');
-        modalTitle.textContent = isEdit ? 'Edit Product' : 'Add Product';
+    function openProductModal(isEdit = false) {
+        productModal.classList.add('show');
+        productModalTitle.textContent = isEdit ? 'Edit Product' : 'Add Product';
     }
 
-    function closeModal() {
-        modal.classList.remove('show');
-        form.reset();
+    function closeProductModal() {
+        productModal.classList.remove('show');
+        productForm.reset();
         document.getElementById('productId').value = '';
     }
 
-    addBtn.addEventListener('click', () => openModal(false));
-    closeBtn.addEventListener('click', closeModal);
-    cancelBtn.addEventListener('click', closeModal);
+    closeProductBtn.addEventListener('click', closeProductModal);
+    cancelProductBtn.addEventListener('click', closeProductModal);
 
-    // Form Submission (Add or Edit)
-    form.addEventListener('submit', async (e) => {
+    productForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
-        const productId = document.getElementById('productId').value;
-        const productData = {
+        const id = document.getElementById('productId').value;
+        const data = {
             family: document.getElementById('family').value,
             spec: document.getElementById('spec').value,
             make: document.getElementById('make').value,
             stock: parseInt(document.getElementById('stock').value),
             price: parseFloat(document.getElementById('price').value)
         };
-
-        const isEdit = productId !== '';
-        const url = isEdit ? `/api/products/${productId}` : '/api/products';
-        const method = isEdit ? 'PUT' : 'POST';
-
+        const isEdit = id !== '';
+        const url = isEdit ? `/api/products/${id}` : '/api/products';
+        
         try {
             const response = await fetch(url, {
-                method: method,
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(productData)
+                method: isEdit ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
             });
-
             if (response.ok) {
-                closeModal();
+                closeProductModal();
                 fetchProducts();
             }
-        } catch (error) {
-            console.error('Error saving product:', error);
-        }
+        } catch (error) { console.error(error); }
     });
 
-    // Delete Product
     window.deleteProduct = async (id) => {
         if (confirm('Are you sure you want to delete this product?')) {
             try {
-                const response = await fetch(`/api/products/${id}`, {
-                    method: 'DELETE'
-                });
-                if (response.ok) {
-                    fetchProducts();
-                }
-            } catch (error) {
-                console.error('Error deleting product:', error);
-            }
+                const response = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+                if (response.ok) fetchProducts();
+            } catch (error) { console.error(error); }
         }
     };
 
-    // Edit Product
     window.editProduct = async (id) => {
         try {
-            // In a real app we might fetch by ID, but we can also just fetch all and find it
             const response = await fetch('/api/products');
             const products = await response.json();
             const product = products.find(p => p.id === id);
-            
             if (product) {
                 document.getElementById('productId').value = product.id;
                 document.getElementById('family').value = product.family;
@@ -125,11 +151,105 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('make').value = product.make;
                 document.getElementById('stock').value = product.stock;
                 document.getElementById('price').value = product.price;
-                openModal(true);
+                openProductModal(true);
             }
+        } catch (error) { console.error(error); }
+    };
+
+    // --- PART MASTER LOGIC ---
+    async function fetchPartMasters() {
+        try {
+            const response = await fetch('/api/partmaster');
+            const parts = await response.json();
+            renderPartMasterTable(parts);
         } catch (error) {
-            console.error('Error preparing edit:', error);
+            console.error('Error fetching part masters:', error);
         }
+    }
+
+    function renderPartMasterTable(parts) {
+        partMasterBody.innerHTML = '';
+        if (parts.length === 0) {
+            partMasterBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">No part masters found. Add one!</td></tr>';
+            return;
+        }
+
+        parts.forEach(part => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${part.id}</td>
+                <td>${part.family}</td>
+                <td>${part.forge_pn}</td>
+                <td>${part.partno}</td>
+                <td class="actions">
+                    <button class="btn btn-edit" onclick="editPartMaster(${part.id})">Edit</button>
+                    <button class="btn btn-danger" onclick="deletePartMaster(${part.id})">Delete</button>
+                </td>
+            `;
+            partMasterBody.appendChild(tr);
+        });
+    }
+
+    function openPartModal(isEdit = false) {
+        partModal.classList.add('show');
+        partModalTitle.textContent = isEdit ? 'Edit Part Master' : 'Add Part Master';
+    }
+
+    function closePartModal() {
+        partModal.classList.remove('show');
+        partForm.reset();
+        document.getElementById('partId').value = '';
+    }
+
+    closePartBtn.addEventListener('click', closePartModal);
+    cancelPartBtn.addEventListener('click', closePartModal);
+
+    partForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('partId').value;
+        const data = {
+            family: document.getElementById('partFamily').value,
+            forge_pn: document.getElementById('forgePn').value,
+            partno: document.getElementById('partno').value
+        };
+        const isEdit = id !== '';
+        const url = isEdit ? `/api/partmaster/${id}` : '/api/partmaster';
+        
+        try {
+            const response = await fetch(url, {
+                method: isEdit ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (response.ok) {
+                closePartModal();
+                fetchPartMasters();
+            }
+        } catch (error) { console.error(error); }
+    });
+
+    window.deletePartMaster = async (id) => {
+        if (confirm('Are you sure you want to delete this part master?')) {
+            try {
+                const response = await fetch(`/api/partmaster/${id}`, { method: 'DELETE' });
+                if (response.ok) fetchPartMasters();
+            } catch (error) { console.error(error); }
+        }
+    };
+
+    window.editPartMaster = async (id) => {
+        try {
+            const response = await fetch('/api/partmaster');
+            const parts = await response.json();
+            const part = parts.find(p => p.id === id);
+            if (part) {
+                document.getElementById('partId').value = part.id;
+                document.getElementById('partFamily').value = part.family;
+                document.getElementById('forgePn').value = part.forge_pn;
+                document.getElementById('partno').value = part.partno;
+                openPartModal(true);
+            }
+        } catch (error) { console.error(error); }
     };
 
     // Initial fetch

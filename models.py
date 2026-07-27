@@ -10,3 +10,11 @@ class Product(Base):
     make = Column(String, index=True)
     stock = Column(Integer, default=0)
     price = Column(Numeric(10, 2))
+
+class PartMaster(Base):
+    __tablename__ = "part_masters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    family = Column(String, index=True)
+    forge_pn = Column(String, index=True)
+    partno = Column(String, index=True)
