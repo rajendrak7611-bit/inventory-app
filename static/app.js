@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${product.spec}</td>
                 <td>${product.make}</td>
                 <td>${product.stock}</td>
-                <td>$${product.price.toFixed(2)}</td>
+                <td>Rs ${product.price.toFixed(2)}</td>
                 <td class="actions">
                     <button class="btn btn-edit" onclick="editProduct(${product.id})">Edit</button>
                     <button class="btn btn-danger" onclick="deleteProduct(${product.id})">Delete</button>
