@@ -6,7 +6,7 @@ from typing import List
 from pydantic import BaseModel
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator
+from models import Product, PartMaster, Machine, Operator, PartOperation
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -40,6 +40,22 @@ class PartMasterCreate(PartMasterBase):
 
 class PartMasterResponse(PartMasterBase):
     id: int
+
+    class Config:
+        from_attributes = True
+
+class PartOperationBase(BaseModel):
+    opn_no: str
+    description: str
+    machine: str
+    cycle_time: float
+
+class PartOperationCreate(PartOperationBase):
+    pass
+
+class PartOperationResponse(PartOperationBase):
+    id: int
+    part_id: int
 
     class Config:
         from_attributes = True
@@ -141,6 +157,29 @@ def delete_partmaster(part_id: int, db: Session = Depends(get_db)):
     db.delete(db_part)
     db.commit()
     return {"message": "Part deleted successfully"}
+
+# --- Part Operations Routes ---
+@app.get("/api/partmaster/{part_id}/operations", response_model=List[PartOperationResponse])
+def get_part_operations(part_id: int, db: Session = Depends(get_db)):
+    operations = db.query(PartOperation).filter(PartOperation.part_id == part_id).order_by(PartOperation.id).all()
+    return operations
+
+@app.put("/api/partmaster/{part_id}/operations")
+def update_part_operations(part_id: int, operations: List[PartOperationCreate], db: Session = Depends(get_db)):
+    db_part = db.query(PartMaster).filter(PartMaster.id == part_id).first()
+    if not db_part:
+        raise HTTPException(status_code=404, detail="Part not found")
+    
+    # Delete existing operations for this part
+    db.query(PartOperation).filter(PartOperation.part_id == part_id).delete()
+    
+    # Add new operations
+    for op in operations:
+        db_op = PartOperation(**op.model_dump(), part_id=part_id)
+        db.add(db_op)
+    
+    db.commit()
+    return {"message": "Operations updated successfully"}
 
 # --- Machine API Routes ---
 

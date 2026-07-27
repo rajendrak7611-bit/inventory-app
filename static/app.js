@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Shared
     const addBtn = document.getElementById('addBtn');
     let currentTab = 'products';
+    let availableMachines = [];
 
     // Tabs
     const tabProducts = document.getElementById('tabProducts');
@@ -29,6 +30,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const closePartBtn = document.getElementById('closePartModalBtn');
     const cancelPartBtn = document.getElementById('cancelPartBtn');
     const partModalTitle = document.getElementById('partModalTitle');
+
+    // Operations Elements
+    const operationsModal = document.getElementById('operationsModal');
+    const closeOperationsModalBtn = document.getElementById('closeOperationsModalBtn');
+    const cancelOperationsBtn = document.getElementById('cancelOperationsBtn');
+    const saveOperationsBtn = document.getElementById('saveOperationsBtn');
+    const operationsBody = document.getElementById('operationsBody');
+    const operationsPartId = document.getElementById('operationsPartId');
 
     // Machine Elements
     const machinesBody = document.getElementById('machinesBody');
@@ -177,6 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tr.innerHTML = `
                     <td>${p.id}</td><td>${p.family}</td><td>${p.forge_pn}</td><td>${p.partno}</td>
                     <td class="actions">
+                        <button class="btn btn-outline" style="margin-right: 5px;" onclick="openOperations(${p.id})">Operations</button>
                         <button class="btn btn-edit" onclick="editPartMaster(${p.id})">Edit</button>
                         <button class="btn btn-danger" onclick="deletePartMaster(${p.id})">Delete</button>
                     </td>`;
@@ -220,11 +230,92 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // --- PART OPERATIONS LOGIC ---
+    window.openOperations = async (partId) => {
+        operationsPartId.value = partId;
+        
+        // Ensure machines are loaded for dropdown
+        if (availableMachines.length === 0) {
+            const mRes = await fetch('/api/machines');
+            availableMachines = await mRes.json();
+        }
+
+        // Fetch existing operations
+        const res = await fetch(`/api/partmaster/${partId}/operations`);
+        const existingOps = await res.json();
+
+        // Render 10 rows
+        operationsBody.innerHTML = '';
+        let machineOptions = '<option value="">-- Select --</option>';
+        availableMachines.forEach(m => {
+            machineOptions += `<option value="${m.name}">${m.name}</option>`;
+        });
+
+        for (let i = 0; i < 10; i++) {
+            const op = existingOps[i] || { opn_no: '', description: '', machine: '', cycle_time: '' };
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><input type="text" class="opn-no" value="${op.opn_no}" style="width: 100%; padding: 8px;"></td>
+                <td><input type="text" class="op-desc" value="${op.description}" style="width: 100%; padding: 8px;"></td>
+                <td>
+                    <select class="op-mach" style="width: 100%; padding: 8px;">
+                        ${machineOptions}
+                    </select>
+                </td>
+                <td><input type="number" step="0.01" class="op-time" value="${op.cycle_time || ''}" style="width: 100%; padding: 8px;"></td>
+            `;
+            // Set dropdown value
+            if (op.machine) {
+                tr.querySelector('.op-mach').value = op.machine;
+            }
+            operationsBody.appendChild(tr);
+        }
+
+        operationsModal.classList.add('show');
+    };
+
+    function closeOperationsModal() {
+        operationsModal.classList.remove('show');
+    }
+    closeOperationsModalBtn.addEventListener('click', closeOperationsModal);
+    cancelOperationsBtn.addEventListener('click', closeOperationsModal);
+
+    saveOperationsBtn.addEventListener('click', async () => {
+        const partId = operationsPartId.value;
+        const rows = operationsBody.querySelectorAll('tr');
+        const operationsData = [];
+
+        rows.forEach(row => {
+            const opn_no = row.querySelector('.opn-no').value.trim();
+            const description = row.querySelector('.op-desc').value.trim();
+            const machine = row.querySelector('.op-mach').value;
+            const cycle_time = parseFloat(row.querySelector('.op-time').value) || 0;
+
+            if (opn_no || description) {
+                operationsData.push({
+                    opn_no, description, machine, cycle_time
+                });
+            }
+        });
+
+        try {
+            await fetch(`/api/partmaster/${partId}/operations`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(operationsData)
+            });
+            closeOperationsModal();
+        } catch (e) {
+            console.error('Error saving operations:', e);
+        }
+    });
+
     // --- MACHINES LOGIC ---
     async function fetchMachines() {
         try {
             const response = await fetch('/api/machines');
             const machines = await response.json();
+            availableMachines = machines; // update global list
             machinesBody.innerHTML = '';
             if (machines.length === 0) {
                 machinesBody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted)">No machines found.</td></tr>';
@@ -332,4 +423,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial fetch
     fetchProducts();
+    // Pre-fetch machines so the dropdown is ready
+    fetch('/api/machines').then(r => r.json()).then(data => availableMachines = data);
 });
