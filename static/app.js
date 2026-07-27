@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tabPartMaster.classList.remove('active');
         productsSection.style.display = 'block';
         partMasterSection.style.display = 'none';
-        addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Product`;
+        addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Tool`;
         fetchProducts();
     });
 
@@ -68,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderProductsTable(products) {
         productsBody.innerHTML = '';
         if (products.length === 0) {
-            productsBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">No products found. Add one!</td></tr>';
+            productsBody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted)">No tools found. Add one!</td></tr>';
             return;
         }
 
@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function openProductModal(isEdit = false) {
         productModal.classList.add('show');
-        productModalTitle.textContent = isEdit ? 'Edit Product' : 'Add Product';
+        productModalTitle.textContent = isEdit ? 'Edit Tool' : 'Add Tool';
     }
 
     function closeProductModal() {
@@ -131,7 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     window.deleteProduct = async (id) => {
-        if (confirm('Are you sure you want to delete this product?')) {
+        if (confirm('Are you sure you want to delete this tool?')) {
             try {
                 const response = await fetch(`/api/products/${id}`, { method: 'DELETE' });
                 if (response.ok) fetchProducts();
