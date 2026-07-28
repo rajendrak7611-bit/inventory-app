@@ -405,24 +405,20 @@ def get_run_schedule(db: Session = Depends(get_db)):
             
         operations = db.query(PartOperation).filter(PartOperation.part_id == part.id).order_by(PartOperation.id).all()
         
-        part_available_time = 0 # Sequential per part
-        
         for op in operations:
             if not op.machine:
                 continue
                 
             machine = op.machine
             
-            # Start time is max of when the machine is free and when the part finishes previous op
-            mach_avail = machine_available_time.get(machine, 0)
-            start_time = max(mach_avail, part_available_time)
+            # PARALLEL: Start time only depends on when the machine is free, not the part
+            start_time = machine_available_time.get(machine, 0)
             
-            runtime = int(op.cycle_time * sched.qty)
-            end_time = start_time + runtime
+            runtime_minutes = op.cycle_time * sched.qty
+            end_time = start_time + runtime_minutes
             
-            # Update availability trackers
+            # Update machine availability tracker
             machine_available_time[machine] = end_time
-            part_available_time = end_time
             
             run_list.append({
                 "partno": sched.partno,
@@ -431,7 +427,7 @@ def get_run_schedule(db: Session = Depends(get_db)):
                 "machine": machine,
                 "qty": sched.qty,
                 "cycle_time": op.cycle_time,
-                "runtime": runtime,
+                "runtime": round(runtime_minutes / 60, 2), # Runtime in hours
                 "start_date": get_calendar_date(start_time),
                 "end_date": get_calendar_date(end_time)
             })
