@@ -767,18 +767,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const schedData = await schedRes.json();
         prodLogSchedules = schedData.filter(s => s.status === 'Pending');
         
-        // Populate Dept dropdown (Unique departments from machines/operators)
-        const depts = new Set();
-        prodLogAllMachines.forEach(m => { if (m.department) depts.add(m.department); });
-        prodLogAllOperators.forEach(o => { if (o.department) depts.add(o.department); });
-        
-        const deptSelect = document.getElementById('prodLogDept');
-        deptSelect.innerHTML = '<option value="">-- Select Dept --</option>';
-        depts.forEach(d => {
-            deptSelect.innerHTML += `<option value="${d}">${d}</option>`;
-        });
-        
-        // Populate Schedule Parts
+        // Populate Schedule Parts (all pending schedules, regardless of dept, user can select)
         const partSelect = document.getElementById('prodLogPartNo');
         partSelect.innerHTML = '<option value="">-- Select Scheduled Part --</option>';
         const uniqueSchedParts = [...new Set(prodLogSchedules.map(s => s.partno))];
@@ -790,18 +779,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     document.getElementById('prodLogDept').addEventListener('change', (e) => {
-        const dept = e.target.value;
+        const dept = e.target.value.trim().toUpperCase();
         const machSelect = document.getElementById('prodLogMachine');
         const opSelect = document.getElementById('prodLogOperator');
         
         machSelect.innerHTML = '<option value="">-- Select Machine --</option>';
         opSelect.innerHTML = '<option value="">-- Select Operator --</option>';
         
-        prodLogAllMachines.filter(m => m.department === dept).forEach(m => {
+        prodLogAllMachines.filter(m => (m.department || '').trim().toUpperCase() === dept).forEach(m => {
             machSelect.innerHTML += `<option value="${m.name}">${m.name}</option>`;
         });
         
-        prodLogAllOperators.filter(o => o.department === dept).forEach(o => {
+        prodLogAllOperators.filter(o => (o.department || '').trim().toUpperCase() === dept).forEach(o => {
             opSelect.innerHTML += `<option value="${o.name}">${o.name}</option>`;
         });
     });
@@ -880,6 +869,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${log.machine}</td>
                     <td><span style="font-weight:bold;color:var(--primary);">${log.prod_qty}</span></td>
                     <td>${log.efficiency}%</td>
+                    <td>${log.idle_hours}</td>
+                    <td>${log.idle_reason}</td>
                 `;
                 tbody.appendChild(tr);
             });

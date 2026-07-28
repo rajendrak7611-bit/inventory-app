@@ -194,19 +194,23 @@
             
             <!-- Prod Log Section -->
             <div class="table-container" id="prodLogSection" style="display: none; padding: 2rem; color: var(--text-main);">
-                <div style="display: flex; gap: 3rem; flex-wrap: wrap;">
-                    <div style="flex: 0 0 350px;">
+                <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                    <div style="flex: 0 0 700px;">
                         <h2 style="margin-bottom: 20px;">Add Prod Log</h2>
-                        <form id="prodLogForm">
+                        <form id="prodLogForm" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                             <div class="form-group">
                                 <label for="prodLogDept">Dept</label>
                                 <select id="prodLogDept" required style="width: 100%; padding: 0.75rem 1rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
                                     <option value="">-- Select Dept --</option>
+                                    <option value="WIPRO">WIPRO</option>
+                                    <option value="SPIDER">SPIDER</option>
+                                    <option value="BC">BC</option>
+                                    <option value="GEAR">GEAR</option>
                                 </select>
                             </div>
                             <div class="form-group">
                                 <label for="prodLogDate">Date</label>
-                                <input type="date" id="prodLogDate" required>
+                                <input type="date" id="prodLogDate" required style="width: 100%; padding: 0.75rem 1rem;">
                             </div>
                             <div class="form-group">
                                 <label for="prodLogShift">Shift</label>
@@ -262,24 +266,24 @@
                             </div>
                             <div class="form-group">
                                 <label for="prodLogRuntime">Runtime (Hours)</label>
-                                <input type="number" step="0.01" id="prodLogRuntime" required placeholder="e.g. 8">
+                                <input type="number" step="0.01" id="prodLogRuntime" required placeholder="e.g. 8" style="width: 100%; padding: 0.75rem 1rem;">
                             </div>
                             <div class="form-group">
                                 <label for="prodLogTargetQty">Target Qty (calculated)</label>
-                                <input type="number" id="prodLogTargetQty" readonly style="background-color: rgba(0, 0, 0, 0.05); cursor: not-allowed;">
+                                <input type="number" id="prodLogTargetQty" readonly style="width: 100%; padding: 0.75rem 1rem; background-color: rgba(0, 0, 0, 0.05); cursor: not-allowed;">
                                 <input type="hidden" id="prodLogCycleTime">
                             </div>
                             <div class="form-group">
                                 <label for="prodLogProdQty">Prod Qty</label>
-                                <input type="number" id="prodLogProdQty" required placeholder="e.g. 100">
+                                <input type="number" id="prodLogProdQty" required placeholder="e.g. 100" style="width: 100%; padding: 0.75rem 1rem;">
                             </div>
                             <div class="form-group">
                                 <label for="prodLogEfficiency">Efficiency</label>
-                                <input type="text" id="prodLogEfficiency" readonly style="background-color: rgba(0, 0, 0, 0.05); cursor: not-allowed;" placeholder="%">
+                                <input type="text" id="prodLogEfficiency" readonly style="width: 100%; padding: 0.75rem 1rem; background-color: rgba(0, 0, 0, 0.05); cursor: not-allowed;" placeholder="%">
                             </div>
                             <div class="form-group">
                                 <label for="prodLogIdleHours">Idle Hours</label>
-                                <input type="number" step="0.01" id="prodLogIdleHours" required placeholder="e.g. 0.5" value="0">
+                                <input type="number" step="0.01" id="prodLogIdleHours" required placeholder="e.g. 0.5" value="0" style="width: 100%; padding: 0.75rem 1rem;">
                             </div>
                             <div class="form-group">
                                 <label for="prodLogIdleReason">Reason of idle</label>
@@ -302,16 +306,16 @@
                                 </select>
                             </div>
                             
-                            <div style="margin-top: 1.5rem;">
+                            <div style="grid-column: 1 / -1; margin-top: 1rem;">
                                 <button type="submit" class="btn btn-primary">Save Prod Log</button>
                             </div>
                         </form>
                     </div>
                     
-                    <div style="flex: 1; min-width: 600px; border-left: 1px solid var(--border-color); padding-left: 3rem;">
+                    <div style="flex: 1; min-width: 500px; border-left: 1px solid var(--border-color); padding-left: 2rem;">
                         <h2 style="margin-bottom: 20px;">Production Logs</h2>
-                        <div style="max-height: 800px; overflow-y: auto; overflow-x: auto; padding-right: 10px;">
-                            <table id="prodLogTable" style="width: 100%; white-space: nowrap;">
+                        <div style="max-height: 800px; overflow-y: auto;">
+                            <table id="prodLogTable" style="width: 100%;">
                                 <thead>
                                     <tr>
                                         <th>Date</th>
@@ -322,6 +326,8 @@
                                         <th>Machine</th>
                                         <th>Prod Qty</th>
                                         <th>Eff %</th>
+                                        <th>Idle Hrs</th>
+                                        <th>Reason</th>
                                     </tr>
                                 </thead>
                                 <tbody id="prodLogBody">
@@ -508,6 +514,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=14"></script>
+    <script src="/static/app.js?v=15"></script>
 </body>
 </html>
