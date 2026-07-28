@@ -42,6 +42,7 @@
                         <a href="#" id="menuScheduleStatus">Status</a>
                     </div>
                 </div>
+                <button class="tab-btn" id="tabProdLog">Prod Log</button>
             </div>
 
             <div class="table-container" id="productsSection">
@@ -190,6 +191,148 @@
                 <h2>Schedule Status</h2>
                 <p style="color: var(--text-muted); margin-top: 10px;">Table to view status will go here.</p>
             </div>
+            
+            <!-- Prod Log Section -->
+            <div class="table-container" id="prodLogSection" style="display: none; padding: 2rem; color: var(--text-main);">
+                <div style="display: flex; gap: 3rem; flex-wrap: wrap;">
+                    <div style="flex: 0 0 350px;">
+                        <h2 style="margin-bottom: 20px;">Add Prod Log</h2>
+                        <form id="prodLogForm">
+                            <div class="form-group">
+                                <label for="prodLogDept">Dept</label>
+                                <select id="prodLogDept" required style="width: 100%; padding: 0.75rem 1rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
+                                    <option value="">-- Select Dept --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="prodLogDate">Date</label>
+                                <input type="date" id="prodLogDate" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="prodLogShift">Shift</label>
+                                <select id="prodLogShift" required style="width: 100%; padding: 0.75rem 1rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
+                                    <option value="">-- Select Shift --</option>
+                                    <option value="First">First</option>
+                                    <option value="Second">Second</option>
+                                    <option value="Third">Third</option>
+                                    <option value="Gen">Gen</option>
+                                    <option value="First12">First12</option>
+                                    <option value="Second12">Second12</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="prodLogSetter">Setter</label>
+                                <select id="prodLogSetter" required style="width: 100%; padding: 0.75rem 1rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
+                                    <option value="">-- Select Setter --</option>
+                                    <option value="Ravi">Ravi</option>
+                                    <option value="Santosh">Santosh</option>
+                                    <option value="Srinivas">Srinivas</option>
+                                    <option value="Ramesh">Ramesh</option>
+                                    <option value="Ananth">Ananth</option>
+                                    <option value="Shyam">Shyam</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="prodLogMachine">Machine</label>
+                                <select id="prodLogMachine" required style="width: 100%; padding: 0.75rem 1rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
+                                    <option value="">-- Select Machine --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="prodLogOperator">Operator</label>
+                                <select id="prodLogOperator" required style="width: 100%; padding: 0.75rem 1rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
+                                    <option value="">-- Select Operator --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="prodLogPartNo">Part No</label>
+                                <select id="prodLogPartNo" required style="width: 100%; padding: 0.75rem 1rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
+                                    <option value="">-- Select Scheduled Part --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="prodLogOpnNo">Operation No</label>
+                                <select id="prodLogOpnNo" required style="width: 100%; padding: 0.75rem 1rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
+                                    <option value="">-- Select Operation --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="prodLogDescription">Description</label>
+                                <input type="text" id="prodLogDescription" readonly style="background-color: rgba(0, 0, 0, 0.05); cursor: not-allowed;">
+                            </div>
+                            <div class="form-group">
+                                <label for="prodLogRuntime">Runtime (Hours)</label>
+                                <input type="number" step="0.01" id="prodLogRuntime" required placeholder="e.g. 8">
+                            </div>
+                            <div class="form-group">
+                                <label for="prodLogTargetQty">Target Qty (calculated)</label>
+                                <input type="number" id="prodLogTargetQty" readonly style="background-color: rgba(0, 0, 0, 0.05); cursor: not-allowed;">
+                                <input type="hidden" id="prodLogCycleTime">
+                            </div>
+                            <div class="form-group">
+                                <label for="prodLogProdQty">Prod Qty</label>
+                                <input type="number" id="prodLogProdQty" required placeholder="e.g. 100">
+                            </div>
+                            <div class="form-group">
+                                <label for="prodLogEfficiency">Efficiency</label>
+                                <input type="text" id="prodLogEfficiency" readonly style="background-color: rgba(0, 0, 0, 0.05); cursor: not-allowed;" placeholder="%">
+                            </div>
+                            <div class="form-group">
+                                <label for="prodLogIdleHours">Idle Hours</label>
+                                <input type="number" step="0.01" id="prodLogIdleHours" required placeholder="e.g. 0.5" value="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="prodLogIdleReason">Reason of idle</label>
+                                <select id="prodLogIdleReason" required style="width: 100%; padding: 0.75rem 1rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
+                                    <option value="None">None</option>
+                                    <option value="No load">No load</option>
+                                    <option value="No Operator">No Operator</option>
+                                    <option value="Setting">Setting</option>
+                                    <option value="Setup">Setup</option>
+                                    <option value="No power">No power</option>
+                                    <option value="Tool issue">Tool issue</option>
+                                    <option value="Quality issue">Quality issue</option>
+                                    <option value="fixture issue">fixture issue</option>
+                                    <option value="Machine bd">Machine bd</option>
+                                    <option value="misc">misc</option>
+                                    <option value="Npd">Npd</option>
+                                    <option value="rework">rework</option>
+                                    <option value="no plan">no plan</option>
+                                    <option value="setter">setter</option>
+                                </select>
+                            </div>
+                            
+                            <div style="margin-top: 1.5rem;">
+                                <button type="submit" class="btn btn-primary">Save Prod Log</button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <div style="flex: 1; min-width: 600px; border-left: 1px solid var(--border-color); padding-left: 3rem;">
+                        <h2 style="margin-bottom: 20px;">Production Logs</h2>
+                        <div style="max-height: 800px; overflow-y: auto; overflow-x: auto; padding-right: 10px;">
+                            <table id="prodLogTable" style="width: 100%; white-space: nowrap;">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Dept</th>
+                                        <th>Shift</th>
+                                        <th>Part No</th>
+                                        <th>Opn</th>
+                                        <th>Machine</th>
+                                        <th>Prod Qty</th>
+                                        <th>Eff %</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="prodLogBody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
         </main>
     </div>
 
@@ -365,6 +508,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=13"></script>
+    <script src="/static/app.js?v=14"></script>
 </body>
 </html>

@@ -6,13 +6,12 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, PartOperation, Schedule
+from models import Product, PartMaster, Machine, Operator, PartOperation, Schedule, ProductionLog
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
 
 # Lightweight migrations for adding columns safely
-from sqlalchemy import text
 with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
     try:
         conn.execute(text("ALTER TABLE part_masters ADD COLUMN department VARCHAR;"))
@@ -26,6 +25,10 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
     try:
         conn.execute(text("ALTER TABLE machines ADD COLUMN department VARCHAR;"))
         conn.execute(text("CREATE INDEX ix_machines_department ON machines (department);"))
+    except Exception:
+        pass
+    try:
+        conn.execute(text("ALTER TABLE schedules ADD COLUMN completed_qty INTEGER DEFAULT 0;"))
     except Exception:
         pass
 
@@ -462,6 +465,44 @@ def get_run_schedule(db: Session = Depends(get_db)):
             })
             
     return run_list
+
+class ProdLogCreate(BaseModel):
+    dept: str
+    date: str
+    shift: str
+    setter: str
+    machine: str
+    operator: str
+    partno: str
+    opn_no: str
+    description: str
+    runtime: float
+    target_qty: float
+    prod_qty: float
+    efficiency: float
+    idle_hours: float
+    idle_reason: str
+
+@app.post("/api/prodlog")
+def create_prodlog(log: ProdLogCreate, db: Session = Depends(get_db)):
+    db_log = ProductionLog(**log.dict())
+    db.add(db_log)
+    
+    # Update schedule's completed_qty
+    # We find the schedule for this partno (if there are multiple, maybe the first pending one)
+    schedule = db.query(Schedule).filter(Schedule.partno == log.partno, Schedule.status == "Pending").first()
+    if schedule:
+        schedule.completed_qty = (schedule.completed_qty or 0) + log.prod_qty
+        if schedule.completed_qty >= schedule.qty:
+            schedule.status = "Completed"
+            
+    db.commit()
+    db.refresh(db_log)
+    return db_log
+
+@app.get("/api/prodlog")
+def get_prodlogs(db: Session = Depends(get_db)):
+    return db.query(ProductionLog).order_by(ProductionLog.id.desc()).all()
 
 # Serve static files (frontend)
 app.mount("/static", StaticFiles(directory="static"), name="static")

@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const menuScheduleCreate = document.getElementById('menuScheduleCreate');
     const menuScheduleRun = document.getElementById('menuScheduleRun');
     const menuScheduleStatus = document.getElementById('menuScheduleStatus');
+    const tabProdLog = document.getElementById('tabProdLog');
     
     const productsSection = document.getElementById('productsSection');
     const partMasterSection = document.getElementById('partMasterSection');
@@ -23,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const scheduleCreateSection = document.getElementById('scheduleCreateSection');
     const scheduleRunSection = document.getElementById('scheduleRunSection');
     const scheduleStatusSection = document.getElementById('scheduleStatusSection');
+    const prodLogSection = document.getElementById('prodLogSection');
 
     // Products Elements
     const productsBody = document.getElementById('productsBody');
@@ -72,12 +74,14 @@ document.addEventListener('DOMContentLoaded', () => {
         scheduleCreateSection.style.display = 'none';
         scheduleRunSection.style.display = 'none';
         scheduleStatusSection.style.display = 'none';
+        prodLogSection.style.display = 'none';
         
         tabProducts.classList.remove('active');
         tabPartMaster.classList.remove('active');
         tabMachines.classList.remove('active');
         tabOperators.classList.remove('active');
         tabSchedule.classList.remove('active');
+        tabProdLog.classList.remove('active');
         importBtn.style.display = 'none';
         addBtn.style.display = 'inline-flex';
     }
@@ -149,6 +153,15 @@ document.addEventListener('DOMContentLoaded', () => {
         tabSchedule.classList.add('active');
         scheduleStatusSection.style.display = 'block';
         addBtn.style.display = 'none';
+    });
+
+    tabProdLog.addEventListener('click', () => {
+        currentTab = 'prod-log';
+        hideAllSections();
+        tabProdLog.classList.add('active');
+        prodLogSection.style.display = 'block';
+        addBtn.style.display = 'none';
+        initProdLog();
     });
 
     addBtn.addEventListener('click', () => {
@@ -733,4 +746,184 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error fetching run schedule:', e);
         }
     }
+
+    // --- PROD LOG LOGIC ---
+    let prodLogAllMachines = [];
+    let prodLogAllOperators = [];
+    let prodLogSchedules = [];
+    let currentPartOperations = [];
+
+    async function initProdLog() {
+        document.getElementById('prodLogDate').valueAsDate = new Date();
+        
+        // Fetch dependencies
+        const machRes = await fetch('/api/machines');
+        prodLogAllMachines = await machRes.json();
+        
+        const opRes = await fetch('/api/operators');
+        prodLogAllOperators = await opRes.json();
+        
+        const schedRes = await fetch('/api/schedule');
+        const schedData = await schedRes.json();
+        prodLogSchedules = schedData.filter(s => s.status === 'Pending');
+        
+        // Populate Dept dropdown (Unique departments from machines/operators)
+        const depts = new Set();
+        prodLogAllMachines.forEach(m => { if (m.department) depts.add(m.department); });
+        prodLogAllOperators.forEach(o => { if (o.department) depts.add(o.department); });
+        
+        const deptSelect = document.getElementById('prodLogDept');
+        deptSelect.innerHTML = '<option value="">-- Select Dept --</option>';
+        depts.forEach(d => {
+            deptSelect.innerHTML += `<option value="${d}">${d}</option>`;
+        });
+        
+        // Populate Schedule Parts
+        const partSelect = document.getElementById('prodLogPartNo');
+        partSelect.innerHTML = '<option value="">-- Select Scheduled Part --</option>';
+        const uniqueSchedParts = [...new Set(prodLogSchedules.map(s => s.partno))];
+        uniqueSchedParts.forEach(p => {
+            partSelect.innerHTML += `<option value="${p}">${p}</option>`;
+        });
+        
+        fetchProdLogs();
+    }
+
+    document.getElementById('prodLogDept').addEventListener('change', (e) => {
+        const dept = e.target.value;
+        const machSelect = document.getElementById('prodLogMachine');
+        const opSelect = document.getElementById('prodLogOperator');
+        
+        machSelect.innerHTML = '<option value="">-- Select Machine --</option>';
+        opSelect.innerHTML = '<option value="">-- Select Operator --</option>';
+        
+        prodLogAllMachines.filter(m => m.department === dept).forEach(m => {
+            machSelect.innerHTML += `<option value="${m.name}">${m.name}</option>`;
+        });
+        
+        prodLogAllOperators.filter(o => o.department === dept).forEach(o => {
+            opSelect.innerHTML += `<option value="${o.name}">${o.name}</option>`;
+        });
+    });
+
+    document.getElementById('prodLogPartNo').addEventListener('change', async (e) => {
+        const partno = e.target.value;
+        const opnSelect = document.getElementById('prodLogOpnNo');
+        opnSelect.innerHTML = '<option value="">-- Select Operation --</option>';
+        document.getElementById('prodLogDescription').value = '';
+        document.getElementById('prodLogCycleTime').value = '';
+        recalcProdLog();
+        
+        if (!partno) return;
+        
+        // Need part_id to get operations. Let's fetch partmaster and find the id.
+        const res = await fetch('/api/partmaster');
+        const allParts = await res.json();
+        const part = allParts.find(p => p.partno === partno);
+        if (part) {
+            const opRes = await fetch(`/api/partmaster/${part.id}/operations`);
+            currentPartOperations = await opRes.json();
+            currentPartOperations.forEach(op => {
+                opnSelect.innerHTML += `<option value="${op.opn_no}">${op.opn_no}</option>`;
+            });
+        }
+    });
+
+    document.getElementById('prodLogOpnNo').addEventListener('change', (e) => {
+        const opn_no = e.target.value;
+        const op = currentPartOperations.find(o => o.opn_no === opn_no);
+        if (op) {
+            document.getElementById('prodLogDescription').value = op.description || '';
+            document.getElementById('prodLogCycleTime').value = op.cycle_time || 0;
+            recalcProdLog();
+        }
+    });
+
+    function recalcProdLog() {
+        const runtime = parseFloat(document.getElementById('prodLogRuntime').value) || 0;
+        const prodQty = parseFloat(document.getElementById('prodLogProdQty').value) || 0;
+        const cycleTime = parseFloat(document.getElementById('prodLogCycleTime').value) || 0;
+        
+        let targetQty = 0;
+        if (cycleTime > 0) {
+            targetQty = (runtime * 60) / cycleTime;
+            document.getElementById('prodLogTargetQty').value = Math.floor(targetQty);
+        } else {
+            document.getElementById('prodLogTargetQty').value = '';
+        }
+        
+        if (targetQty > 0) {
+            const eff = (prodQty / targetQty) * 100;
+            document.getElementById('prodLogEfficiency').value = eff.toFixed(2);
+        } else {
+            document.getElementById('prodLogEfficiency').value = '';
+        }
+    }
+
+    document.getElementById('prodLogRuntime').addEventListener('input', recalcProdLog);
+    document.getElementById('prodLogProdQty').addEventListener('input', recalcProdLog);
+
+    async function fetchProdLogs() {
+        try {
+            const res = await fetch('/api/prodlog');
+            const data = await res.json();
+            const tbody = document.getElementById('prodLogBody');
+            tbody.innerHTML = '';
+            data.forEach(log => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${log.date}</td>
+                    <td>${log.dept}</td>
+                    <td>${log.shift}</td>
+                    <td>${log.partno}</td>
+                    <td>${log.opn_no}</td>
+                    <td>${log.machine}</td>
+                    <td><span style="font-weight:bold;color:var(--primary);">${log.prod_qty}</span></td>
+                    <td>${log.efficiency}%</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (e) { console.error(e); }
+    }
+
+    const prodLogForm = document.getElementById('prodLogForm');
+    if (prodLogForm) {
+        prodLogForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                dept: document.getElementById('prodLogDept').value,
+                date: document.getElementById('prodLogDate').value,
+                shift: document.getElementById('prodLogShift').value,
+                setter: document.getElementById('prodLogSetter').value,
+                machine: document.getElementById('prodLogMachine').value,
+                operator: document.getElementById('prodLogOperator').value,
+                partno: document.getElementById('prodLogPartNo').value,
+                opn_no: document.getElementById('prodLogOpnNo').value,
+                description: document.getElementById('prodLogDescription').value,
+                runtime: parseFloat(document.getElementById('prodLogRuntime').value) || 0,
+                target_qty: parseFloat(document.getElementById('prodLogTargetQty').value) || 0,
+                prod_qty: parseFloat(document.getElementById('prodLogProdQty').value) || 0,
+                efficiency: parseFloat(document.getElementById('prodLogEfficiency').value) || 0,
+                idle_hours: parseFloat(document.getElementById('prodLogIdleHours').value) || 0,
+                idle_reason: document.getElementById('prodLogIdleReason').value
+            };
+            
+            try {
+                const response = await fetch('/api/prodlog', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    alert('Production Log saved!');
+                    prodLogForm.reset();
+                    document.getElementById('prodLogDate').valueAsDate = new Date(); // reset date
+                    fetchProdLogs();
+                } else {
+                    alert('Error saving Prod Log');
+                }
+            } catch (err) { console.error(err); }
+        });
+    }
+
 });

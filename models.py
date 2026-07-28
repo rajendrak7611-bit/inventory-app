@@ -58,4 +58,29 @@ class Schedule(Base):
     partno = Column(String, index=True)
     target_date = Column(String, index=True)
     qty = Column(Integer)
+    completed_qty = Column(Integer, default=0)
     status = Column(String, default="Pending")
+
+from datetime import datetime
+from sqlalchemy import DateTime
+
+class ProductionLog(Base):
+    __tablename__ = "production_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    dept = Column(String, index=True)
+    date = Column(String)
+    shift = Column(String)
+    setter = Column(String)
+    machine = Column(String)
+    operator = Column(String)
+    partno = Column(String, index=True)
+    opn_no = Column(String)
+    description = Column(String)
+    runtime = Column(Float)
+    target_qty = Column(Float)
+    prod_qty = Column(Float)
+    efficiency = Column(Float)
+    idle_hours = Column(Float)
+    idle_reason = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
