@@ -11,9 +11,9 @@ from models import Product, PartMaster, Machine, Operator, PartOperation
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
 
-# Lightweight migration for adding department column
+# Lightweight migrations for adding columns safely
 from sqlalchemy import text
-with engine.begin() as conn:
+with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
     try:
         conn.execute(text("ALTER TABLE part_masters ADD COLUMN department VARCHAR;"))
         conn.execute(text("CREATE INDEX ix_part_masters_department ON part_masters (department);"))
