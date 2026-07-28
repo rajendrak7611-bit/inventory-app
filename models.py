@@ -19,6 +19,7 @@ class PartMaster(Base):
     family = Column(String, index=True)
     forge_pn = Column(String, index=True)
     partno = Column(String, index=True)
+    department = Column(String, index=True)
 
     operations = relationship("PartOperation", back_populates="part", cascade="all, delete-orphan")
 
@@ -39,6 +40,7 @@ class Machine(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
+    department = Column(String, index=True)
 
 class Operator(Base):
     __tablename__ = "operators"

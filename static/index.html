@@ -63,6 +63,7 @@
                             <th>Family</th>
                             <th>Forge PN</th>
                             <th>Part No</th>
+                            <th>Department</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -78,6 +79,7 @@
                         <tr>
                             <th>ID</th>
                             <th>Machine Name</th>
+                            <th>Department</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -175,6 +177,11 @@
                     <input type="text" id="partno" required placeholder="e.g. PN-200">
                 </div>
                 
+                <div class="form-group">
+                    <label for="partDept">Department</label>
+                    <input type="text" id="partDept" placeholder="e.g. Assembly">
+                </div>
+                
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" id="cancelPartBtn">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Details</button>
@@ -195,6 +202,10 @@
                 <div class="form-group">
                     <label for="machineName">Machine Name</label>
                     <input type="text" id="machineName" required placeholder="e.g. CNC-1">
+                </div>
+                <div class="form-group">
+                    <label for="machineDept">Department</label>
+                    <input type="text" id="machineDept" placeholder="e.g. Milling">
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" id="cancelMachineBtn">Cancel</button>
@@ -262,6 +273,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=2"></script>
+    <script src="/static/app.js?v=3"></script>
 </body>
 </html>

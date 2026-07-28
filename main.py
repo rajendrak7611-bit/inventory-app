@@ -11,6 +11,20 @@ from models import Product, PartMaster, Machine, Operator, PartOperation
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
 
+# Lightweight migration for adding department column
+from sqlalchemy import text
+with engine.begin() as conn:
+    try:
+        conn.execute(text("ALTER TABLE part_masters ADD COLUMN department VARCHAR;"))
+        conn.execute(text("CREATE INDEX ix_part_masters_department ON part_masters (department);"))
+    except Exception:
+        pass
+    try:
+        conn.execute(text("ALTER TABLE machines ADD COLUMN department VARCHAR;"))
+        conn.execute(text("CREATE INDEX ix_machines_department ON machines (department);"))
+    except Exception:
+        pass
+
 app = FastAPI(title="Inventory Management API")
 
 # Pydantic schemas for data validation
@@ -34,6 +48,7 @@ class PartMasterBase(BaseModel):
     family: str
     forge_pn: str
     partno: str
+    department: str = ""
 
 class PartMasterCreate(PartMasterBase):
     pass
@@ -64,6 +79,7 @@ class BulkImportPart(BaseModel):
     family: str
     forge_pn: str
     partno: str
+    department: str = ""
     operations: List[PartOperationBase]
 
 class BulkImportPayload(BaseModel):
@@ -71,6 +87,7 @@ class BulkImportPayload(BaseModel):
 
 class MachineBase(BaseModel):
     name: str
+    department: str = ""
 
 class MachineCreate(MachineBase):
     pass
@@ -198,11 +215,12 @@ def bulk_import_partmaster(payload: BulkImportPayload, db: Session = Depends(get
         if existing_part:
             existing_part.family = part_data.family
             existing_part.forge_pn = part_data.forge_pn
+            existing_part.department = part_data.department
             db.query(PartOperation).filter(PartOperation.part_id == existing_part.id).delete()
             db.commit()
             part_id = existing_part.id
         else:
-            new_part = PartMaster(family=part_data.family, forge_pn=part_data.forge_pn, partno=part_data.partno)
+            new_part = PartMaster(family=part_data.family, forge_pn=part_data.forge_pn, partno=part_data.partno, department=part_data.department)
             db.add(new_part)
             db.commit()
             db.refresh(new_part)

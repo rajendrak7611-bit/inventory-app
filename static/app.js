@@ -142,6 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             family: String(row['Family'] || row['family'] || '').trim(),
                             forge_pn: String(row['Forge pn'] || row['forge_pn'] || row['Forge PN'] || '').trim(),
                             partno: partno,
+                            department: String(row['Dept'] || row['dept'] || row['Department'] || row['department'] || '').trim(),
                             operations: []
                         };
                     }
@@ -261,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
             parts.forEach(p => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${p.id}</td><td>${p.family}</td><td>${p.forge_pn}</td><td>${p.partno}</td>
+                    <td>${p.id}</td><td>${p.family}</td><td>${p.forge_pn}</td><td>${p.partno}</td><td>${p.department || ''}</td>
                     <td class="actions">
                         <button class="btn btn-outline" style="margin-right: 5px;" onclick="openOperations(${p.id})">Operations</button>
                         <button class="btn btn-edit" onclick="editPartMaster(${p.id})">Edit</button>
@@ -284,7 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const id = document.getElementById('partId').value;
         const data = {
             family: document.getElementById('partFamily').value, forge_pn: document.getElementById('forgePn').value,
-            partno: document.getElementById('partno').value
+            partno: document.getElementById('partno').value, department: document.getElementById('partDept').value
         };
         const url = id ? `/api/partmaster/${id}` : '/api/partmaster';
         await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
@@ -303,6 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (p) {
             document.getElementById('partId').value = p.id; document.getElementById('partFamily').value = p.family;
             document.getElementById('forgePn').value = p.forge_pn; document.getElementById('partno').value = p.partno;
+            document.getElementById('partDept').value = p.department || '';
             openPartModal(true);
         }
     };
@@ -401,7 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
             machines.forEach(m => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${m.id}</td><td>${m.name}</td>
+                    <td>${m.id}</td><td>${m.name}</td><td>${m.department || ''}</td>
                     <td class="actions">
                         <button class="btn btn-edit" onclick="editMachine(${m.id})">Edit</button>
                         <button class="btn btn-danger" onclick="deleteMachine(${m.id})">Delete</button>
@@ -421,7 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
     machineForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('machineId').value;
-        const data = { name: document.getElementById('machineName').value };
+        const data = { name: document.getElementById('machineName').value, department: document.getElementById('machineDept').value };
         const url = id ? `/api/machines/${id}` : '/api/machines';
         await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
         closeMachineModal(); fetchMachines();
@@ -438,6 +440,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const m = data.find(x => x.id === id);
         if (m) {
             document.getElementById('machineId').value = m.id; document.getElementById('machineName').value = m.name;
+            document.getElementById('machineDept').value = m.department || '';
             openMachineModal(true);
         }
     };
