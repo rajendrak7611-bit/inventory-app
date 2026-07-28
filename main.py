@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 
 from database import engine, get_db, Base
@@ -48,7 +48,7 @@ class PartMasterBase(BaseModel):
     family: str
     forge_pn: str
     partno: str
-    department: str = ""
+    department: Optional[str] = ""
 
 class PartMasterCreate(PartMasterBase):
     pass
@@ -79,7 +79,7 @@ class BulkImportPart(BaseModel):
     family: str
     forge_pn: str
     partno: str
-    department: str = ""
+    department: Optional[str] = ""
     operations: List[PartOperationBase]
 
 class BulkImportPayload(BaseModel):
@@ -87,7 +87,7 @@ class BulkImportPayload(BaseModel):
 
 class MachineBase(BaseModel):
     name: str
-    department: str = ""
+    department: Optional[str] = ""
 
 class MachineCreate(MachineBase):
     pass
@@ -100,7 +100,7 @@ class MachineResponse(MachineBase):
 
 class OperatorBase(BaseModel):
     name: str
-    department: str
+    department: Optional[str] = ""
 
 class OperatorCreate(OperatorBase):
     pass
