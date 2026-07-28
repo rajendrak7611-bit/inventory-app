@@ -405,20 +405,49 @@ def get_run_schedule(db: Session = Depends(get_db)):
             
         operations = db.query(PartOperation).filter(PartOperation.part_id == part.id).order_by(PartOperation.id).all()
         
+        prev_start_time = 0
+        prev_end_time = 0
+        prev_cycle_time = 0
+        
         for op in operations:
             if not op.machine:
                 continue
                 
             machine = op.machine
-            
-            # PARALLEL: Start time only depends on when the machine is free, not the part
-            start_time = machine_available_time.get(machine, 0)
-            
+            mach_avail = machine_available_time.get(machine, 0)
             runtime_minutes = op.cycle_time * sched.qty
-            end_time = start_time + runtime_minutes
             
-            # Update machine availability tracker
+            if prev_end_time == 0:
+                # First operation for the part
+                start_time = mach_avail
+                end_time = start_time + runtime_minutes
+            else:
+                # Subsequent operations: Overlapping (transfer batch of 1 piece)
+                earliest_start = prev_start_time + prev_cycle_time
+                start_time = max(mach_avail, earliest_start)
+                
+                earliest_end = prev_end_time + op.cycle_time
+                projected_end = start_time + runtime_minutes
+                
+                if projected_end < earliest_end:
+                    # This operation is faster than the previous one.
+                    # It would be starved if it started early. 
+                    # Shift it to the end so it finishes at exactly the same time.
+                    end_time = earliest_end
+                    start_time = end_time - runtime_minutes
+                    if start_time < mach_avail:
+                        start_time = mach_avail
+                        end_time = start_time + runtime_minutes
+                else:
+                    # Operation is slower or started late, runs continuously
+                    end_time = projected_end
+            
+            # Update availability trackers
             machine_available_time[machine] = end_time
+            
+            prev_start_time = start_time
+            prev_end_time = end_time
+            prev_cycle_time = op.cycle_time
             
             run_list.append({
                 "partno": sched.partno,
