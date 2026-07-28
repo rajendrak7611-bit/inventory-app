@@ -34,6 +34,14 @@
                 <button class="tab-btn" id="tabPartMaster">Part Master</button>
                 <button class="tab-btn" id="tabMachines">Machines</button>
                 <button class="tab-btn" id="tabOperators">Operators</button>
+                <div class="dropdown">
+                    <button class="tab-btn" id="tabSchedule" style="pointer-events: none;">Schedule ▼</button>
+                    <div class="dropdown-content">
+                        <a href="#" id="menuScheduleCreate">Create</a>
+                        <a href="#" id="menuScheduleRun">Run</a>
+                        <a href="#" id="menuScheduleStatus">Status</a>
+                    </div>
+                </div>
             </div>
 
             <div class="table-container" id="productsSection">
@@ -104,6 +112,22 @@
                         <!-- Data will be populated here by JavaScript -->
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Schedule Sections -->
+            <div class="table-container" id="scheduleCreateSection" style="display: none; padding: 2rem; color: var(--text-main);">
+                <h2>Create Schedule</h2>
+                <p style="color: var(--text-muted); margin-top: 10px;">Form to create schedule will go here.</p>
+            </div>
+            
+            <div class="table-container" id="scheduleRunSection" style="display: none; padding: 2rem; color: var(--text-main);">
+                <h2>Run Schedule</h2>
+                <p style="color: var(--text-muted); margin-top: 10px;">Interface to run schedule will go here.</p>
+            </div>
+            
+            <div class="table-container" id="scheduleStatusSection" style="display: none; padding: 2rem; color: var(--text-main);">
+                <h2>Schedule Status</h2>
+                <p style="color: var(--text-muted); margin-top: 10px;">Table to view status will go here.</p>
             </div>
         </main>
     </div>
@@ -280,6 +304,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=8"></script>
+    <script src="/static/app.js?v=9"></script>
 </body>
 </html>

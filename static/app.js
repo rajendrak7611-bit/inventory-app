@@ -11,11 +11,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabPartMaster = document.getElementById('tabPartMaster');
     const tabMachines = document.getElementById('tabMachines');
     const tabOperators = document.getElementById('tabOperators');
+    const tabSchedule = document.getElementById('tabSchedule');
+    const menuScheduleCreate = document.getElementById('menuScheduleCreate');
+    const menuScheduleRun = document.getElementById('menuScheduleRun');
+    const menuScheduleStatus = document.getElementById('menuScheduleStatus');
     
     const productsSection = document.getElementById('productsSection');
     const partMasterSection = document.getElementById('partMasterSection');
     const machinesSection = document.getElementById('machinesSection');
     const operatorsSection = document.getElementById('operatorsSection');
+    const scheduleCreateSection = document.getElementById('scheduleCreateSection');
+    const scheduleRunSection = document.getElementById('scheduleRunSection');
+    const scheduleStatusSection = document.getElementById('scheduleStatusSection');
 
     // Products Elements
     const productsBody = document.getElementById('productsBody');
@@ -62,11 +69,17 @@ document.addEventListener('DOMContentLoaded', () => {
         partMasterSection.style.display = 'none';
         machinesSection.style.display = 'none';
         operatorsSection.style.display = 'none';
+        scheduleCreateSection.style.display = 'none';
+        scheduleRunSection.style.display = 'none';
+        scheduleStatusSection.style.display = 'none';
+        
         tabProducts.classList.remove('active');
         tabPartMaster.classList.remove('active');
         tabMachines.classList.remove('active');
         tabOperators.classList.remove('active');
+        tabSchedule.classList.remove('active');
         importBtn.style.display = 'none';
+        addBtn.style.display = 'inline-flex';
     }
 
     // Tab Logic
@@ -107,6 +120,33 @@ document.addEventListener('DOMContentLoaded', () => {
         importBtn.style.display = 'inline-block';
         addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Operator`;
         fetchOperators();
+    });
+
+    menuScheduleCreate.addEventListener('click', (e) => {
+        e.preventDefault();
+        currentTab = 'schedule-create';
+        hideAllSections();
+        tabSchedule.classList.add('active');
+        scheduleCreateSection.style.display = 'block';
+        addBtn.style.display = 'none';
+    });
+
+    menuScheduleRun.addEventListener('click', (e) => {
+        e.preventDefault();
+        currentTab = 'schedule-run';
+        hideAllSections();
+        tabSchedule.classList.add('active');
+        scheduleRunSection.style.display = 'block';
+        addBtn.style.display = 'none';
+    });
+
+    menuScheduleStatus.addEventListener('click', (e) => {
+        e.preventDefault();
+        currentTab = 'schedule-status';
+        hideAllSections();
+        tabSchedule.classList.add('active');
+        scheduleStatusSection.style.display = 'block';
+        addBtn.style.display = 'none';
     });
 
     addBtn.addEventListener('click', () => {
