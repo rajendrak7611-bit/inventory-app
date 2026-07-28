@@ -353,9 +353,37 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- PART OPERATIONS LOGIC ---
+    let currentMachineOptions = '';
+    
+    function addOperationRow(op = { opn_no: '', description: '', machine: '', cycle_time: '' }) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><input type="text" class="opn-no" value="${op.opn_no}" style="width: 100%; padding: 8px;"></td>
+            <td><input type="text" class="op-desc" value="${op.description}" style="width: 100%; padding: 8px;"></td>
+            <td>
+                <select class="op-mach" style="width: 100%; padding: 8px;">
+                    ${currentMachineOptions}
+                </select>
+            </td>
+            <td><input type="number" step="0.01" class="op-time" value="${op.cycle_time || ''}" style="width: 100%; padding: 8px;"></td>
+        `;
+        if (op.machine) tr.querySelector('.op-mach').value = op.machine;
+        operationsBody.appendChild(tr);
+    }
+
+    document.getElementById('addOperationRowBtn').addEventListener('click', () => {
+        addOperationRow();
+    });
+
     window.openOperations = async (partId) => {
         operationsPartId.value = partId;
         
+        // Get the part's department to filter machines
+        const pRes = await fetch('/api/partmaster');
+        const parts = await pRes.json();
+        const part = parts.find(p => p.id === partId);
+        const partDept = part ? (part.department || '').trim().toLowerCase() : '';
+
         // Ensure machines are loaded for dropdown
         if (availableMachines.length === 0) {
             const mRes = await fetch('/api/machines');
@@ -366,31 +394,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await fetch(`/api/partmaster/${partId}/operations`);
         const existingOps = await res.json();
 
-        // Render 10 rows
         operationsBody.innerHTML = '';
-        let machineOptions = '<option value="">-- Select --</option>';
+        currentMachineOptions = '<option value="">-- Select --</option>';
         availableMachines.forEach(m => {
-            machineOptions += `<option value="${m.name}">${m.name}</option>`;
+            const mDept = (m.department || '').trim().toLowerCase();
+            // Show if part has no dept, machine has no dept, or depts match
+            if (!partDept || !mDept || mDept === partDept) {
+                currentMachineOptions += `<option value="${m.name}">${m.name}</option>`;
+            }
         });
 
-        for (let i = 0; i < 10; i++) {
-            const op = existingOps[i] || { opn_no: '', description: '', machine: '', cycle_time: '' };
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><input type="text" class="opn-no" value="${op.opn_no}" style="width: 100%; padding: 8px;"></td>
-                <td><input type="text" class="op-desc" value="${op.description}" style="width: 100%; padding: 8px;"></td>
-                <td>
-                    <select class="op-mach" style="width: 100%; padding: 8px;">
-                        ${machineOptions}
-                    </select>
-                </td>
-                <td><input type="number" step="0.01" class="op-time" value="${op.cycle_time || ''}" style="width: 100%; padding: 8px;"></td>
-            `;
-            // Set dropdown value
-            if (op.machine) {
-                tr.querySelector('.op-mach').value = op.machine;
-            }
-            operationsBody.appendChild(tr);
+        if (existingOps.length > 0) {
+            existingOps.forEach(op => addOperationRow(op));
+        } else {
+            addOperationRow();
         }
 
         operationsModal.classList.add('show');

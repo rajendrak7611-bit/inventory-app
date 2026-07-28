@@ -253,8 +253,9 @@
                 <h2 id="operationsModalTitle">Part Operations</h2>
                 <button class="close-btn" id="closeOperationsModalBtn">&times;</button>
             </div>
-            <div style="margin-bottom: 10px;">
-                <p>Define up to 10 operations for this part.</p>
+            <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                <p>Define operations for this part.</p>
+                <button type="button" class="btn btn-outline" id="addOperationRowBtn">+ Add Operation</button>
                 <input type="hidden" id="operationsPartId">
             </div>
             <div class="table-container" style="max-height: 400px; overflow-y: auto;">
@@ -279,6 +280,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=7"></script>
+    <script src="/static/app.js?v=8"></script>
 </body>
 </html>
