@@ -85,6 +85,12 @@ class BulkImportPart(BaseModel):
 class BulkImportPayload(BaseModel):
     parts: List[BulkImportPart]
 
+class BulkImportMachinePayload(BaseModel):
+    machines: List[MachineBase]
+
+class BulkImportOperatorPayload(BaseModel):
+    operators: List[OperatorBase]
+
 class MachineBase(BaseModel):
     name: str
     department: Optional[str] = ""
@@ -267,6 +273,17 @@ def delete_machine(machine_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Machine deleted successfully"}
 
+@app.post("/api/machines/bulk_import")
+def bulk_import_machines(payload: BulkImportMachinePayload, db: Session = Depends(get_db)):
+    for machine_data in payload.machines:
+        existing = db.query(Machine).filter(Machine.name == machine_data.name).first()
+        if existing:
+            existing.department = machine_data.department
+        else:
+            db.add(Machine(**machine_data.model_dump()))
+    db.commit()
+    return {"message": "Import successful"}
+
 # --- Operator API Routes ---
 
 @app.get("/api/operators", response_model=List[OperatorResponse])
@@ -300,6 +317,17 @@ def delete_operator(operator_id: int, db: Session = Depends(get_db)):
     db.delete(db_operator)
     db.commit()
     return {"message": "Operator deleted successfully"}
+
+@app.post("/api/operators/bulk_import")
+def bulk_import_operators(payload: BulkImportOperatorPayload, db: Session = Depends(get_db)):
+    for op_data in payload.operators:
+        existing = db.query(Operator).filter(Operator.name == op_data.name).first()
+        if existing:
+            existing.department = op_data.department
+        else:
+            db.add(Operator(**op_data.model_dump()))
+    db.commit()
+    return {"message": "Import successful"}
 
 # Serve static files (frontend)
 app.mount("/static", StaticFiles(directory="static"), name="static")

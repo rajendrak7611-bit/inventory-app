@@ -94,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
         hideAllSections();
         tabMachines.classList.add('active');
         machinesSection.style.display = 'block';
+        importBtn.style.display = 'inline-block';
         addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Machine`;
         fetchMachines();
     });
@@ -103,6 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
         hideAllSections();
         tabOperators.classList.add('active');
         operatorsSection.style.display = 'block';
+        importBtn.style.display = 'inline-block';
         addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Operator`;
         fetchOperators();
     });
@@ -132,47 +134,85 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sheet = workbook.Sheets[sheetName];
                 const json = XLSX.utils.sheet_to_json(sheet);
 
-                const partsMap = {};
-                json.forEach(row => {
-                    const partno = String(row['part no'] || row['Part no'] || row['Part No'] || row['partno'] || '').trim();
-                    if (!partno) return;
+                let endpoint = '';
+                let bodyData = '';
 
-                    if (!partsMap[partno]) {
-                        partsMap[partno] = {
-                            family: String(row['Family'] || row['family'] || '').trim(),
-                            forge_pn: String(row['Forge pn'] || row['forge_pn'] || row['Forge PN'] || '').trim(),
-                            partno: partno,
-                            department: String(row['Dept'] || row['dept'] || row['Department'] || row['department'] || '').trim(),
-                            operations: []
-                        };
-                    }
+                if (currentTab === 'partmaster') {
+                    const partsMap = {};
+                    json.forEach(row => {
+                        const partno = String(row['part no'] || row['Part no'] || row['Part No'] || row['partno'] || '').trim();
+                        if (!partno) return;
 
-                    if (row['Opn no'] !== undefined || row['Description']) {
-                        partsMap[partno].operations.push({
-                            opn_no: String(row['Opn no'] || row['opn_no'] || row['Opn No'] || '').trim(),
-                            description: String(row['Description'] || row['description'] || '').trim(),
-                            machine: String(row['Machine'] || row['machine'] || '').trim(),
-                            cycle_time: parseFloat(row['cycle time'] || row['Cycle time'] || row['Cycle Time'] || row['cycle_time']) || 0
+                        if (!partsMap[partno]) {
+                            partsMap[partno] = {
+                                family: String(row['Family'] || row['family'] || '').trim(),
+                                forge_pn: String(row['Forge pn'] || row['forge_pn'] || row['Forge PN'] || '').trim(),
+                                partno: partno,
+                                department: String(row['Dept'] || row['dept'] || row['Department'] || row['department'] || '').trim(),
+                                operations: []
+                            };
+                        }
+
+                        if (row['Opn no'] !== undefined || row['Description']) {
+                            partsMap[partno].operations.push({
+                                opn_no: String(row['Opn no'] || row['opn_no'] || row['Opn No'] || '').trim(),
+                                description: String(row['Description'] || row['description'] || '').trim(),
+                                machine: String(row['Machine'] || row['machine'] || '').trim(),
+                                cycle_time: parseFloat(row['cycle time'] || row['Cycle time'] || row['Cycle Time'] || row['cycle_time']) || 0
+                            });
+                        }
+                    });
+                    endpoint = '/api/partmaster/bulk_import';
+                    bodyData = JSON.stringify({ parts: Object.values(partsMap) });
+                } else if (currentTab === 'machines') {
+                    const machines = [];
+                    json.forEach(row => {
+                        const name = String(row['Machine Name'] || row['machine name'] || row['Machine'] || '').trim();
+                        if (!name) return;
+                        machines.push({
+                            name: name,
+                            department: String(row['Dept'] || row['dept'] || row['Department'] || row['department'] || '').trim()
                         });
-                    }
-                });
+                    });
+                    endpoint = '/api/machines/bulk_import';
+                    bodyData = JSON.stringify({ machines: machines });
+                } else if (currentTab === 'operators') {
+                    const operators = [];
+                    json.forEach(row => {
+                        const name = String(row['Operator Name'] || row['operator name'] || row['Operator'] || '').trim();
+                        if (!name) return;
+                        operators.push({
+                            name: name,
+                            department: String(row['Dept'] || row['dept'] || row['Department'] || row['department'] || '').trim()
+                        });
+                    });
+                    endpoint = '/api/operators/bulk_import';
+                    bodyData = JSON.stringify({ operators: operators });
+                }
 
-                const payload = { parts: Object.values(partsMap) };
+                if (!endpoint) {
+                    alert('Import is not supported on this tab.');
+                    importBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Import Excel`;
+                    importBtn.disabled = false;
+                    importFile.value = '';
+                    return;
+                }
                 
                 // Show loading indicator on button
-                const originalText = importBtn.innerHTML;
                 importBtn.innerHTML = 'Importing...';
                 importBtn.disabled = true;
 
-                const response = await fetch('/api/partmaster/bulk_import', {
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: bodyData
                 });
 
                 if (response.ok) {
                     alert('Import successful!');
-                    fetchPartMasters();
+                    if (currentTab === 'partmaster') fetchPartMasters();
+                    else if (currentTab === 'machines') fetchMachines();
+                    else if (currentTab === 'operators') fetchOperators();
                 } else {
                     alert('Import failed. Please check the console.');
                 }
