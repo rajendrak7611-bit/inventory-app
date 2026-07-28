@@ -31,6 +31,10 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         conn.execute(text("ALTER TABLE schedules ADD COLUMN completed_qty INTEGER DEFAULT 0;"))
     except Exception:
         pass
+    try:
+        conn.execute(text("ALTER TABLE schedules ADD COLUMN status VARCHAR DEFAULT 'Pending';"))
+    except Exception:
+        pass
 
 app = FastAPI(title="Inventory Management API")
 
