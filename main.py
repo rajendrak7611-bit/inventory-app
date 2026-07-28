@@ -406,6 +406,10 @@ def get_run_schedule(db: Session = Depends(get_db)):
     run_list = []
     
     for sched in schedules:
+        remaining_qty = sched.qty - (sched.completed_qty or 0)
+        if remaining_qty <= 0:
+            continue
+            
         # Fetch part operations for this schedule's partno
         part = db.query(PartMaster).filter(PartMaster.partno == sched.partno).first()
         if not part:
@@ -423,7 +427,7 @@ def get_run_schedule(db: Session = Depends(get_db)):
                 
             machine = op.machine
             mach_avail = machine_available_time.get(machine, 0)
-            runtime_minutes = op.cycle_time * sched.qty
+            runtime_minutes = op.cycle_time * remaining_qty
             
             if prev_end_time == 0:
                 # First operation for the part
@@ -462,7 +466,7 @@ def get_run_schedule(db: Session = Depends(get_db)):
                 "opn_no": op.opn_no,
                 "description": op.description,
                 "machine": machine,
-                "qty": sched.qty,
+                "qty": remaining_qty,
                 "cycle_time": op.cycle_time,
                 "runtime": round(runtime_minutes / 60, 2), # Runtime in hours
                 "start_date": get_calendar_date(start_time),
