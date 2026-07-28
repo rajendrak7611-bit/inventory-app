@@ -765,9 +765,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const schedRes = await fetch('/api/schedule');
         const schedData = await schedRes.json();
-        prodLogSchedules = schedData.filter(s => s.status === 'Pending');
+        prodLogSchedules = schedData.filter(s => s.status === 'Pending' || !s.status);
         
-        // Populate Schedule Parts (all pending schedules, regardless of dept, user can select)
+        // Populate Schedule Parts with ALL active schedules initially
         const partSelect = document.getElementById('prodLogPartNo');
         partSelect.innerHTML = '<option value="">-- Select Scheduled Part --</option>';
         const uniqueSchedParts = [...new Set(prodLogSchedules.map(s => s.partno))];
@@ -782,9 +782,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const dept = e.target.value.trim().toUpperCase();
         const machSelect = document.getElementById('prodLogMachine');
         const opSelect = document.getElementById('prodLogOperator');
+        const partSelect = document.getElementById('prodLogPartNo');
         
         machSelect.innerHTML = '<option value="">-- Select Machine --</option>';
         opSelect.innerHTML = '<option value="">-- Select Operator --</option>';
+        partSelect.innerHTML = '<option value="">-- Select Scheduled Part --</option>';
         
         prodLogAllMachines.filter(m => (m.department || '').trim().toUpperCase() === dept).forEach(m => {
             machSelect.innerHTML += `<option value="${m.name}">${m.name}</option>`;
@@ -793,6 +795,19 @@ document.addEventListener('DOMContentLoaded', () => {
         prodLogAllOperators.filter(o => (o.department || '').trim().toUpperCase() === dept).forEach(o => {
             opSelect.innerHTML += `<option value="${o.name}">${o.name}</option>`;
         });
+        
+        // Filter pending schedules by this department
+        const deptSchedules = prodLogSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept);
+        const uniqueSchedParts = [...new Set(deptSchedules.map(s => s.partno))];
+        uniqueSchedParts.forEach(p => {
+            partSelect.innerHTML += `<option value="${p}">${p}</option>`;
+        });
+        
+        // Reset dependent fields
+        document.getElementById('prodLogOpnNo').innerHTML = '<option value="">-- Select Operation --</option>';
+        document.getElementById('prodLogDescription').value = '';
+        document.getElementById('prodLogCycleTime').value = '';
+        recalcProdLog();
     });
 
     document.getElementById('prodLogPartNo').addEventListener('change', async (e) => {
