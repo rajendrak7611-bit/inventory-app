@@ -635,6 +635,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    async function fetchSchedulesForList() {
+        try {
+            const res = await fetch('/api/schedule');
+            const schedules = await res.json();
+            const tbody = document.getElementById('scheduleListBody');
+            if (tbody) {
+                tbody.innerHTML = '';
+                if (schedules.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No schedules found.</td></tr>';
+                    return;
+                }
+                // Sort by newest first assuming higher ID means newer
+                schedules.sort((a, b) => b.id - a.id);
+                schedules.forEach(s => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${s.partno}</td>
+                        <td>${s.target_date}</td>
+                        <td>${s.qty}</td>
+                        <td><span style="padding: 2px 8px; background-color: rgba(59, 130, 246, 0.1); color: var(--primary); border-radius: 12px; font-size: 0.85em;">${s.status || 'Pending'}</span></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        } catch (e) {
+            console.error('Error fetching schedules:', e);
+        }
+    }
+
     if (scheduleCreateForm) {
         scheduleCreateForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -653,6 +682,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (response.ok) {
                     alert('Schedule created successfully!');
                     scheduleCreateForm.reset();
+                    scheduleDept.value = ''; // Reset dept field
+                    fetchSchedulesForList();
                 } else {
                     alert('Failed to create schedule.');
                 }
@@ -662,4 +693,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // Call fetchSchedulesForList when opening the create tab
+    menuScheduleCreate.addEventListener('click', (e) => {
+        // e.preventDefault() is already handled in the previous listener, but we can just add this logic here or let it be handled when they click the tab.
+        fetchSchedulesForList();
+    });
 });
