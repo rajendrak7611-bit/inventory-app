@@ -410,10 +410,6 @@ def get_run_schedule(db: Session = Depends(get_db)):
     run_list = []
     
     for sched in schedules:
-        remaining_qty = sched.qty - (sched.completed_qty or 0)
-        if remaining_qty <= 0:
-            continue
-            
         # Fetch part operations for this schedule's partno
         part = db.query(PartMaster).filter(PartMaster.partno == sched.partno).first()
         if not part:
@@ -429,12 +425,24 @@ def get_run_schedule(db: Session = Depends(get_db)):
             if not op.machine:
                 continue
                 
+            # Calculate remaining qty for this specific operation
+            logs = db.query(ProductionLog).filter(
+                ProductionLog.partno == sched.partno,
+                ProductionLog.opn_no == op.opn_no
+            ).all()
+            op_completed = sum((l.prod_qty or 0) for l in logs)
+            remaining_qty = sched.qty - op_completed
+            
+            # If this specific operation is completed, skip it from the schedule run
+            if remaining_qty <= 0:
+                continue
+                
             machine = op.machine
             mach_avail = machine_available_time.get(machine, 0)
             runtime_minutes = op.cycle_time * remaining_qty
             
             if prev_end_time == 0:
-                # First operation for the part
+                # First operation for the part OR previous operations completed
                 start_time = mach_avail
                 end_time = start_time + runtime_minutes
             else:
