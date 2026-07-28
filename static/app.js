@@ -149,6 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 forge_pn: String(row['Forge pn'] || row['forge_pn'] || row['Forge PN'] || '').trim(),
                                 partno: partno,
                                 department: String(row['Dept'] || row['dept'] || row['Department'] || row['department'] || '').trim(),
+                                va: String(row['VA'] || row['va'] || row['Va'] || '').trim(),
                                 operations: []
                             };
                         }
@@ -302,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
             parts.forEach(p => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${p.id}</td><td>${p.department || ''}</td><td>${p.family}</td><td>${p.forge_pn}</td><td>${p.partno}</td>
+                    <td>${p.id}</td><td>${p.department || ''}</td><td>${p.va || ''}</td><td>${p.family}</td><td>${p.forge_pn}</td><td>${p.partno}</td>
                     <td class="actions">
                         <button class="btn btn-outline" style="margin-right: 5px;" onclick="openOperations(${p.id})">Operations</button>
                         <button class="btn btn-edit" onclick="editPartMaster(${p.id})">Edit</button>
@@ -325,7 +326,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const id = document.getElementById('partId').value;
         const data = {
             family: document.getElementById('partFamily').value, forge_pn: document.getElementById('forgePn').value,
-            partno: document.getElementById('partno').value, department: document.getElementById('partDept').value
+            partno: document.getElementById('partno').value, department: document.getElementById('partDept').value,
+            va: document.getElementById('partVa').value
         };
         const url = id ? `/api/partmaster/${id}` : '/api/partmaster';
         await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
@@ -345,6 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('partId').value = p.id; document.getElementById('partFamily').value = p.family;
             document.getElementById('forgePn').value = p.forge_pn; document.getElementById('partno').value = p.partno;
             document.getElementById('partDept').value = p.department || '';
+            document.getElementById('partVa').value = p.va || '';
             openPartModal(true);
         }
     };

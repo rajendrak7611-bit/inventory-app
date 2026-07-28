@@ -20,6 +20,7 @@ class PartMaster(Base):
     forge_pn = Column(String, index=True)
     partno = Column(String, index=True)
     department = Column(String, index=True)
+    va = Column(String)
 
     operations = relationship("PartOperation", back_populates="part", cascade="all, delete-orphan")
 

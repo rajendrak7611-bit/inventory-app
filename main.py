@@ -20,6 +20,10 @@ with engine.begin() as conn:
     except Exception:
         pass
     try:
+        conn.execute(text("ALTER TABLE part_masters ADD COLUMN va VARCHAR;"))
+    except Exception:
+        pass
+    try:
         conn.execute(text("ALTER TABLE machines ADD COLUMN department VARCHAR;"))
         conn.execute(text("CREATE INDEX ix_machines_department ON machines (department);"))
     except Exception:
@@ -49,6 +53,7 @@ class PartMasterBase(BaseModel):
     forge_pn: str
     partno: str
     department: Optional[str] = ""
+    va: Optional[str] = ""
 
 class PartMasterCreate(PartMasterBase):
     pass
@@ -80,6 +85,7 @@ class BulkImportPart(BaseModel):
     forge_pn: str
     partno: str
     department: Optional[str] = ""
+    va: Optional[str] = ""
     operations: List[PartOperationBase]
 
 class BulkImportPayload(BaseModel):
@@ -224,11 +230,12 @@ def bulk_import_partmaster(payload: BulkImportPayload, db: Session = Depends(get
             existing_part.family = part_data.family
             existing_part.forge_pn = part_data.forge_pn
             existing_part.department = part_data.department
+            existing_part.va = part_data.va
             db.query(PartOperation).filter(PartOperation.part_id == existing_part.id).delete()
             db.commit()
             part_id = existing_part.id
         else:
-            new_part = PartMaster(family=part_data.family, forge_pn=part_data.forge_pn, partno=part_data.partno, department=part_data.department)
+            new_part = PartMaster(family=part_data.family, forge_pn=part_data.forge_pn, partno=part_data.partno, department=part_data.department, va=part_data.va)
             db.add(new_part)
             db.commit()
             db.refresh(new_part)
