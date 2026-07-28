@@ -303,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
             parts.forEach(p => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${p.id}</td><td>${p.department || ''}</td><td>${p.va || ''}</td><td>${p.family}</td><td>${p.forge_pn}</td><td>${p.partno}</td>
+                    <td>${p.id}</td><td>${p.department || ''}</td><td>${p.family}</td><td>${p.forge_pn}</td><td>${p.partno}</td><td>${p.va || ''}</td>
                     <td class="actions">
                         <button class="btn btn-outline" style="margin-right: 5px;" onclick="openOperations(${p.id})">Operations</button>
                         <button class="btn btn-edit" onclick="editPartMaster(${p.id})">Edit</button>
