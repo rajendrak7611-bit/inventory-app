@@ -6,7 +6,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, PartOperation
+from models import Product, PartMaster, Machine, Operator, PartOperation, Schedule
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -120,6 +120,22 @@ class OperatorCreate(OperatorBase):
     pass
 
 class OperatorResponse(OperatorBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+class ScheduleBase(BaseModel):
+    department: Optional[str] = ""
+    partno: str
+    target_date: str
+    qty: int
+    status: Optional[str] = "Pending"
+
+class ScheduleCreate(ScheduleBase):
+    pass
+
+class ScheduleResponse(ScheduleBase):
     id: int
 
     class Config:
@@ -337,6 +353,20 @@ def bulk_import_operators(payload: BulkImportOperatorPayload, db: Session = Depe
             db.add(Operator(**op_data.model_dump()))
     db.commit()
     return {"message": "Import successful"}
+
+# --- Schedule API Routes ---
+
+@app.get("/api/schedule", response_model=List[ScheduleResponse])
+def read_schedules(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return db.query(Schedule).offset(skip).limit(limit).all()
+
+@app.post("/api/schedule", response_model=ScheduleResponse)
+def create_schedule(schedule: ScheduleCreate, db: Session = Depends(get_db)):
+    db_schedule = Schedule(**schedule.model_dump())
+    db.add(db_schedule)
+    db.commit()
+    db.refresh(db_schedule)
+    return db_schedule
 
 # Serve static files (frontend)
 app.mount("/static", StaticFiles(directory="static"), name="static")

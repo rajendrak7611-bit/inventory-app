@@ -49,3 +49,13 @@ class Operator(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     department = Column(String, index=True)
+
+class Schedule(Base):
+    __tablename__ = "schedules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    department = Column(String, index=True)
+    partno = Column(String, index=True)
+    target_date = Column(String, index=True)
+    qty = Column(Integer)
+    status = Column(String, default="Pending")

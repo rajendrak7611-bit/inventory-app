@@ -129,6 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tabSchedule.classList.add('active');
         scheduleCreateSection.style.display = 'block';
         addBtn.style.display = 'none';
+        loadSchedulePartNos();
     });
 
     menuScheduleRun.addEventListener('click', (e) => {
@@ -605,4 +606,60 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchProducts();
     // Pre-fetch machines so the dropdown is ready
     fetch('/api/machines').then(r => r.json()).then(data => availableMachines = data);
+
+    // --- SCHEDULE LOGIC ---
+    const schedulePartNo = document.getElementById('schedulePartNo');
+    const scheduleDept = document.getElementById('scheduleDept');
+    const scheduleCreateForm = document.getElementById('scheduleCreateForm');
+
+    let allPartMasters = [];
+
+    async function loadSchedulePartNos() {
+        if (allPartMasters.length === 0) {
+            const res = await fetch('/api/partmaster');
+            allPartMasters = await res.json();
+        }
+        schedulePartNo.innerHTML = '<option value="">-- Select Part No --</option>';
+        allPartMasters.forEach(p => {
+            schedulePartNo.innerHTML += `<option value="${p.partno}">${p.partno}</option>`;
+        });
+    }
+
+    schedulePartNo.addEventListener('change', (e) => {
+        const selectedPartNo = e.target.value;
+        const part = allPartMasters.find(p => p.partno === selectedPartNo);
+        if (part) {
+            scheduleDept.value = part.department || '';
+        } else {
+            scheduleDept.value = '';
+        }
+    });
+
+    if (scheduleCreateForm) {
+        scheduleCreateForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                partno: schedulePartNo.value,
+                department: scheduleDept.value,
+                target_date: document.getElementById('scheduleTargetDate').value,
+                qty: parseInt(document.getElementById('scheduleQty').value)
+            };
+            try {
+                const response = await fetch('/api/schedule', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    alert('Schedule created successfully!');
+                    scheduleCreateForm.reset();
+                } else {
+                    alert('Failed to create schedule.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error creating schedule.');
+            }
+        });
+    }
 });
