@@ -262,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
             parts.forEach(p => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${p.id}</td><td>${p.family}</td><td>${p.forge_pn}</td><td>${p.partno}</td><td>${p.department || ''}</td>
+                    <td>${p.id}</td><td>${p.department || ''}</td><td>${p.family}</td><td>${p.forge_pn}</td><td>${p.partno}</td>
                     <td class="actions">
                         <button class="btn btn-outline" style="margin-right: 5px;" onclick="openOperations(${p.id})">Operations</button>
                         <button class="btn btn-edit" onclick="editPartMaster(${p.id})">Edit</button>
@@ -403,7 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
             machines.forEach(m => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${m.id}</td><td>${m.name}</td><td>${m.department || ''}</td>
+                    <td>${m.id}</td><td>${m.department || ''}</td><td>${m.name}</td>
                     <td class="actions">
                         <button class="btn btn-edit" onclick="editMachine(${m.id})">Edit</button>
                         <button class="btn btn-danger" onclick="deleteMachine(${m.id})">Delete</button>
@@ -458,7 +458,7 @@ document.addEventListener('DOMContentLoaded', () => {
             operators.forEach(o => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${o.id}</td><td>${o.name}</td><td>${o.department}</td>
+                    <td>${o.id}</td><td>${o.department}</td><td>${o.name}</td>
                     <td class="actions">
                         <button class="btn btn-edit" onclick="editOperator(${o.id})">Edit</button>
                         <button class="btn btn-danger" onclick="deleteOperator(${o.id})">Delete</button>
