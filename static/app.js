@@ -139,6 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tabSchedule.classList.add('active');
         scheduleRunSection.style.display = 'block';
         addBtn.style.display = 'none';
+        fetchRunSchedule();
     });
 
     menuScheduleStatus.addEventListener('click', (e) => {
@@ -699,4 +700,37 @@ document.addEventListener('DOMContentLoaded', () => {
         // e.preventDefault() is already handled in the previous listener, but we can just add this logic here or let it be handled when they click the tab.
         fetchSchedulesForList();
     });
+
+    async function fetchRunSchedule() {
+        try {
+            const res = await fetch('/api/schedule/run');
+            const data = await res.json();
+            const tbody = document.getElementById('scheduleRunBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">No pending schedules found to run.</td></tr>';
+                return;
+            }
+            
+            data.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${item.partno}</td>
+                    <td>${item.opn_no}</td>
+                    <td>${item.description}</td>
+                    <td>${item.machine}</td>
+                    <td>${item.qty}</td>
+                    <td>${item.cycle_time}</td>
+                    <td>${item.runtime}</td>
+                    <td><span style="font-weight: 500;">${item.start_date}</span></td>
+                    <td><span style="font-weight: 500;">${item.end_date}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (e) {
+            console.error('Error fetching run schedule:', e);
+        }
+    }
 });

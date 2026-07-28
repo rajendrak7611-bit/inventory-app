@@ -368,6 +368,76 @@ def create_schedule(schedule: ScheduleCreate, db: Session = Depends(get_db)):
     db.refresh(db_schedule)
     return db_schedule
 
+@app.get("/api/schedule/run")
+def get_run_schedule(db: Session = Depends(get_db)):
+    from datetime import date, timedelta
+    
+    # 1. Fetch all pending schedules
+    schedules = db.query(Schedule).filter(Schedule.status == "Pending").all()
+    # Sort by target_date (assuming YYYY-MM-DD format from input date)
+    schedules = sorted(schedules, key=lambda s: s.target_date)
+    
+    # 2. Track availability in working minutes from today
+    machine_available_time = {}
+    
+    today = date.today()
+    
+    def get_calendar_date(working_minutes):
+        # 1 working day = 21 hours = 1260 minutes
+        working_days = int(working_minutes // 1260)
+        current = today
+        days_added = 0
+        
+        # We must add 'working_days' skipping Sundays
+        while days_added < working_days:
+            current += timedelta(days=1)
+            if current.weekday() != 6: # 6 is Sunday
+                days_added += 1
+        return current.strftime("%d/%m")
+        
+    run_list = []
+    
+    for sched in schedules:
+        # Fetch part operations for this schedule's partno
+        part = db.query(PartMaster).filter(PartMaster.partno == sched.partno).first()
+        if not part:
+            continue
+            
+        operations = db.query(PartOperation).filter(PartOperation.part_id == part.id).order_by(PartOperation.id).all()
+        
+        part_available_time = 0 # Sequential per part
+        
+        for op in operations:
+            if not op.machine:
+                continue
+                
+            machine = op.machine
+            
+            # Start time is max of when the machine is free and when the part finishes previous op
+            mach_avail = machine_available_time.get(machine, 0)
+            start_time = max(mach_avail, part_available_time)
+            
+            runtime = int(op.cycle_time * sched.qty)
+            end_time = start_time + runtime
+            
+            # Update availability trackers
+            machine_available_time[machine] = end_time
+            part_available_time = end_time
+            
+            run_list.append({
+                "partno": sched.partno,
+                "opn_no": op.opn_no,
+                "description": op.description,
+                "machine": machine,
+                "qty": sched.qty,
+                "cycle_time": op.cycle_time,
+                "runtime": runtime,
+                "start_date": get_calendar_date(start_time),
+                "end_date": get_calendar_date(end_time)
+            })
+            
+    return run_list
+
 # Serve static files (frontend)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

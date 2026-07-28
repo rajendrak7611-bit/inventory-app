@@ -165,9 +165,25 @@
                 </div>
             </div>
             
-            <div class="table-container" id="scheduleRunSection" style="display: none; padding: 2rem; color: var(--text-main);">
-                <h2>Run Schedule</h2>
-                <p style="color: var(--text-muted); margin-top: 10px;">Interface to run schedule will go here.</p>
+            <div class="table-container" id="scheduleRunSection" style="display: none;">
+                <table id="scheduleRunTable">
+                    <thead>
+                        <tr>
+                            <th>Part No</th>
+                            <th>Opn No</th>
+                            <th>Description</th>
+                            <th>Machine</th>
+                            <th>Qty</th>
+                            <th>Cycle Time</th>
+                            <th>Runtime</th>
+                            <th>Start Date</th>
+                            <th>End Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scheduleRunBody">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
             </div>
             
             <div class="table-container" id="scheduleStatusSection" style="display: none; padding: 2rem; color: var(--text-main);">
@@ -349,6 +365,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=11"></script>
+    <script src="/static/app.js?v=12"></script>
 </body>
 </html>
