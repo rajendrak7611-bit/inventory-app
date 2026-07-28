@@ -36,6 +36,10 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         conn.execute(text("ALTER TABLE schedules ADD COLUMN status VARCHAR DEFAULT 'Pending';"))
     except Exception:
         pass
+    try:
+        conn.execute(text("UPDATE schedules SET status = 'Pending' WHERE status = 'Completed';"))
+    except Exception:
+        pass
 
 app = FastAPI(title="Inventory Management API")
 
@@ -496,17 +500,26 @@ class ProdLogCreate(BaseModel):
 def create_prodlog(log: ProdLogCreate, db: Session = Depends(get_db)):
     db_log = ProductionLog(**log.dict())
     db.add(db_log)
-    
-    # Update schedule's completed_qty
-    # We find the schedule for this partno (if there are multiple, maybe the first pending one)
-    schedule = db.query(Schedule).filter(Schedule.partno == log.partno, Schedule.status == "Pending").first()
-    if schedule:
-        schedule.completed_qty = (schedule.completed_qty or 0) + log.prod_qty
-        if schedule.completed_qty >= schedule.qty:
-            schedule.status = "Completed"
-            
     db.commit()
     db.refresh(db_log)
+    
+    # Check if we should mark the schedule as Completed
+    schedule = db.query(Schedule).filter(Schedule.partno == log.partno, Schedule.status == "Pending").first()
+    if schedule:
+        part = db.query(PartMaster).filter(PartMaster.partno == schedule.partno).first()
+        if part:
+            last_op = db.query(PartOperation).filter(PartOperation.part_id == part.id).order_by(PartOperation.id.desc()).first()
+            if last_op and log.opn_no == last_op.opn_no:
+                # Sum all production for this last operation
+                logs = db.query(ProductionLog).filter(
+                    ProductionLog.partno == schedule.partno,
+                    ProductionLog.opn_no == last_op.opn_no
+                ).all()
+                total_prod = sum((l.prod_qty or 0) for l in logs)
+                if total_prod >= schedule.qty:
+                    schedule.status = "Completed"
+                    db.commit()
+            
     return db_log
 
 @app.get("/api/prodlog")
