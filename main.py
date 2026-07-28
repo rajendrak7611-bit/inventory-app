@@ -85,11 +85,7 @@ class BulkImportPart(BaseModel):
 class BulkImportPayload(BaseModel):
     parts: List[BulkImportPart]
 
-class BulkImportMachinePayload(BaseModel):
-    machines: List[MachineBase]
 
-class BulkImportOperatorPayload(BaseModel):
-    operators: List[OperatorBase]
 
 class MachineBase(BaseModel):
     name: str
@@ -107,6 +103,12 @@ class MachineResponse(MachineBase):
 class OperatorBase(BaseModel):
     name: str
     department: Optional[str] = ""
+
+class BulkImportMachinePayload(BaseModel):
+    machines: List[MachineBase]
+
+class BulkImportOperatorPayload(BaseModel):
+    operators: List[OperatorBase]
 
 class OperatorCreate(OperatorBase):
     pass
