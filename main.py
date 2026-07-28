@@ -49,9 +49,9 @@ class ProductResponse(ProductBase):
         from_attributes = True
 
 class PartMasterBase(BaseModel):
-    family: str
-    forge_pn: str
-    partno: str
+    family: Optional[str] = ""
+    forge_pn: Optional[str] = ""
+    partno: Optional[str] = ""
     department: Optional[str] = ""
     va: Optional[str] = ""
 
@@ -65,10 +65,10 @@ class PartMasterResponse(PartMasterBase):
         from_attributes = True
 
 class PartOperationBase(BaseModel):
-    opn_no: str
-    description: str
-    machine: str
-    cycle_time: float
+    opn_no: Optional[str] = ""
+    description: Optional[str] = ""
+    machine: Optional[str] = ""
+    cycle_time: Optional[float] = 0.0
 
 class PartOperationCreate(PartOperationBase):
     pass
@@ -81,9 +81,9 @@ class PartOperationResponse(PartOperationBase):
         from_attributes = True
 
 class BulkImportPart(BaseModel):
-    family: str
-    forge_pn: str
-    partno: str
+    family: Optional[str] = ""
+    forge_pn: Optional[str] = ""
+    partno: Optional[str] = ""
     department: Optional[str] = ""
     va: Optional[str] = ""
     operations: List[PartOperationBase]
