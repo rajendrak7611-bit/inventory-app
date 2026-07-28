@@ -823,7 +823,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Need part_id to get operations. Let's fetch partmaster and find the id.
         const res = await fetch('/api/partmaster');
         const allParts = await res.json();
-        const part = allParts.find(p => p.partno === partno);
+        const part = allParts.find(p => String(p.partno).trim().toLowerCase() === String(partno).trim().toLowerCase());
         if (part) {
             const opRes = await fetch(`/api/partmaster/${part.id}/operations`);
             currentPartOperations = await opRes.json();
@@ -834,8 +834,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('prodLogOpnNo').addEventListener('change', (e) => {
-        const opn_no = e.target.value;
-        const op = currentPartOperations.find(o => o.opn_no === opn_no);
+        const opn_no = String(e.target.value).trim();
+        const op = currentPartOperations.find(o => String(o.opn_no).trim() === opn_no);
         if (op) {
             document.getElementById('prodLogDescription').value = op.description || '';
             document.getElementById('prodLogCycleTime').value = op.cycle_time || 0;
