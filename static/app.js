@@ -902,9 +902,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${log.date}</td>
                     <td>${log.dept}</td>
                     <td>${log.shift}</td>
+                    <td>${log.setter || ''}</td>
                     <td>${log.partno}</td>
                     <td>${log.opn_no}</td>
+                    <td>${log.description || ''}</td>
                     <td>${log.machine}</td>
+                    <td>${log.operator || ''}</td>
+                    <td>${log.cycle_time || ''}</td>
+                    <td>${log.runtime || ''}</td>
+                    <td>${log.target_qty || ''}</td>
                     <td><span style="font-weight:bold;color:var(--primary);">${log.prod_qty}</span></td>
                     <td>${log.efficiency}%</td>
                     <td><span style="font-weight:bold;">${totalIdle.toFixed(2)}</span></td>
