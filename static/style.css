@@ -160,7 +160,6 @@ header {
     border-radius: 8px;
     border: 1px solid var(--glass-border);
     overflow: hidden;
-    margin-top: 5px;
 }
 
 .dropdown-content a {
