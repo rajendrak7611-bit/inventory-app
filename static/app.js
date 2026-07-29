@@ -153,6 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tabSchedule.classList.add('active');
         scheduleStatusSection.style.display = 'block';
         addBtn.style.display = 'none';
+        initScheduleStatus();
     });
 
     tabProdLog.addEventListener('click', () => {
@@ -744,6 +745,102 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } catch (e) {
             console.error('Error fetching run schedule:', e);
+        }
+    }
+
+    // --- SCHEDULE STATUS LOGIC ---
+    let statusAllParts = [];
+    
+    async function initScheduleStatus() {
+        try {
+            const partsRes = await fetch('/api/partmaster');
+            statusAllParts = await partsRes.json();
+            
+            const deptSelect = document.getElementById('statusDeptSelect');
+            deptSelect.addEventListener('change', fetchScheduleStatus);
+            
+            const exportBtn = document.getElementById('exportStatusBtn');
+            exportBtn.addEventListener('click', () => {
+                const table = document.getElementById('statusTable');
+                if (!table) return;
+                const wb = XLSX.utils.table_to_book(table, {sheet: "Status"});
+                XLSX.writeFile(wb, `Schedule_Status_${new Date().toISOString().slice(0,10)}.xlsx`);
+            });
+        } catch (e) {
+            console.error('Error init schedule status', e);
+        }
+    }
+
+    async function fetchScheduleStatus() {
+        const dept = document.getElementById('statusDeptSelect').value;
+        const tbody = document.getElementById('statusBody');
+        tbody.innerHTML = '';
+        if (!dept) return;
+
+        try {
+            const [schedRes, logRes] = await Promise.all([
+                fetch('/api/schedule'),
+                fetch('/api/prodlog')
+            ]);
+            
+            const allSchedules = await schedRes.json();
+            const allLogs = await logRes.json();
+            
+            const deptSchedules = allSchedules.filter(s => s.department === dept && (s.status === 'Pending' || !s.status));
+            const uniqueParts = [...new Set(deptSchedules.map(s => s.partno))];
+            
+            for (const partno of uniqueParts) {
+                const partObj = statusAllParts.find(p => p.partno === partno);
+                if (!partObj) continue;
+                
+                const opsRes = await fetch(`/api/partmaster/${partObj.id}/operations`);
+                const operations = await opsRes.json();
+                
+                // Sort operations numerically if possible
+                operations.sort((a, b) => {
+                    let numA = parseInt(a.opn_no) || 0;
+                    let numB = parseInt(b.opn_no) || 0;
+                    return numA - numB;
+                });
+                
+                let rowHtml = `<td>${partno}</td>`;
+                
+                // Opn 1 to 10
+                for (let i = 0; i < 10; i++) {
+                    if (i < operations.length) {
+                        const currentOp = operations[i];
+                        const nextOp = operations[i + 1];
+                        
+                        // Total produced for current op
+                        const currentProd = allLogs.filter(l => l.partno === partno && l.opn_no === currentOp.opn_no).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                        
+                        // Total produced for next op
+                        let nextProd = 0;
+                        if (nextOp) {
+                            nextProd = allLogs.filter(l => l.partno === partno && l.opn_no === nextOp.opn_no).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                        }
+                        
+                        let balance = currentProd - nextProd;
+                        rowHtml += `<td>${balance}</td>`;
+                    } else {
+                        rowHtml += `<td></td>`;
+                    }
+                }
+                
+                // fixed columns: debur, for ins, rework, nc, rfd
+                const fixedOps = ['debur', 'for ins', 'rework', 'nc', 'rfd'];
+                for (const fOp of fixedOps) {
+                    const prod = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === fOp).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                    rowHtml += `<td>${prod || ''}</td>`;
+                }
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = rowHtml;
+                tbody.appendChild(tr);
+            }
+            
+        } catch (e) {
+            console.error('Error fetching schedule status', e);
         }
     }
 

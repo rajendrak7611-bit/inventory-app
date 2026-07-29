@@ -188,8 +188,50 @@
             </div>
             
             <div class="table-container" id="scheduleStatusSection" style="display: none; padding: 2rem; color: var(--text-main);">
-                <h2>Schedule Status</h2>
-                <p style="color: var(--text-muted); margin-top: 10px;">Table to view status will go here.</p>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <h2 style="margin: 0;">Schedule Status</h2>
+                        <select id="statusDeptSelect" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
+                            <option value="">-- Select Dept --</option>
+                            <option value="WIPRO">WIPRO</option>
+                            <option value="SPIDER">SPIDER</option>
+                            <option value="BC">BC</option>
+                            <option value="GEAR">GEAR</option>
+                        </select>
+                    </div>
+                    <button id="exportStatusBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Export Excel
+                    </button>
+                </div>
+                
+                <div style="max-height: 700px; overflow-y: auto;">
+                    <table id="statusTable" style="width: 100%; white-space: nowrap;">
+                        <thead>
+                            <tr>
+                                <th>part no</th>
+                                <th>opn 1</th>
+                                <th>opn 2</th>
+                                <th>opn 3</th>
+                                <th>opn 4</th>
+                                <th>opn 5</th>
+                                <th>opn 6</th>
+                                <th>opn 7</th>
+                                <th>opn 8</th>
+                                <th>opn 9</th>
+                                <th>opn 10</th>
+                                <th>debur</th>
+                                <th>for ins</th>
+                                <th>rework</th>
+                                <th>nc</th>
+                                <th>rfd</th>
+                            </tr>
+                        </thead>
+                        <tbody id="statusBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
             
             <!-- Prod Log Section -->
