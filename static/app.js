@@ -188,6 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tabInspection.classList.add('active');
         inspectionSection.style.display = 'block';
         addBtn.style.display = 'none';
+        initInspection();
     });
 
     addBtn.addEventListener('click', () => {
@@ -867,6 +868,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     let nextFProd = 0;
                     if (fOp === 'debur') {
                         nextFProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                    } else if (fOp === 'for ins') {
+                        nextFProd = allLogs.filter(l => l.partno === partno && ['rework', 'nc', 'rfd'].includes((l.opn_no || '').toLowerCase())).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                     }
                     
                     const fBalance = prod - nextFProd;
@@ -1051,6 +1054,193 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } catch (e) {
             console.error('Error fetching debur logs:', e);
+        }
+    }
+
+    // --- INSPECTION LOGIC ---
+    let inspAllParts = [];
+    let inspOperatorsLoaded = false;
+    
+    document.getElementById('inspDeptSelect').addEventListener('change', fetchInspectionStatus);
+    
+    async function initInspection() {
+        try {
+            document.getElementById('inspDate').valueAsDate = new Date();
+            
+            if (inspAllParts.length === 0) {
+                const partsRes = await fetch('/api/partmaster');
+                inspAllParts = await partsRes.json();
+            }
+            if (!inspOperatorsLoaded) {
+                const opRes = await fetch('/api/operators');
+                const operators = await opRes.json();
+                const sel = document.getElementById('inspOperator');
+                operators.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o.name;
+                    opt.textContent = o.name;
+                    sel.appendChild(opt);
+                });
+                inspOperatorsLoaded = true;
+            }
+            
+            fetchInspectionLogs();
+            
+            const deptSelect = document.getElementById('inspDeptSelect');
+            if (deptSelect.value) {
+                fetchInspectionStatus();
+            }
+        } catch (e) {
+            console.error('Error init inspection', e);
+        }
+    }
+    
+    async function fetchInspectionStatus() {
+        const dept = document.getElementById('inspDeptSelect').value;
+        const tbody = document.getElementById('inspPartsBody');
+        tbody.innerHTML = '';
+        if (!dept) {
+            tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">Select a department</td></tr>';
+            return;
+        }
+
+        try {
+            const [schedRes, logRes] = await Promise.all([
+                fetch('/api/schedule'),
+                fetch('/api/prodlog')
+            ]);
+            
+            const allSchedules = await schedRes.json();
+            const allLogs = await logRes.json();
+            
+            const deptSchedules = allSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase() && (s.status === 'Pending' || !s.status));
+            const uniqueParts = [...new Set(deptSchedules.map(s => s.partno))];
+            
+            if (uniqueParts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">No pending parts for this department</td></tr>';
+                return;
+            }
+            
+            for (const partno of uniqueParts) {
+                const deburredTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const forInsTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                
+                const balance = deburredTotal - forInsTotal;
+                
+                if (balance <= 0) continue; // Only show parts with positive balance for inspection
+                
+                const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                tr.innerHTML = `
+                    <td>${partno}</td>
+                    <td style="font-weight: 600; color: var(--primary-color);">${balance}</td>
+                `;
+                tr.addEventListener('click', () => {
+                    document.getElementById('inspPartNo').value = partno;
+                });
+                tbody.appendChild(tr);
+            }
+            
+            if (tbody.children.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">No parts pending inspection</td></tr>';
+            }
+        } catch (e) {
+            console.error('Error fetching inspection status', e);
+        }
+    }
+    
+    document.getElementById('inspForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const date = document.getElementById('inspDate').value;
+        const operator = document.getElementById('inspOperator').value;
+        const partno = document.getElementById('inspPartNo').value;
+        const runtime = parseFloat(document.getElementById('inspHours').value) || 0;
+        const dept = document.getElementById('inspDeptSelect').value;
+        
+        const inspQty = parseInt(document.getElementById('inspQty').value) || 0;
+        const reworkQty = parseInt(document.getElementById('inspRework').value) || 0;
+        const ncQty = parseInt(document.getElementById('inspNC').value) || 0;
+        const rfdQty = parseInt(document.getElementById('inspRFD').value) || 0;
+        
+        if (inspQty === 0) {
+            alert("Total Inspected quantity cannot be zero.");
+            return;
+        }
+        
+        const createPayload = (opn_no, qty) => ({
+            dept, date, shift: '', setter: '', machine: '',
+            operator, partno, opn_no, description: '', runtime,
+            target_qty: 0, prod_qty: qty, efficiency: 0,
+            idle_hours: 0, idle_reason: ''
+        });
+        
+        const payloads = [];
+        payloads.push(createPayload('for ins', inspQty));
+        if (reworkQty > 0) payloads.push(createPayload('rework', reworkQty));
+        if (ncQty > 0) payloads.push(createPayload('nc', ncQty));
+        if (rfdQty > 0) payloads.push(createPayload('rfd', rfdQty));
+        
+        try {
+            let successCount = 0;
+            for (const payload of payloads) {
+                const res = await fetch('/api/prodlog', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) successCount++;
+            }
+            
+            if (successCount === payloads.length) {
+                document.getElementById('inspHours').value = '';
+                document.getElementById('inspQty').value = '';
+                document.getElementById('inspRework').value = '';
+                document.getElementById('inspNC').value = '';
+                document.getElementById('inspRFD').value = '';
+                
+                fetchInspectionStatus(); // Refresh left side
+                fetchInspectionLogs();   // Refresh right side logs
+            } else {
+                alert("Failed to save some or all inspection logs.");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Error saving inspection log.");
+        }
+    });
+
+    async function fetchInspectionLogs() {
+        try {
+            const res = await fetch('/api/prodlog');
+            const allLogs = await res.json();
+            const inspLogs = allLogs.filter(l => (l.opn_no || '').toLowerCase() === 'for ins');
+            
+            // Sort descending by ID or Date to show newest first
+            inspLogs.sort((a, b) => b.id - a.id);
+            
+            const tbody = document.getElementById('inspLogsBody');
+            tbody.innerHTML = '';
+            
+            if (inspLogs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">No inspection logs found.</td></tr>';
+                return;
+            }
+            
+            // Show only recent 50 logs to keep UI snappy
+            inspLogs.slice(0, 50).forEach(log => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${log.date}</td>
+                    <td>${log.operator || ''}</td>
+                    <td>${log.partno}</td>
+                    <td>${log.runtime || ''}</td>
+                    <td><span style="font-weight: 500;">${log.prod_qty || ''}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (e) {
+            console.error('Error fetching inspection logs:', e);
         }
     }
 
