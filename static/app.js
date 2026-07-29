@@ -877,12 +877,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 let totalIdle = log.idle_hours || 0;
                 if (log.idle_hours_2) totalIdle += log.idle_hours_2;
                 if (log.idle_hours_3) totalIdle += log.idle_hours_3;
-                
-                let reasons = [];
-                if (log.idle_reason && log.idle_reason !== 'None') reasons.push(log.idle_reason);
-                if (log.idle_reason_2 && log.idle_reason_2 !== 'None') reasons.push(log.idle_reason_2);
-                if (log.idle_reason_3 && log.idle_reason_3 !== 'None') reasons.push(log.idle_reason_3);
-                const reasonStr = reasons.join(', ') || 'None';
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -894,8 +888,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${log.machine}</td>
                     <td><span style="font-weight:bold;color:var(--primary);">${log.prod_qty}</span></td>
                     <td>${log.efficiency}%</td>
-                    <td>${totalIdle.toFixed(2)}</td>
-                    <td>${reasonStr}</td>
+                    <td><span style="font-weight:bold;">${totalIdle.toFixed(2)}</span></td>
+                    <td>${log.idle_hours || 0}</td>
+                    <td>${log.idle_reason === 'None' ? '-' : log.idle_reason}</td>
+                    <td>${log.idle_hours_2 || 0}</td>
+                    <td>${log.idle_reason_2 === 'None' ? '-' : log.idle_reason_2}</td>
+                    <td>${log.idle_hours_3 || 0}</td>
+                    <td>${log.idle_reason_3 === 'None' ? '-' : log.idle_reason_3}</td>
                 `;
                 tbody.appendChild(tr);
             });
