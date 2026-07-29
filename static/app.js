@@ -1493,6 +1493,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${idleMap["no plan"] || ''}</td>
                     <td>${idleMap["setter"] || ''}</td>
                 `;
+                
+                const actionTd = document.createElement('td');
+                const delBtn = document.createElement('button');
+                delBtn.className = 'btn-text';
+                delBtn.style.color = 'var(--danger-color)';
+                delBtn.textContent = 'Delete';
+                delBtn.onclick = async () => {
+                    if (confirm('Are you sure you want to delete this log?')) {
+                        try {
+                            const delRes = await fetch(`/api/prodlog/${log.id}`, { method: 'DELETE' });
+                            if (delRes.ok) {
+                                fetchProdLogs();
+                            } else {
+                                alert('Error deleting log.');
+                            }
+                        } catch (err) {
+                            console.error(err);
+                            alert('Error deleting log.');
+                        }
+                    }
+                };
+                actionTd.appendChild(delBtn);
+                tr.appendChild(actionTd);
+                
                 tbody.appendChild(tr);
             });
         } catch (e) { console.error(e); }

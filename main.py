@@ -569,6 +569,15 @@ def create_prodlog(log: ProdLogCreate, db: Session = Depends(get_db)):
 def get_prodlogs(db: Session = Depends(get_db)):
     return db.query(ProductionLog).order_by(ProductionLog.id.desc()).all()
 
+@app.delete("/api/prodlog/{log_id}")
+def delete_prodlog(log_id: int, db: Session = Depends(get_db)):
+    db_log = db.query(ProductionLog).filter(ProductionLog.id == log_id).first()
+    if not db_log:
+        raise HTTPException(status_code=404, detail="Log not found")
+    db.delete(db_log)
+    db.commit()
+    return {"message": "Log deleted"}
+
 @app.post("/api/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == req.username).first()
