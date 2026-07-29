@@ -179,6 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tabDebur.classList.add('active');
         deburSection.style.display = 'block';
         addBtn.style.display = 'none';
+        initDebur();
     });
 
     tabInspection.addEventListener('click', () => {
@@ -869,6 +870,168 @@ document.addEventListener('DOMContentLoaded', () => {
             
         } catch (e) {
             console.error('Error fetching schedule status', e);
+        }
+    }
+
+    // --- DEBUR LOGIC ---
+    let deburAllParts = [];
+    let deburOperatorsLoaded = false;
+    
+    document.getElementById('deburDeptSelect').addEventListener('change', fetchDeburStatus);
+    
+    async function initDebur() {
+        try {
+            document.getElementById('deburDate').valueAsDate = new Date();
+            
+            if (deburAllParts.length === 0) {
+                const partsRes = await fetch('/api/partmaster');
+                deburAllParts = await partsRes.json();
+            }
+            if (!deburOperatorsLoaded) {
+                const opRes = await fetch('/api/operators');
+                const operators = await opRes.json();
+                const sel = document.getElementById('deburOperator');
+                operators.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o.operator_name;
+                    opt.textContent = o.operator_name;
+                    sel.appendChild(opt);
+                });
+                deburOperatorsLoaded = true;
+            }
+            
+            fetchDeburLogs();
+            
+            const deptSelect = document.getElementById('deburDeptSelect');
+            if (deptSelect.value) {
+                fetchDeburStatus();
+            }
+        } catch (e) {
+            console.error('Error init debur', e);
+        }
+    }
+    
+    async function fetchDeburStatus() {
+        const dept = document.getElementById('deburDeptSelect').value;
+        const tbody = document.getElementById('deburPartsBody');
+        tbody.innerHTML = '';
+        if (!dept) {
+            tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">Select a department</td></tr>';
+            return;
+        }
+
+        try {
+            const [schedRes, logRes] = await Promise.all([
+                fetch('/api/schedule'),
+                fetch('/api/prodlog')
+            ]);
+            
+            const allSchedules = await schedRes.json();
+            const allLogs = await logRes.json();
+            
+            const deptSchedules = allSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase() && (s.status === 'Pending' || !s.status));
+            const uniqueParts = [...new Set(deptSchedules.map(s => s.partno))];
+            
+            if (uniqueParts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">No pending parts for this department</td></tr>';
+                return;
+            }
+            
+            for (const partno of uniqueParts) {
+                const partObj = deburAllParts.find(p => (p.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase());
+                if (!partObj) continue;
+                
+                const opsRes = await fetch(`/api/partmaster/${partObj.id}/operations`);
+                const operations = await opsRes.json();
+                
+                if (operations.length === 0) continue;
+                
+                operations.sort((a, b) => (parseInt(a.opn_no) || 0) - (parseInt(b.opn_no) || 0));
+                const lastOp = operations[operations.length - 1];
+                
+                const lastOpProd = allLogs.filter(l => l.partno === partno && l.opn_no === lastOp.opn_no).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const deburredProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                
+                const balance = lastOpProd - deburredProd;
+                
+                const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                tr.innerHTML = `
+                    <td>${partno}</td>
+                    <td style="font-weight: 600; color: ${balance > 0 ? 'var(--primary-color)' : 'inherit'};">${balance}</td>
+                `;
+                tr.addEventListener('click', () => {
+                    document.getElementById('deburPartNo').value = partno;
+                });
+                tbody.appendChild(tr);
+            }
+        } catch (e) {
+            console.error('Error fetching debur status', e);
+        }
+    }
+    
+    document.getElementById('deburForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            date: document.getElementById('deburDate').value,
+            operator: document.getElementById('deburOperator').value,
+            partno: document.getElementById('deburPartNo').value,
+            opn_no: 'debur', // Use debur as the operation
+            run_time: parseFloat(document.getElementById('deburHours').value) || 0,
+            prod_qty: parseInt(document.getElementById('deburQty').value) || 0
+        };
+        
+        try {
+            const res = await fetch('/api/prodlog', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                document.getElementById('deburHours').value = '';
+                document.getElementById('deburQty').value = '';
+                fetchDeburStatus(); // Refresh left side
+                fetchDeburLogs();   // Refresh right side logs
+            } else {
+                alert("Failed to save debur log.");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Error saving debur log.");
+        }
+    });
+
+    async function fetchDeburLogs() {
+        try {
+            const res = await fetch('/api/prodlog');
+            const allLogs = await res.json();
+            const deburLogs = allLogs.filter(l => (l.opn_no || '').toLowerCase() === 'debur');
+            
+            // Sort descending by ID or Date to show newest first
+            deburLogs.sort((a, b) => b.id - a.id);
+            
+            const tbody = document.getElementById('deburLogsBody');
+            tbody.innerHTML = '';
+            
+            if (deburLogs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">No debur logs found.</td></tr>';
+                return;
+            }
+            
+            // Show only recent 50 logs to keep UI snappy
+            deburLogs.slice(0, 50).forEach(log => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${log.date}</td>
+                    <td>${log.operator || ''}</td>
+                    <td>${log.partno}</td>
+                    <td>${log.run_time || ''}</td>
+                    <td><span style="font-weight: 500;">${log.prod_qty || ''}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (e) {
+            console.error('Error fetching debur logs:', e);
         }
     }
 
