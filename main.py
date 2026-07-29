@@ -405,6 +405,11 @@ def create_schedule(schedule: ScheduleCreate, db: Session = Depends(get_db)):
     db.refresh(db_schedule)
     return db_schedule
 
+@app.delete("/api/schedule")
+def clear_all_schedules(db: Session = Depends(get_db)):
+    db.query(Schedule).delete()
+    db.commit()
+    return {"message": "All schedules cleared"}
 @app.get("/api/schedule/run")
 def get_run_schedule(db: Session = Depends(get_db)):
     from datetime import date, timedelta

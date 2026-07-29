@@ -775,18 +775,35 @@ document.addEventListener('DOMContentLoaded', () => {
                     scheduleDept.value = ''; // Reset dept field
                     fetchSchedulesForList();
                 } else {
-                    alert('Failed to create schedule.');
+                    alert('Error creating schedule.');
                 }
-            } catch (err) {
-                console.error(err);
-                alert('Error creating schedule.');
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        });
+    }
+
+    const clearScheduleBtn = document.getElementById('clearScheduleBtn');
+    if (clearScheduleBtn) {
+        clearScheduleBtn.addEventListener('click', async () => {
+            if (confirm("Are you sure you want to completely clear the entire schedule? This action cannot be undone.")) {
+                try {
+                    const response = await fetch('/api/schedule', { method: 'DELETE' });
+                    if (response.ok) {
+                        fetchSchedulesForList();
+                    } else {
+                        alert('Error clearing schedules.');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    alert('Error clearing schedules.');
+                }
             }
         });
     }
 
     // Call fetchSchedulesForList when opening the create tab
     menuScheduleCreate.addEventListener('click', (e) => {
-        // e.preventDefault() is already handled in the previous listener, but we can just add this logic here or let it be handled when they click the tab.
         fetchSchedulesForList();
     });
 

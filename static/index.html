@@ -136,7 +136,10 @@
             <div class="table-container" id="scheduleCreateSection" style="display: none; padding: 2rem; color: var(--text-main);">
                 <div style="display: flex; gap: 3rem; flex-wrap: wrap;">
                     <div style="flex: 0 0 350px;">
-                        <h2 style="margin-bottom: 20px;">Create Schedule</h2>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 style="margin: 0;">Create Schedule</h2>
+                            <button id="clearScheduleBtn" class="btn btn-outline" style="color: #ef4444; border-color: #ef4444; padding: 0.4rem 0.8rem; font-size: 0.9rem;">Clear All</button>
+                        </div>
                         <form id="scheduleCreateForm">
                             <div class="form-group">
                                 <label for="schedulePartNo">Part No</label>
@@ -825,6 +828,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=40"></script>
+    <script src="/static/app.js?v=41"></script>
 </body>
 </html>
