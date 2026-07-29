@@ -751,21 +751,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- SCHEDULE STATUS LOGIC ---
     let statusAllParts = [];
     
+    document.getElementById('statusDeptSelect').addEventListener('change', fetchScheduleStatus);
+    document.getElementById('exportStatusBtn').addEventListener('click', () => {
+        const table = document.getElementById('statusTable');
+        if (!table) return;
+        const wb = XLSX.utils.table_to_book(table, {sheet: "Status"});
+        XLSX.writeFile(wb, `Schedule_Status_${new Date().toISOString().slice(0,10)}.xlsx`);
+    });
+    
     async function initScheduleStatus() {
         try {
-            const partsRes = await fetch('/api/partmaster');
-            statusAllParts = await partsRes.json();
+            if (statusAllParts.length === 0) {
+                const partsRes = await fetch('/api/partmaster');
+                statusAllParts = await partsRes.json();
+            }
             
             const deptSelect = document.getElementById('statusDeptSelect');
-            deptSelect.addEventListener('change', fetchScheduleStatus);
-            
-            const exportBtn = document.getElementById('exportStatusBtn');
-            exportBtn.addEventListener('click', () => {
-                const table = document.getElementById('statusTable');
-                if (!table) return;
-                const wb = XLSX.utils.table_to_book(table, {sheet: "Status"});
-                XLSX.writeFile(wb, `Schedule_Status_${new Date().toISOString().slice(0,10)}.xlsx`);
-            });
+            if (deptSelect.value) {
+                fetchScheduleStatus();
+            }
         } catch (e) {
             console.error('Error init schedule status', e);
         }
