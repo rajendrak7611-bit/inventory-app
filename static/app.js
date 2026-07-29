@@ -11,17 +11,16 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         loginOverlay.style.display = 'none';
         
-        // Add logout button to header
-        const header = document.querySelector('header');
+        // Add logout button to header actions div
+        const actionDiv = document.getElementById('headerActions');
         const logoutBtn = document.createElement('button');
         logoutBtn.className = 'btn btn-secondary';
-        logoutBtn.style.marginLeft = 'auto';
         logoutBtn.textContent = `Logout (${JSON.parse(currentUser).username})`;
         logoutBtn.onclick = () => {
             localStorage.removeItem('grs_user');
             window.location.reload();
         };
-        header.appendChild(logoutBtn);
+        actionDiv.appendChild(logoutBtn);
     }
 
     loginForm.addEventListener('submit', async (e) => {
