@@ -45,6 +45,9 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         conn.execute(text("ALTER TABLE production_logs ADD COLUMN idle_reason_2 VARCHAR;"))
         conn.execute(text("ALTER TABLE production_logs ADD COLUMN idle_hours_3 FLOAT;"))
         conn.execute(text("ALTER TABLE production_logs ADD COLUMN idle_reason_3 VARCHAR;"))
+    except Exception:
+        pass
+    try:
         conn.execute(text("ALTER TABLE production_logs ADD COLUMN multiple_mc INTEGER DEFAULT 1;"))
     except Exception:
         pass
