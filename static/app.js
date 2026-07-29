@@ -973,12 +973,21 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('deburForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const payload = {
+            dept: document.getElementById('deburDeptSelect').value,
             date: document.getElementById('deburDate').value,
+            shift: '',
+            setter: '',
+            machine: '',
             operator: document.getElementById('deburOperator').value,
             partno: document.getElementById('deburPartNo').value,
             opn_no: 'debur', // Use debur as the operation
-            run_time: parseFloat(document.getElementById('deburHours').value) || 0,
-            prod_qty: parseInt(document.getElementById('deburQty').value) || 0
+            description: '',
+            runtime: parseFloat(document.getElementById('deburHours').value) || 0,
+            target_qty: 0,
+            prod_qty: parseInt(document.getElementById('deburQty').value) || 0,
+            efficiency: 0,
+            idle_hours: 0,
+            idle_reason: ''
         };
         
         try {
