@@ -786,11 +786,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const allSchedules = await schedRes.json();
             const allLogs = await logRes.json();
             
-            const deptSchedules = allSchedules.filter(s => s.department === dept && (s.status === 'Pending' || !s.status));
+            const deptSchedules = allSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase() && (s.status === 'Pending' || !s.status));
             const uniqueParts = [...new Set(deptSchedules.map(s => s.partno))];
             
             for (const partno of uniqueParts) {
-                const partObj = statusAllParts.find(p => p.partno === partno);
+                const partObj = statusAllParts.find(p => (p.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase());
                 if (!partObj) continue;
                 
                 const opsRes = await fetch(`/api/partmaster/${partObj.id}/operations`);
