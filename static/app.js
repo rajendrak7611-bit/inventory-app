@@ -6,21 +6,59 @@ document.addEventListener('DOMContentLoaded', () => {
     const appContainer = document.querySelector('.app-container');
 
     const currentUser = localStorage.getItem('grs_user');
-    if (!currentUser) {
+    let userObj = null;
+    try {
+        if (currentUser) userObj = JSON.parse(currentUser);
+    } catch(e) {}
+
+    if (!userObj) {
         appContainer.style.display = 'none';
     } else {
         loginOverlay.style.display = 'none';
         
+        // Access Control Logic
+        const allTabs = document.querySelectorAll('.tabs [data-screen]');
+        let firstAvailableTab = null;
+        let accessibleScreens = [];
+        try {
+            accessibleScreens = JSON.parse(userObj.accessible_screens || '[]');
+        } catch(e) {}
+        
+        allTabs.forEach(tab => {
+            const screen = tab.getAttribute('data-screen');
+            if (userObj.role === 'admin' || accessibleScreens.includes(screen)) {
+                tab.style.display = (screen === 'schedule') ? 'inline-block' : 'inline-block';
+                if (!firstAvailableTab) firstAvailableTab = tab;
+            } else {
+                tab.style.display = 'none';
+            }
+        });
+        
+        // Special case for Users tab
+        const tabUsers = document.getElementById('tabUsers');
+        if (userObj.role === 'admin') {
+            tabUsers.style.display = 'inline-block';
+        } else {
+            tabUsers.style.display = 'none';
+        }
+
         // Add logout button to header actions div
         const actionDiv = document.getElementById('headerActions');
         const logoutBtn = document.createElement('button');
         logoutBtn.className = 'btn btn-secondary';
-        logoutBtn.textContent = `Logout (${JSON.parse(currentUser).username})`;
+        logoutBtn.textContent = `Logout (${userObj.username})`;
         logoutBtn.onclick = () => {
             localStorage.removeItem('grs_user');
             window.location.reload();
         };
         actionDiv.appendChild(logoutBtn);
+
+        // Auto-click the first available tab if they don't have access to the default (products)
+        if (userObj.role !== 'admin' && firstAvailableTab && !accessibleScreens.includes('products')) {
+            setTimeout(() => {
+                firstAvailableTab.click();
+            }, 100);
+        }
     }
 
     loginForm.addEventListener('submit', async (e) => {
@@ -120,6 +158,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const operatorModalTitle = document.getElementById('operatorModalTitle');
 
     function hideAllSections() {
+        const usersSection = document.getElementById('usersSection');
+        if (usersSection) usersSection.style.display = 'none';
         productsSection.style.display = 'none';
         partMasterSection.style.display = 'none';
         machinesSection.style.display = 'none';
@@ -131,6 +171,8 @@ document.addEventListener('DOMContentLoaded', () => {
         deburSection.style.display = 'none';
         inspectionSection.style.display = 'none';
         
+        const tabUsers = document.getElementById('tabUsers');
+        if (tabUsers) tabUsers.classList.remove('active');
         tabProducts.classList.remove('active');
         tabPartMaster.classList.remove('active');
         tabMachines.classList.remove('active');
@@ -144,6 +186,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Tab Logic
+    const tabUsers = document.getElementById('tabUsers');
+    if (tabUsers) {
+        tabUsers.addEventListener('click', () => {
+            currentTab = 'users';
+            hideAllSections();
+            tabUsers.classList.add('active');
+            const usersSection = document.getElementById('usersSection');
+            if (usersSection) usersSection.style.display = 'block';
+            addBtn.style.display = 'none';
+            importBtn.style.display = 'none';
+            fetchUsers();
+        });
+    }
+
     tabProducts.addEventListener('click', () => {
         currentTab = 'products';
         hideAllSections();
@@ -1574,6 +1630,75 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!table) return;
             const wb = XLSX.utils.table_to_book(table, {sheet: "Prod Logs"});
             XLSX.writeFile(wb, `Production_Logs_${new Date().toISOString().slice(0,10)}.xlsx`);
+        });
+    }
+
+    // --- USER MANAGEMENT LOGIC ---
+    async function fetchUsers() {
+        try {
+            const res = await fetch('/api/users');
+            const users = await res.json();
+            const tbody = document.getElementById('usersBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            users.forEach(u => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${u.id}</td>
+                    <td>${u.username}</td>
+                    <td>${u.role}</td>
+                    <td>
+                        <button class="btn btn-danger" onclick="deleteUser(${u.id})">Delete</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (e) { console.error(e); }
+    }
+    
+    window.deleteUser = async (id) => {
+        if (confirm('Delete this user?')) {
+            try {
+                const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+                if (res.ok) fetchUsers();
+                else alert('Failed to delete user.');
+            } catch (e) { console.error(e); }
+        }
+    };
+
+    const userCreateForm = document.getElementById('userCreateForm');
+    if (userCreateForm) {
+        userCreateForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('userName').value;
+            const password = document.getElementById('userPass').value;
+            
+            // Collect checked screens
+            const checkboxes = document.querySelectorAll('#userScreensList input[type="checkbox"]:checked');
+            const screens = Array.from(checkboxes).map(cb => cb.value);
+            
+            try {
+                const res = await fetch('/api/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username,
+                        password,
+                        accessible_screens: JSON.stringify(screens)
+                    })
+                });
+                if (res.ok) {
+                    alert('User created!');
+                    userCreateForm.reset();
+                    fetchUsers();
+                } else {
+                    const err = await res.json();
+                    alert(err.detail || 'Error creating user');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error creating user');
+            }
         });
     }
 

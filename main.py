@@ -25,6 +25,10 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
     except Exception:
         pass
     try:
+        conn.execute(text("ALTER TABLE users ADD COLUMN accessible_screens VARCHAR DEFAULT '';"))
+    except Exception:
+        pass
+    try:
         conn.execute(text("ALTER TABLE machines ADD COLUMN department VARCHAR;"))
         conn.execute(text("CREATE INDEX ix_machines_department ON machines (department);"))
     except Exception:
@@ -58,7 +62,7 @@ with Session(engine) as db:
     admin_user = db.query(User).filter(User.username == "admin").first()
     if not admin_user:
         hashed = hashlib.sha256("admin123".encode()).hexdigest()
-        new_admin = User(username="admin", password_hash=hashed, role="admin")
+        new_admin = User(username="admin", password_hash=hashed, role="admin", accessible_screens='["users","products","partmaster","machines","operators","schedule","prodlog","debur","inspection"]')
         db.add(new_admin)
         db.commit()
 
@@ -68,6 +72,19 @@ app = FastAPI(title="Inventory Management API")
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    accessible_screens: str
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    role: str
+    accessible_screens: str
+    class Config:
+        from_attributes = True
 
 class ProductBase(BaseModel):
     family: str
@@ -578,6 +595,38 @@ def delete_prodlog(log_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Log deleted"}
 
+@app.get("/api/users", response_model=List[UserResponse])
+def get_users(db: Session = Depends(get_db)):
+    return db.query(User).all()
+
+@app.post("/api/users", response_model=UserResponse)
+def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    existing = db.query(User).filter(User.username == user.username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    hashed = hashlib.sha256(user.password.encode()).hexdigest()
+    db_user = User(
+        username=user.username,
+        password_hash=hashed,
+        role="operator",
+        accessible_screens=user.accessible_screens
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+@app.delete("/api/users/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if db_user.username == "admin":
+        raise HTTPException(status_code=400, detail="Cannot delete master admin")
+    db.delete(db_user)
+    db.commit()
+    return {"message": "User deleted"}
+
 @app.post("/api/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == req.username).first()
@@ -588,7 +637,12 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     if hashed != user.password_hash:
         raise HTTPException(status_code=401, detail="Invalid username or password")
         
-    return {"message": "Success", "username": user.username, "role": user.role}
+    return {
+        "message": "Success", 
+        "username": user.username, 
+        "role": user.role,
+        "accessible_screens": user.accessible_screens
+    }
 
 # Serve static files (frontend)
 app.mount("/static", StaticFiles(directory="static"), name="static")

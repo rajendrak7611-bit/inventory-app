@@ -9,6 +9,7 @@ class User(Base):
     username = Column(String, unique=True, index=True)
     password_hash = Column(String)
     role = Column(String, default="admin")
+    accessible_screens = Column(String, default="")
 
 class Product(Base):
     __tablename__ = "products"

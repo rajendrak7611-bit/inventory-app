@@ -45,11 +45,12 @@
 
         <main>
             <div class="tabs">
-                <button class="tab-btn active" id="tabProducts">Tools</button>
-                <button class="tab-btn" id="tabPartMaster">Part Master</button>
-                <button class="tab-btn" id="tabMachines">Machines</button>
-                <button class="tab-btn" id="tabOperators">Operators</button>
-                <div class="dropdown">
+                <button class="tab-btn" id="tabUsers" data-screen="users" style="display: none;">Users</button>
+                <button class="tab-btn active" id="tabProducts" data-screen="products">Tools</button>
+                <button class="tab-btn" id="tabPartMaster" data-screen="partmaster">Part Master</button>
+                <button class="tab-btn" id="tabMachines" data-screen="machines">Machines</button>
+                <button class="tab-btn" id="tabOperators" data-screen="operators">Operators</button>
+                <div class="dropdown" data-screen="schedule">
                     <button class="tab-btn" id="tabSchedule" style="pointer-events: none;">Schedule ▼</button>
                     <div class="dropdown-content">
                         <a href="#" id="menuScheduleCreate">Create</a>
@@ -57,9 +58,9 @@
                         <a href="#" id="menuScheduleStatus">Status</a>
                     </div>
                 </div>
-                <button class="tab-btn" id="tabProdLog">Prod Log</button>
-                <button class="tab-btn" id="tabDebur">Debur</button>
-                <button class="tab-btn" id="tabInspection">Inspection</button>
+                <button class="tab-btn" id="tabProdLog" data-screen="prodlog">Prod Log</button>
+                <button class="tab-btn" id="tabDebur" data-screen="debur">Debur</button>
+                <button class="tab-btn" id="tabInspection" data-screen="inspection">Inspection</button>
             </div>
 
             <div class="table-container" id="productsSection">
@@ -653,6 +654,57 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Users Section -->
+            <div class="table-container" id="usersSection" style="display: none; padding: 2rem; color: var(--text-main);">
+                <div style="display: flex; gap: 3rem; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 300px;">
+                        <h2 style="margin-bottom: 20px;">Manage Users</h2>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Username</th>
+                                    <th>Role</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="flex: 0 0 350px;">
+                        <h2 style="margin-bottom: 20px;">Create User</h2>
+                        <form id="userCreateForm">
+                            <div class="form-group">
+                                <label for="userName">Username</label>
+                                <input type="text" id="userName" required style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif; font-size: 0.95rem;">
+                            </div>
+                            <div class="form-group" style="margin-top: 15px;">
+                                <label for="userPass">Password</label>
+                                <input type="password" id="userPass" required style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif; font-size: 0.95rem;">
+                            </div>
+                            <div class="form-group" style="margin-top: 15px;">
+                                <label style="margin-bottom: 10px; display: block;">Accessible Screens</label>
+                                <div style="display: flex; flex-direction: column; gap: 8px;" id="userScreensList">
+                                    <label><input type="checkbox" value="products"> Tools</label>
+                                    <label><input type="checkbox" value="partmaster"> Part Master</label>
+                                    <label><input type="checkbox" value="machines"> Machines</label>
+                                    <label><input type="checkbox" value="operators"> Operators</label>
+                                    <label><input type="checkbox" value="schedule"> Schedule</label>
+                                    <label><input type="checkbox" value="prodlog"> Prod Log</label>
+                                    <label><input type="checkbox" value="debur"> Debur</label>
+                                    <label><input type="checkbox" value="inspection"> Inspection</label>
+                                </div>
+                            </div>
+                            <div style="margin-top: 20px;">
+                                <button type="submit" class="btn btn-primary" style="width: 100%;">Create User</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
             
         </main>
     </div>
@@ -829,6 +881,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=42"></script>
+    <script src="/static/app.js?v=43"></script>
 </body>
 </html>
