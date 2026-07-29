@@ -893,8 +893,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sel = document.getElementById('deburOperator');
                 operators.forEach(o => {
                     const opt = document.createElement('option');
-                    opt.value = o.operator_name;
-                    opt.textContent = o.operator_name;
+                    opt.value = o.name;
+                    opt.textContent = o.name;
                     sel.appendChild(opt);
                 });
                 deburOperatorsLoaded = true;
