@@ -83,4 +83,8 @@ class ProductionLog(Base):
     efficiency = Column(Float)
     idle_hours = Column(Float)
     idle_reason = Column(String)
+    idle_hours_2 = Column(Float)
+    idle_reason_2 = Column(String)
+    idle_hours_3 = Column(Float)
+    idle_reason_3 = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)

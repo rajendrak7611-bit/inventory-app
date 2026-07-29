@@ -874,6 +874,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const tbody = document.getElementById('prodLogBody');
             tbody.innerHTML = '';
             data.forEach(log => {
+                let totalIdle = log.idle_hours || 0;
+                if (log.idle_hours_2) totalIdle += log.idle_hours_2;
+                if (log.idle_hours_3) totalIdle += log.idle_hours_3;
+                
+                let reasons = [];
+                if (log.idle_reason && log.idle_reason !== 'None') reasons.push(log.idle_reason);
+                if (log.idle_reason_2 && log.idle_reason_2 !== 'None') reasons.push(log.idle_reason_2);
+                if (log.idle_reason_3 && log.idle_reason_3 !== 'None') reasons.push(log.idle_reason_3);
+                const reasonStr = reasons.join(', ') || 'None';
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${log.date}</td>
@@ -884,8 +894,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${log.machine}</td>
                     <td><span style="font-weight:bold;color:var(--primary);">${log.prod_qty}</span></td>
                     <td>${log.efficiency}%</td>
-                    <td>${log.idle_hours}</td>
-                    <td>${log.idle_reason}</td>
+                    <td>${totalIdle.toFixed(2)}</td>
+                    <td>${reasonStr}</td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -911,7 +921,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 prod_qty: parseFloat(document.getElementById('prodLogProdQty').value) || 0,
                 efficiency: parseFloat(document.getElementById('prodLogEfficiency').value) || 0,
                 idle_hours: parseFloat(document.getElementById('prodLogIdleHours').value) || 0,
-                idle_reason: document.getElementById('prodLogIdleReason').value
+                idle_reason: document.getElementById('prodLogIdleReason').value,
+                idle_hours_2: parseFloat(document.getElementById('prodLogIdleHours2').value) || 0,
+                idle_reason_2: document.getElementById('prodLogIdleReason2').value,
+                idle_hours_3: parseFloat(document.getElementById('prodLogIdleHours3').value) || 0,
+                idle_reason_3: document.getElementById('prodLogIdleReason3').value
             };
             
             try {
