@@ -1,4 +1,54 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // --- LOGIN LOGIC ---
+    const loginOverlay = document.getElementById('loginOverlay');
+    const loginForm = document.getElementById('loginForm');
+    const loginError = document.getElementById('loginError');
+    const appContainer = document.querySelector('.app-container');
+
+    const currentUser = localStorage.getItem('grs_user');
+    if (!currentUser) {
+        appContainer.style.display = 'none';
+    } else {
+        loginOverlay.style.display = 'none';
+        
+        // Add logout button to header
+        const header = document.querySelector('header');
+        const logoutBtn = document.createElement('button');
+        logoutBtn.className = 'btn btn-secondary';
+        logoutBtn.style.marginLeft = 'auto';
+        logoutBtn.textContent = `Logout (${JSON.parse(currentUser).username})`;
+        logoutBtn.onclick = () => {
+            localStorage.removeItem('grs_user');
+            window.location.reload();
+        };
+        header.appendChild(logoutBtn);
+    }
+
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        loginError.style.display = 'none';
+        const username = document.getElementById('loginUsername').value;
+        const password = document.getElementById('loginPassword').value;
+        
+        try {
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                localStorage.setItem('grs_user', JSON.stringify(data));
+                window.location.reload();
+            } else {
+                loginError.style.display = 'block';
+            }
+        } catch (err) {
+            console.error(err);
+            loginError.style.display = 'block';
+        }
+    });
+
     // Shared
     const addBtn = document.getElementById('addBtn');
     const importBtn = document.getElementById('importBtn');

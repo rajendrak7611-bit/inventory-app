@@ -9,6 +9,21 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
+    <!-- Login Overlay -->
+    <div id="loginOverlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--bg-color); display: flex; justify-content: center; align-items: center; z-index: 9999;">
+        <div style="background: var(--card-bg); padding: 3rem; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); width: 100%; max-width: 400px; text-align: center;">
+            <div style="display: flex; justify-content: center; margin-bottom: 1.5rem; color: var(--primary-color);">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            </div>
+            <h2 style="margin-bottom: 2rem; color: var(--text-main); font-size: 1.5rem;">GRS Engineering Login</h2>
+            <form id="loginForm" style="display: flex; flex-direction: column; gap: 1.2rem;">
+                <input type="text" id="loginUsername" placeholder="Username" required style="padding: 0.8rem 1rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.05); color: var(--text-main); font-size: 1rem;">
+                <input type="password" id="loginPassword" placeholder="Password" required style="padding: 0.8rem 1rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.05); color: var(--text-main); font-size: 1rem;">
+                <button type="submit" class="btn btn-primary" style="padding: 0.8rem; font-size: 1.1rem; margin-top: 1rem;">Sign In</button>
+                <div id="loginError" style="color: #ef4444; margin-top: 0.5rem; display: none;">Invalid credentials</div>
+            </form>
+        </div>
+    </div>
     <div class="app-container">
         <header>
             <div class="logo">
@@ -810,6 +825,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=37"></script>
+    <script src="/static/app.js?v=38"></script>
 </body>
 </html>

@@ -1,3 +1,4 @@
+import hashlib
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -7,7 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, PartOperation, Schedule, ProductionLog
+from models import Product, PartMaster, Machine, Operator, PartOperation, Schedule, ProductionLog, User
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -52,9 +53,22 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
     except Exception:
         pass
 
+# Seed default admin user
+with Session(engine) as db:
+    admin_user = db.query(User).filter(User.username == "admin").first()
+    if not admin_user:
+        hashed = hashlib.sha256("admin123".encode()).hexdigest()
+        new_admin = User(username="admin", password_hash=hashed, role="admin")
+        db.add(new_admin)
+        db.commit()
+
 app = FastAPI(title="Inventory Management API")
 
 # Pydantic schemas for data validation
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 class ProductBase(BaseModel):
     family: str
     spec: str
@@ -549,6 +563,18 @@ def create_prodlog(log: ProdLogCreate, db: Session = Depends(get_db)):
 @app.get("/api/prodlog")
 def get_prodlogs(db: Session = Depends(get_db)):
     return db.query(ProductionLog).order_by(ProductionLog.id.desc()).all()
+
+@app.post("/api/login")
+def login(req: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == req.username).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    
+    hashed = hashlib.sha256(req.password.encode()).hexdigest()
+    if hashed != user.password_hash:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+        
+    return {"message": "Success", "username": user.username, "role": user.role}
 
 # Serve static files (frontend)
 app.mount("/static", StaticFiles(directory="static"), name="static")
