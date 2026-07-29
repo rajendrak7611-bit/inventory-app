@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const menuScheduleRun = document.getElementById('menuScheduleRun');
     const menuScheduleStatus = document.getElementById('menuScheduleStatus');
     const tabProdLog = document.getElementById('tabProdLog');
+    const tabDebur = document.getElementById('tabDebur');
+    const tabInspection = document.getElementById('tabInspection');
     
     const productsSection = document.getElementById('productsSection');
     const partMasterSection = document.getElementById('partMasterSection');
@@ -25,6 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const scheduleRunSection = document.getElementById('scheduleRunSection');
     const scheduleStatusSection = document.getElementById('scheduleStatusSection');
     const prodLogSection = document.getElementById('prodLogSection');
+    const deburSection = document.getElementById('deburSection');
+    const inspectionSection = document.getElementById('inspectionSection');
 
     // Products Elements
     const productsBody = document.getElementById('productsBody');
@@ -75,6 +79,8 @@ document.addEventListener('DOMContentLoaded', () => {
         scheduleRunSection.style.display = 'none';
         scheduleStatusSection.style.display = 'none';
         prodLogSection.style.display = 'none';
+        deburSection.style.display = 'none';
+        inspectionSection.style.display = 'none';
         
         tabProducts.classList.remove('active');
         tabPartMaster.classList.remove('active');
@@ -82,6 +88,8 @@ document.addEventListener('DOMContentLoaded', () => {
         tabOperators.classList.remove('active');
         tabSchedule.classList.remove('active');
         tabProdLog.classList.remove('active');
+        tabDebur.classList.remove('active');
+        tabInspection.classList.remove('active');
         importBtn.style.display = 'none';
         addBtn.style.display = 'inline-flex';
     }
@@ -163,6 +171,22 @@ document.addEventListener('DOMContentLoaded', () => {
         prodLogSection.style.display = 'block';
         addBtn.style.display = 'none';
         initProdLog();
+    });
+
+    tabDebur.addEventListener('click', () => {
+        currentTab = 'debur';
+        hideAllSections();
+        tabDebur.classList.add('active');
+        deburSection.style.display = 'block';
+        addBtn.style.display = 'none';
+    });
+
+    tabInspection.addEventListener('click', () => {
+        currentTab = 'inspection';
+        hideAllSections();
+        tabInspection.classList.add('active');
+        inspectionSection.style.display = 'block';
+        addBtn.style.display = 'none';
     });
 
     addBtn.addEventListener('click', () => {
