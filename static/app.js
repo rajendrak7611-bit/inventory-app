@@ -878,6 +878,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (log.idle_hours_2) totalIdle += log.idle_hours_2;
                 if (log.idle_hours_3) totalIdle += log.idle_hours_3;
 
+                // Pre-fill a map with 0 for all specific reasons
+                const idleMap = {
+                    "No load": 0, "No Operator": 0, "Setting": 0, "Setup": 0,
+                    "No power": 0, "Tool issue": 0, "Quality issue": 0,
+                    "fixture issue": 0, "Machine bd": 0, "misc": 0,
+                    "Npd": 0, "rework": 0, "no plan": 0, "setter": 0
+                };
+
+                if (log.idle_reason && idleMap[log.idle_reason] !== undefined) {
+                    idleMap[log.idle_reason] += log.idle_hours || 0;
+                }
+                if (log.idle_reason_2 && idleMap[log.idle_reason_2] !== undefined) {
+                    idleMap[log.idle_reason_2] += log.idle_hours_2 || 0;
+                }
+                if (log.idle_reason_3 && idleMap[log.idle_reason_3] !== undefined) {
+                    idleMap[log.idle_reason_3] += log.idle_hours_3 || 0;
+                }
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${log.date}</td>
@@ -889,12 +907,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><span style="font-weight:bold;color:var(--primary);">${log.prod_qty}</span></td>
                     <td>${log.efficiency}%</td>
                     <td><span style="font-weight:bold;">${totalIdle.toFixed(2)}</span></td>
-                    <td>${log.idle_hours || 0}</td>
-                    <td>${log.idle_reason === 'None' ? '-' : log.idle_reason}</td>
-                    <td>${log.idle_hours_2 || 0}</td>
-                    <td>${log.idle_reason_2 === 'None' ? '-' : log.idle_reason_2}</td>
-                    <td>${log.idle_hours_3 || 0}</td>
-                    <td>${log.idle_reason_3 === 'None' ? '-' : log.idle_reason_3}</td>
+                    <td>${idleMap["No load"] || ''}</td>
+                    <td>${idleMap["No Operator"] || ''}</td>
+                    <td>${idleMap["Setting"] || ''}</td>
+                    <td>${idleMap["Setup"] || ''}</td>
+                    <td>${idleMap["No power"] || ''}</td>
+                    <td>${idleMap["Tool issue"] || ''}</td>
+                    <td>${idleMap["Quality issue"] || ''}</td>
+                    <td>${idleMap["fixture issue"] || ''}</td>
+                    <td>${idleMap["Machine bd"] || ''}</td>
+                    <td>${idleMap["misc"] || ''}</td>
+                    <td>${idleMap["Npd"] || ''}</td>
+                    <td>${idleMap["rework"] || ''}</td>
+                    <td>${idleMap["no plan"] || ''}</td>
+                    <td>${idleMap["setter"] || ''}</td>
                 `;
                 tbody.appendChild(tr);
             });
