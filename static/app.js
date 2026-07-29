@@ -972,4 +972,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const exportProdLogBtn = document.getElementById('exportProdLogBtn');
+    if (exportProdLogBtn) {
+        exportProdLogBtn.addEventListener('click', () => {
+            const table = document.getElementById('prodLogTable');
+            if (!table) return;
+            const wb = XLSX.utils.table_to_book(table, {sheet: "Prod Logs"});
+            XLSX.writeFile(wb, `Production_Logs_${new Date().toISOString().slice(0,10)}.xlsx`);
+        });
+    }
+
 });
