@@ -768,11 +768,11 @@ document.addEventListener('DOMContentLoaded', () => {
         prodLogSchedules = schedData.filter(s => s.status === 'Pending' || !s.status);
         
         // Populate Schedule Parts with ALL active schedules initially
-        const partSelect = document.getElementById('prodLogPartNo');
-        partSelect.innerHTML = '<option value="">-- Select Scheduled Part --</option>';
+        const partList = document.getElementById('prodLogPartNoList');
+        partList.innerHTML = '';
         const uniqueSchedParts = [...new Set(prodLogSchedules.map(s => s.partno))];
         uniqueSchedParts.forEach(p => {
-            partSelect.innerHTML += `<option value="${p}">${p}</option>`;
+            partList.innerHTML += `<option value="${p}">`;
         });
         
         fetchProdLogs();
@@ -782,11 +782,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const dept = e.target.value.trim().toUpperCase();
         const machSelect = document.getElementById('prodLogMachine');
         const opSelect = document.getElementById('prodLogOperator');
-        const partSelect = document.getElementById('prodLogPartNo');
+        const partList = document.getElementById('prodLogPartNoList');
         
         machSelect.innerHTML = '<option value="">-- Select Machine --</option>';
         opSelect.innerHTML = '<option value="">-- Select Operator --</option>';
-        partSelect.innerHTML = '<option value="">-- Select Scheduled Part --</option>';
+        document.getElementById('prodLogPartNo').value = '';
+        partList.innerHTML = '';
         
         prodLogAllMachines.filter(m => (m.department || '').trim().toUpperCase() === dept).forEach(m => {
             machSelect.innerHTML += `<option value="${m.name}">${m.name}</option>`;
@@ -800,7 +801,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const deptSchedules = prodLogSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept);
         const uniqueSchedParts = [...new Set(deptSchedules.map(s => s.partno))];
         uniqueSchedParts.forEach(p => {
-            partSelect.innerHTML += `<option value="${p}">${p}</option>`;
+            partList.innerHTML += `<option value="${p}">`;
         });
         
         // Reset dependent fields
