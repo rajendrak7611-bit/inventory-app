@@ -280,6 +280,10 @@
                                 <label for="prodLogEfficiency">Efficiency</label>
                                 <input type="text" id="prodLogEfficiency" readonly style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); cursor: not-allowed;" placeholder="%">
                             </div>
+                            <div class="form-group">
+                                <label for="prodLogMultipleMc">Multiple M/C</label>
+                                <input type="number" id="prodLogMultipleMc" value="1" min="1" required style="width: 100%; padding: 0.4rem 0.6rem;">
+                            </div>
                             <div style="grid-column: 1 / -1; margin-top: 10px; border: 1px solid var(--border-color); padding: 15px; border-radius: 8px;">
                                 <h4 style="margin-bottom: 15px; font-weight: 500; font-size: 14px;">Idle Time & Reasons</h4>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 10px;">
@@ -372,6 +376,7 @@
                                         <th>Description</th>
                                         <th>Machine</th>
                                         <th>Operator</th>
+                                        <th>Multiple M/C</th>
                                         <th>Cycle Time</th>
                                         <th>Run Time</th>
                                         <th>Target Qty</th>

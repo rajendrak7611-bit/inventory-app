@@ -45,6 +45,7 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         conn.execute(text("ALTER TABLE production_logs ADD COLUMN idle_reason_2 VARCHAR;"))
         conn.execute(text("ALTER TABLE production_logs ADD COLUMN idle_hours_3 FLOAT;"))
         conn.execute(text("ALTER TABLE production_logs ADD COLUMN idle_reason_3 VARCHAR;"))
+        conn.execute(text("ALTER TABLE production_logs ADD COLUMN multiple_mc INTEGER DEFAULT 1;"))
     except Exception:
         pass
 
@@ -514,6 +515,7 @@ class ProdLogCreate(BaseModel):
     idle_reason_2: Optional[str] = ""
     idle_hours_3: Optional[float] = 0.0
     idle_reason_3: Optional[str] = ""
+    multiple_mc: Optional[int] = 1
 
 @app.post("/api/prodlog")
 def create_prodlog(log: ProdLogCreate, db: Session = Depends(get_db)):

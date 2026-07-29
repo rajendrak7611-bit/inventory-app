@@ -908,6 +908,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${log.description || ''}</td>
                     <td>${log.machine}</td>
                     <td>${log.operator || ''}</td>
+                    <td>${log.multiple_mc || 1}</td>
                     <td>${log.cycle_time || ''}</td>
                     <td>${log.runtime || ''}</td>
                     <td>${log.target_qty || ''}</td>
@@ -945,6 +946,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 setter: document.getElementById('prodLogSetter').value,
                 machine: document.getElementById('prodLogMachine').value,
                 operator: document.getElementById('prodLogOperator').value,
+                multiple_mc: parseInt(document.getElementById('prodLogMultipleMc').value) || 1,
                 partno: document.getElementById('prodLogPartNo').value,
                 opn_no: document.getElementById('prodLogOpnNo').value,
                 description: document.getElementById('prodLogDescription').value,
