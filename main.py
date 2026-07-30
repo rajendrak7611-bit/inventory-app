@@ -42,7 +42,8 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
     except Exception:
         pass
     try:
-        conn.execute(text("UPDATE schedules SET status = 'Pending' WHERE status = 'Completed';"))
+        conn.execute(text("UPDATE schedules SET status = 'Pending';"))
+        conn.execute(text("UPDATE schedules SET status = 'Completed' WHERE qty <= (SELECT COALESCE(SUM(prod_qty), 0) FROM production_logs WHERE production_logs.partno = schedules.partno AND opn_no = 'rfd');"))
     except Exception:
         pass
     try:
@@ -602,19 +603,15 @@ def create_prodlog(log: ProdLogCreate, db: Session = Depends(get_db)):
     # Check if we should mark the schedule as Completed
     schedule = db.query(Schedule).filter(Schedule.partno == log.partno, Schedule.status == "Pending").first()
     if schedule:
-        part = db.query(PartMaster).filter(PartMaster.partno == schedule.partno).first()
-        if part:
-            last_op = db.query(PartOperation).filter(PartOperation.part_id == part.id).order_by(PartOperation.id.desc()).first()
-            if last_op and log.opn_no == last_op.opn_no:
-                # Sum all production for this last operation
-                logs = db.query(ProductionLog).filter(
-                    ProductionLog.partno == schedule.partno,
-                    ProductionLog.opn_no == last_op.opn_no
-                ).all()
-                total_prod = sum((l.prod_qty or 0) for l in logs)
-                if total_prod >= schedule.qty:
-                    schedule.status = "Completed"
-                    db.commit()
+        if log.opn_no == 'rfd':
+            logs = db.query(ProductionLog).filter(
+                ProductionLog.partno == schedule.partno,
+                ProductionLog.opn_no == 'rfd'
+            ).all()
+            total_prod = sum((l.prod_qty or 0) for l in logs)
+            if total_prod >= schedule.qty:
+                schedule.status = "Completed"
+                db.commit()
             
     return db_log
 
