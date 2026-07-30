@@ -2036,11 +2036,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 keys.forEach(fpn => {
                     const required = reqs[fpn];
-                    if (required <= 1) return; // Display only quantities greater than 1
-                    
                     const rm = rawMaterials.find(r => (r.forge_pn || '').trim().toUpperCase() === fpn);
                     const stock = rm ? (rm.stock || 0) : 0;
                     const shortage = Math.max(0, required - stock);
+                    
+                    if (shortage <= 0) return; // Display only parts with an actual shortage
                     
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
@@ -2053,7 +2053,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 
                 if (tbody.children.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No requirements greater than 1 found.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No parts with shortage found.</td></tr>';
                 }
             }
         } catch (e) {
