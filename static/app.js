@@ -467,11 +467,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (currentTab === 'rawmaterial') {
                     const rawmaterials = [];
                     json.forEach(row => {
-                        const forge_pn = String(row['Forge PN'] || row['Forge Pn'] || row['forge_pn'] || row['Forge pn'] || '').trim();
+                        const forge_pn = String(row['Forge PN'] || row['FORGE PN'] || row['Forge Pn'] || row['forge_pn'] || row['Forge pn'] || '').trim();
                         if (!forge_pn) return;
                         
                         // Treat 'Quantity' or 'Stock' or 'Receipt' column as the quantity
-                        const quantity = parseInt(row['Quantity'] || row['Qty'] || row['qty'] || row['Stock'] || row['Receipt'] || 0) || 0;
+                        const quantity = parseInt(row['Quantity'] || row['QUANTITY'] || row['Qty'] || row['qty'] || row['Stock'] || row['Receipt'] || 0) || 0;
                         const receipt = quantity;
                         const despatch = 0;
                         const stock = quantity;
@@ -490,13 +490,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     const logs = [];
                     const type = currentTab === 'rm_receipt' ? 'receipt' : 'despatch';
                     json.forEach(row => {
-                        const forge_pn = String(row['Forge PN'] || row['Forge Pn'] || row['forge_pn'] || row['Forge pn'] || '').trim();
+                        const forge_pn = String(row['Forge PN'] || row['FORGE PN'] || row['Forge Pn'] || row['forge_pn'] || row['Forge pn'] || '').trim();
                         if (!forge_pn) return;
                         
-                        const qty = parseInt(row['Quantity'] || row['Qty'] || row['qty'] || 0) || 0;
+                        const qty = parseInt(row['Quantity'] || row['QUANTITY'] || row['Qty'] || row['qty'] || 0) || 0;
                         if (qty <= 0) return;
                         
-                        let date = row['Date'] || row['date'];
+                        let date = row['Date'] || row['DATE'] || row['date'];
                         if (!date) {
                             date = new Date().toISOString().split('T')[0];
                         } else {
