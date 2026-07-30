@@ -1229,6 +1229,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const balance = lastOpProd - deburredProd;
                 
+                if (balance <= 0) continue;
+                
                 const tr = document.createElement('tr');
                 tr.style.cursor = 'pointer';
                 tr.innerHTML = `
@@ -1239,6 +1241,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.getElementById('deburPartNo').value = partno;
                 });
                 tbody.appendChild(tr);
+            }
+            
+            if (tbody.children.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">No parts pending debur</td></tr>';
             }
         } catch (e) {
             console.error('Error fetching debur status', e);
