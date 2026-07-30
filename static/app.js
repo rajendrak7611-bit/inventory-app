@@ -112,8 +112,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabInspection = document.getElementById('tabInspection');
     
     const rawMaterialsSection = document.getElementById('rawMaterialsSection');
-    const rmReceiptSection = document.getElementById('rmReceiptSection');
-    const rmDespatchSection = document.getElementById('rmDespatchSection');
     const productsSection = document.getElementById('productsSection');
     const partMasterSection = document.getElementById('partMasterSection');
     const machinesSection = document.getElementById('machinesSection');
@@ -169,8 +167,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const usersSection = document.getElementById('usersSection');
         if (usersSection) usersSection.style.display = 'none';
         if (rawMaterialsSection) rawMaterialsSection.style.display = 'none';
-        if (rmReceiptSection) rmReceiptSection.style.display = 'none';
-        if (rmDespatchSection) rmDespatchSection.style.display = 'none';
         productsSection.style.display = 'none';
         partMasterSection.style.display = 'none';
         machinesSection.style.display = 'none';
@@ -213,46 +209,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (menuRmMaster) {
-        menuRmMaster.addEventListener('click', (e) => {
-            e.preventDefault();
-            currentTab = 'rawmaterial-master';
+    if (tabRawMaterial) {
+        tabRawMaterial.addEventListener('click', () => {
+            currentTab = 'rawmaterial';
             hideAllSections();
             tabRawMaterial.classList.add('active');
             if (rawMaterialsSection) rawMaterialsSection.style.display = 'block';
-            addBtn.style.display = 'none';
+            addBtn.style.display = 'inline-flex';
+            addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Raw Material';
             importBtn.style.display = 'none';
             fetchRawMaterials();
-        });
-    }
-
-    if (menuRmReceipt) {
-        menuRmReceipt.addEventListener('click', (e) => {
-            e.preventDefault();
-            currentTab = 'rawmaterial-receipt';
-            hideAllSections();
-            tabRawMaterial.classList.add('active');
-            if (rmReceiptSection) rmReceiptSection.style.display = 'block';
-            addBtn.style.display = 'inline-flex';
-            addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Receipt';
-            importBtn.style.display = 'inline-flex';
-            fetchRmLogs('receipt');
-            fetchRawMaterials(); // Needed to populate the Forge PN dropdown
-        });
-    }
-
-    if (menuRmDespatch) {
-        menuRmDespatch.addEventListener('click', (e) => {
-            e.preventDefault();
-            currentTab = 'rawmaterial-despatch';
-            hideAllSections();
-            tabRawMaterial.classList.add('active');
-            if (rmDespatchSection) rmDespatchSection.style.display = 'block';
-            addBtn.style.display = 'inline-flex';
-            addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Despatch';
-            importBtn.style.display = 'inline-flex';
-            fetchRmLogs('despatch');
-            fetchRawMaterials(); // Needed to populate the Forge PN dropdown
         });
     }
 
@@ -359,21 +325,11 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (currentTab === 'partmaster') openPartModal(false);
         else if (currentTab === 'machines') openMachineModal(false);
         else if (currentTab === 'operators') openOperatorModal(false);
-        else if (currentTab === 'rawmaterial-receipt') {
-            document.getElementById('rmLogModalTitle').innerText = 'Add Receipt';
-            document.getElementById('rmLogForm').reset();
-            document.getElementById('rmLogType').value = 'receipt';
-            document.getElementById('rmLogDate').value = new Date().toISOString().split('T')[0];
-            populateForgePnDatalist();
-            document.getElementById('rmLogModal').classList.add('show');
-        }
-        else if (currentTab === 'rawmaterial-despatch') {
-            document.getElementById('rmLogModalTitle').innerText = 'Add Despatch';
-            document.getElementById('rmLogForm').reset();
-            document.getElementById('rmLogType').value = 'despatch';
-            document.getElementById('rmLogDate').value = new Date().toISOString().split('T')[0];
-            populateForgePnDatalist();
-            document.getElementById('rmLogModal').classList.add('show');
+        else if (currentTab === 'rawmaterial') {
+            document.getElementById('rmModalTitle').innerText = 'Add Raw Material';
+            document.getElementById('rawMaterialForm').reset();
+            document.getElementById('rmId').value = '';
+            document.getElementById('rawMaterialModal').classList.add('show');
         }
     });
 
@@ -450,26 +406,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                     endpoint = '/api/operators/bulk_import';
                     bodyData = JSON.stringify({ operators: operators });
-                } else if (currentTab === 'rawmaterial-receipt' || currentTab === 'rawmaterial-despatch') {
-                    const logs = [];
-                    const type = currentTab === 'rawmaterial-receipt' ? 'receipt' : 'despatch';
-                    json.forEach(row => {
-                        const forge_pn = String(row['Forge PN'] || row['Forge Pn'] || row['forge_pn'] || row['Forge pn'] || '').trim();
-                        if (!forge_pn) return;
-                        let dateStr = row['Date'] || row['date'];
-                        if (typeof dateStr === 'number') {
-                            const date = new Date(Math.round((dateStr - 25569)*86400*1000));
-                            dateStr = date.toISOString().split('T')[0];
-                        } else {
-                            dateStr = String(dateStr || new Date().toISOString().split('T')[0]).trim();
-                        }
-                        const qty = parseInt(row['Qty'] || row['qty'] || row['Quantity'] || 0) || 0;
-                        if (qty > 0) {
-                            logs.push({ type, date: dateStr, forge_pn, qty });
-                        }
-                    });
-                    endpoint = '/api/rawmateriallogs/bulk';
-                    bodyData = JSON.stringify({ logs: logs });
                 }
 
                 if (!endpoint) {
@@ -495,8 +431,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (currentTab === 'partmaster') fetchPartMasters();
                     else if (currentTab === 'machines') fetchMachines();
                     else if (currentTab === 'operators') fetchOperators();
-                    else if (currentTab === 'rawmaterial-receipt') fetchRmLogs('receipt');
-                    else if (currentTab === 'rawmaterial-despatch') fetchRmLogs('despatch');
                 } else {
                     alert('Import failed. Please check the console.');
                 }
@@ -1754,7 +1688,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td>${rm.receipt}</td>
                         <td>${rm.despatch}</td>
                         <td>${rm.stock}</td>
-                        <td>${rm.stock}</td>
+                        <td class="action-col">
+                            <button class="btn btn-primary btn-sm" onclick="editRawMaterial(${rm.id})">Edit</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteRawMaterial(${rm.id})">Delete</button>
+                        </td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -1764,79 +1701,69 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function fetchRmLogs(type) {
-        try {
-            const res = await fetch('/api/rawmateriallogs');
-            const allLogs = await res.json();
-            const filteredLogs = allLogs.filter(log => log.type === type);
-            
-            const tbodyId = type === 'receipt' ? 'rmReceiptBody' : 'rmDespatchBody';
-            const tbody = document.getElementById(tbodyId);
-            if (tbody) {
-                tbody.innerHTML = '';
-                filteredLogs.forEach(log => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${log.date}</td>
-                        <td>${log.forge_pn}</td>
-                        <td>${log.qty}</td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-            }
-        } catch (e) {
-            console.error('Error fetching rm logs', e);
-        }
-    }
-
-    function populateForgePnDatalist() {
-        const datalist = document.getElementById('forgePnList');
-        if (datalist) {
-            datalist.innerHTML = '';
-            allRawMaterials.forEach(rm => {
-                const option = document.createElement('option');
-                option.value = rm.forge_pn;
-                datalist.appendChild(option);
-            });
-        }
-    }
-
-    const rmLogModal = document.getElementById('rmLogModal');
-    const rmLogForm = document.getElementById('rmLogForm');
-    if (rmLogForm) {
-        rmLogForm.addEventListener('submit', async (e) => {
+    const rawMaterialModal = document.getElementById('rawMaterialModal');
+    const rawMaterialForm = document.getElementById('rawMaterialForm');
+    if (rawMaterialForm) {
+        rawMaterialForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const type = document.getElementById('rmLogType').value;
-            const date = document.getElementById('rmLogDate').value;
-            const forge_pn = document.getElementById('rmLogForgePn').value;
-            const qty = parseInt(document.getElementById('rmLogQty').value) || 0;
+            const id = document.getElementById('rmId').value;
+            const forge_pn = document.getElementById('rmForgePn').value;
+            const receipt = parseInt(document.getElementById('rmReceipt').value) || 0;
+            const despatch = parseInt(document.getElementById('rmDespatch').value) || 0;
+            const stock = receipt - despatch;
             
-            const payload = { type, date, forge_pn, qty };
+            const payload = { forge_pn, receipt, despatch, stock };
+            
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/rawmaterials/${id}` : '/api/rawmaterials';
             
             try {
-                const res = await fetch('/api/rawmateriallogs', {
-                    method: 'POST',
+                const res = await fetch(url, {
+                    method: method,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
                 if (res.ok) {
-                    rmLogModal.classList.remove('show');
-                    fetchRmLogs(type);
+                    rawMaterialModal.classList.remove('show');
+                    fetchRawMaterials();
                 } else {
-                    alert('Failed to save log');
+                    alert('Failed to save raw material');
                 }
             } catch (e) {
                 console.error(e);
             }
         });
         
-        document.getElementById('closeRmLogModalBtn').addEventListener('click', () => {
-            rmLogModal.classList.remove('show');
+        document.getElementById('closeRmModalBtn').addEventListener('click', () => {
+            rawMaterialModal.classList.remove('show');
         });
-        document.getElementById('cancelRmLogBtn').addEventListener('click', () => {
-            rmLogModal.classList.remove('show');
+        document.getElementById('cancelRmBtn').addEventListener('click', () => {
+            rawMaterialModal.classList.remove('show');
         });
     }
+
+    window.editRawMaterial = (id) => {
+        const rm = allRawMaterials.find(r => r.id === id);
+        if (rm) {
+            document.getElementById('rmModalTitle').innerText = 'Edit Raw Material';
+            document.getElementById('rmId').value = rm.id;
+            document.getElementById('rmForgePn').value = rm.forge_pn;
+            document.getElementById('rmReceipt').value = rm.receipt;
+            document.getElementById('rmDespatch').value = rm.despatch;
+            rawMaterialModal.classList.add('show');
+        }
+    };
+
+    window.deleteRawMaterial = async (id) => {
+        if (confirm('Are you sure you want to delete this raw material?')) {
+            try {
+                const res = await fetch(`/api/rawmaterials/${id}`, { method: 'DELETE' });
+                if (res.ok) fetchRawMaterials();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+    };
 
 
     // --- USER MANAGEMENT LOGIC ---
