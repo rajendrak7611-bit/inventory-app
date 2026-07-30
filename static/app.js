@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabSchedule = document.getElementById('tabSchedule');
     const menuScheduleCreate = document.getElementById('menuScheduleCreate');
     const menuScheduleRun = document.getElementById('menuScheduleRun');
-    const menuScheduleStatus = document.getElementById('menuScheduleStatus');
+    const tabStatus = document.getElementById('tabStatus');
     const tabProdLog = document.getElementById('tabProdLog');
     const tabDebur = document.getElementById('tabDebur');
     const tabInspection = document.getElementById('tabInspection');
@@ -178,6 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tabMachines.classList.remove('active');
         tabOperators.classList.remove('active');
         tabSchedule.classList.remove('active');
+        if (tabStatus) tabStatus.classList.remove('active');
         tabProdLog.classList.remove('active');
         tabDebur.classList.remove('active');
         tabInspection.classList.remove('active');
@@ -259,15 +260,17 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchRunSchedule();
     });
 
-    menuScheduleStatus.addEventListener('click', (e) => {
-        e.preventDefault();
-        currentTab = 'schedule-status';
-        hideAllSections();
-        tabSchedule.classList.add('active');
-        scheduleStatusSection.style.display = 'block';
-        addBtn.style.display = 'none';
-        initScheduleStatus();
-    });
+    if (tabStatus) {
+        tabStatus.addEventListener('click', (e) => {
+            e.preventDefault();
+            currentTab = 'schedule-status';
+            hideAllSections();
+            tabStatus.classList.add('active');
+            scheduleStatusSection.style.display = 'block';
+            addBtn.style.display = 'none';
+            initScheduleStatus();
+        });
+    }
 
     tabProdLog.addEventListener('click', () => {
         currentTab = 'prod-log';

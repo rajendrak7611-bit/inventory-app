@@ -62,7 +62,7 @@ with Session(engine) as db:
     admin_user = db.query(User).filter(User.username == "admin").first()
     if not admin_user:
         hashed = hashlib.sha256("admin123".encode()).hexdigest()
-        new_admin = User(username="admin", password_hash=hashed, role="admin", accessible_screens='["users","products","partmaster","machines","operators","schedule","prodlog","debur","inspection"]')
+        new_admin = User(username="admin", password_hash=hashed, role="admin", accessible_screens='["users","products","partmaster","machines","operators","schedule","status","prodlog","debur","inspection"]')
         db.add(new_admin)
         db.commit()
 
