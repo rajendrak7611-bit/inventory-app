@@ -682,6 +682,23 @@
                 <h2 style="margin-bottom: 20px;">Reports</h2>
                 <p>Reports dashboard coming soon...</p>
             </div>
+            
+            <div id="rmRequirementSection" style="display: none; padding: 2rem; color: var(--text-main);">
+                <h2 style="margin-bottom: 20px;">RM Requirement Report</h2>
+                <div class="table-container">
+                    <table class="styled-table">
+                        <thead>
+                            <tr>
+                                <th>Forge PN</th>
+                                <th>Required Qty</th>
+                                <th>Available Stock</th>
+                                <th>Shortage</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rmRequirementBody"></tbody>
+                    </table>
+                </div>
+            </div>
 
             <!-- Users Section -->
             <div class="table-container" id="usersSection" style="display: none; padding: 2rem; color: var(--text-main);">
@@ -1010,6 +1027,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=58"></script>
+    <script src="/static/app.js?v=59"></script>
 </body>
 </html>

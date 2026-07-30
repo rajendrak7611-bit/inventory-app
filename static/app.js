@@ -168,8 +168,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function hideAllSections() {
         const usersSection = document.getElementById('usersSection');
         const reportsSection = document.getElementById('reportsSection');
+        const rmRequirementSection = document.getElementById('rmRequirementSection');
         if (usersSection) usersSection.style.display = 'none';
         if (reportsSection) reportsSection.style.display = 'none';
+        if (rmRequirementSection) rmRequirementSection.style.display = 'none';
         if (rawMaterialsSection) rawMaterialsSection.style.display = 'none';
         if (rmReceiptSection) rmReceiptSection.style.display = 'none';
         if (rmDespatchSection) rmDespatchSection.style.display = 'none';
@@ -226,10 +228,11 @@ document.addEventListener('DOMContentLoaded', () => {
             hideAllSections();
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             if (tabReports) tabReports.classList.add('active');
-            const reportsSection = document.getElementById('reportsSection');
-            if (reportsSection) reportsSection.style.display = 'block';
+            const rmReqSec = document.getElementById('rmRequirementSection');
+            if (rmReqSec) rmReqSec.style.display = 'block';
             addBtn.style.display = 'none';
             importBtn.style.display = 'none';
+            fetchRmRequirement();
         });
     }
 
@@ -1994,6 +1997,62 @@ document.addEventListener('DOMContentLoaded', () => {
                 tbody.appendChild(tr);
             });
         } catch (e) { console.error(e); }
+    }
+    
+    // --- RM REQUIREMENT REPORT ---
+    async function fetchRmRequirement() {
+        try {
+            const [schedRes, pmRes, rmRes] = await Promise.all([
+                fetch('/api/schedule'),
+                fetch('/api/partmaster'),
+                fetch('/api/rawmaterials')
+            ]);
+            
+            const schedules = await schedRes.json();
+            const partMasters = await pmRes.json();
+            const rawMaterials = await rmRes.json();
+            
+            const reqs = {};
+            // Only consider Pending schedules for requirement calculation
+            const pendingSchedules = schedules.filter(s => s.status === 'Pending' || !s.status);
+            
+            pendingSchedules.forEach(sched => {
+                const part = partMasters.find(p => p.partno === sched.partno);
+                if (part && part.forge_pn) {
+                    const fpn = part.forge_pn.trim().toUpperCase();
+                    reqs[fpn] = (reqs[fpn] || 0) + (sched.qty || 0);
+                }
+            });
+            
+            const tbody = document.getElementById('rmRequirementBody');
+            if (tbody) {
+                tbody.innerHTML = '';
+                const keys = Object.keys(reqs).sort();
+                
+                if (keys.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No pending schedules found to generate requirement report.</td></tr>';
+                    return;
+                }
+                
+                keys.forEach(fpn => {
+                    const rm = rawMaterials.find(r => (r.forge_pn || '').trim().toUpperCase() === fpn);
+                    const stock = rm ? (rm.stock || 0) : 0;
+                    const required = reqs[fpn];
+                    const shortage = Math.max(0, required - stock);
+                    
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${fpn}</td>
+                        <td>${required}</td>
+                        <td>${stock}</td>
+                        <td style="font-weight: 600; color: ${shortage > 0 ? '#ef4444' : 'inherit'};">${shortage}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        } catch (e) {
+            console.error('Error fetching RM Requirement', e);
+        }
     }
     
     window.deleteUser = async (id) => {
