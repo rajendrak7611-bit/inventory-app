@@ -546,14 +546,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMachineOptions = '';
     
     function addOperationRow(op = { opn_no: '', description: '', machine: '', cycle_time: '' }) {
+        const uniqueListId = 'machineList_' + Math.random().toString(36).substring(7);
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td><input type="text" class="opn-no" value="${op.opn_no}" style="width: 100%; padding: 8px;"></td>
             <td><input type="text" class="op-desc" value="${op.description}" style="width: 100%; padding: 8px;"></td>
             <td>
-                <select class="op-mach" style="width: 100%; padding: 8px;">
+                <input type="text" class="op-mach" list="${uniqueListId}" placeholder="Type or select a Machine" style="width: 100%; padding: 8px;">
+                <datalist id="${uniqueListId}">
                     ${currentMachineOptions}
-                </select>
+                </datalist>
             </td>
             <td><input type="number" step="0.01" class="op-time" value="${op.cycle_time || ''}" style="width: 100%; padding: 8px;"></td>
         `;
