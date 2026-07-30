@@ -119,6 +119,9 @@ class RawMaterialLogResponse(RawMaterialLogBase):
 class BulkImportRmLogPayload(BaseModel):
     logs: List[RawMaterialLogBase]
 
+class BulkImportRmPayload(BaseModel):
+    rawmaterials: List[RawMaterialBase]
+
 class ProductBase(BaseModel):
     family: str
     spec: str
@@ -662,6 +665,25 @@ def delete_raw_material(rm_id: int, db: Session = Depends(get_db)):
     db.delete(db_rm)
     db.commit()
     return {"message": "Raw Material deleted"}
+
+@app.post("/api/rawmaterials/bulk")
+def bulk_import_raw_materials(payload: BulkImportRmPayload, db: Session = Depends(get_db)):
+    for rm in payload.rawmaterials:
+        db_rm = db.query(RawMaterial).filter(RawMaterial.forge_pn == rm.forge_pn).first()
+        if db_rm:
+            db_rm.receipt = rm.receipt
+            db_rm.despatch = rm.despatch
+            db_rm.stock = rm.stock
+        else:
+            new_rm = RawMaterial(
+                forge_pn=rm.forge_pn,
+                receipt=rm.receipt,
+                despatch=rm.despatch,
+                stock=rm.stock
+            )
+            db.add(new_rm)
+    db.commit()
+    return {"message": f"Successfully processed {len(payload.rawmaterials)} raw materials"}
 
 @app.get("/api/rawmateriallogs", response_model=List[RawMaterialLogResponse])
 def get_raw_material_logs(db: Session = Depends(get_db)):

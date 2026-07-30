@@ -217,7 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (rawMaterialsSection) rawMaterialsSection.style.display = 'block';
             addBtn.style.display = 'inline-flex';
             addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Raw Material';
-            importBtn.style.display = 'none';
+            importBtn.style.display = 'inline-flex';
             fetchRawMaterials();
         });
     }
@@ -406,6 +406,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                     endpoint = '/api/operators/bulk_import';
                     bodyData = JSON.stringify({ operators: operators });
+                } else if (currentTab === 'rawmaterial') {
+                    const rawmaterials = [];
+                    json.forEach(row => {
+                        const forge_pn = String(row['Forge PN'] || row['Forge Pn'] || row['forge_pn'] || row['Forge pn'] || '').trim();
+                        if (!forge_pn) return;
+                        
+                        // Treat 'Quantity' or 'Stock' or 'Receipt' column as the quantity
+                        const quantity = parseInt(row['Quantity'] || row['Qty'] || row['qty'] || row['Stock'] || row['Receipt'] || 0) || 0;
+                        const receipt = quantity;
+                        const despatch = 0;
+                        const stock = quantity;
+                        
+                        rawmaterials.push({ forge_pn, receipt, despatch, stock });
+                    });
+                    endpoint = '/api/rawmaterials/bulk';
+                    bodyData = JSON.stringify({ rawmaterials: rawmaterials });
                 }
 
                 if (!endpoint) {
@@ -431,6 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (currentTab === 'partmaster') fetchPartMasters();
                     else if (currentTab === 'machines') fetchMachines();
                     else if (currentTab === 'operators') fetchOperators();
+                    else if (currentTab === 'rawmaterial') fetchRawMaterials();
                 } else {
                     alert('Import failed. Please check the console.');
                 }
