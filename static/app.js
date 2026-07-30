@@ -2035,9 +2035,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 keys.forEach(fpn => {
+                    const required = reqs[fpn];
+                    if (required <= 1) return; // Display only quantities greater than 1
+                    
                     const rm = rawMaterials.find(r => (r.forge_pn || '').trim().toUpperCase() === fpn);
                     const stock = rm ? (rm.stock || 0) : 0;
-                    const required = reqs[fpn];
                     const shortage = Math.max(0, required - stock);
                     
                     const tr = document.createElement('tr');
@@ -2049,10 +2051,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                     tbody.appendChild(tr);
                 });
+                
+                if (tbody.children.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No requirements greater than 1 found.</td></tr>';
+                }
             }
         } catch (e) {
             console.error('Error fetching RM Requirement', e);
         }
+    }
+    
+    const exportRmReqBtn = document.getElementById('exportRmReqBtn');
+    if (exportRmReqBtn) {
+        exportRmReqBtn.addEventListener('click', () => {
+            const table = document.getElementById('rmRequirementTable');
+            if (table) {
+                const wb = XLSX.utils.table_to_book(table, { sheet: "RM Requirement" });
+                XLSX.writeFile(wb, "RM_Requirement_Report.xlsx");
+            }
+        });
     }
     
     window.deleteUser = async (id) => {
