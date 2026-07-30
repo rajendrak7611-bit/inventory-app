@@ -218,11 +218,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (tabReports) {
-        tabReports.addEventListener('click', () => {
-            currentTab = 'reports';
+    const menuRmRequirement = document.getElementById('menuRmRequirement');
+    if (menuRmRequirement) {
+        menuRmRequirement.addEventListener('click', (e) => {
+            e.preventDefault();
+            currentTab = 'rm_requirement';
             hideAllSections();
-            tabReports.classList.add('active');
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            if (tabReports) tabReports.classList.add('active');
             const reportsSection = document.getElementById('reportsSection');
             if (reportsSection) reportsSection.style.display = 'block';
             addBtn.style.display = 'none';
