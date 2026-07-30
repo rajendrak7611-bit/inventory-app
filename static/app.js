@@ -476,7 +476,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         const despatch = 0;
                         const stock = quantity;
                         
+                        rawmaterials.push({ forge_pn, receipt, despatch, stock });
                     });
+                    
+                    if (rawmaterials.length === 0) {
+                        alert("No valid raw material data found. Please check column headers (e.g., 'Forge PN', 'Quantity').");
+                        return;
+                    }
+                    
                     endpoint = '/api/rawmaterials/bulk';
                     bodyData = JSON.stringify({ rawmaterials: rawmaterials });
                 } else if (currentTab === 'rm_receipt' || currentTab === 'rm_despatch') {
@@ -502,6 +509,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         logs.push({ type, date, forge_pn, qty });
                     });
+                    
+                    if (logs.length === 0) {
+                        alert("No valid log data found. Please check column headers (e.g., 'Forge PN', 'Quantity').");
+                        return;
+                    }
+                    
                     endpoint = '/api/rawmateriallogs/bulk';
                     bodyData = JSON.stringify({ logs: logs });
                 }
