@@ -45,6 +45,7 @@
 
         <main>
             <div class="tabs">
+                <button class="tab-btn" id="tabReports">Reports</button>
                 <button class="tab-btn" id="tabUsers" data-screen="users" style="display: none;">Users</button>
                 <div class="dropdown" data-screen="rawmaterial">
                     <button class="tab-btn" id="tabRawMaterial" style="pointer-events: none;">Raw Material ▼</button>
@@ -671,6 +672,12 @@
                 </div>
             </div>
 
+            <!-- Reports Section -->
+            <div id="reportsSection" style="display: none; padding: 2rem; color: var(--text-main); background: var(--card-bg); border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                <h2 style="margin-bottom: 20px;">Reports</h2>
+                <p>Reports dashboard coming soon...</p>
+            </div>
+
             <!-- Users Section -->
             <div class="table-container" id="usersSection" style="display: none; padding: 2rem; color: var(--text-main);">
                 <div style="display: flex; gap: 3rem; flex-wrap: wrap;">
@@ -998,6 +1005,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=56"></script>
+    <script src="/static/app.js?v=57"></script>
 </body>
 </html>

@@ -167,7 +167,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function hideAllSections() {
         const usersSection = document.getElementById('usersSection');
+        const reportsSection = document.getElementById('reportsSection');
         if (usersSection) usersSection.style.display = 'none';
+        if (reportsSection) reportsSection.style.display = 'none';
         if (rawMaterialsSection) rawMaterialsSection.style.display = 'none';
         if (rmReceiptSection) rmReceiptSection.style.display = 'none';
         if (rmDespatchSection) rmDespatchSection.style.display = 'none';
@@ -183,7 +185,9 @@ document.addEventListener('DOMContentLoaded', () => {
         inspectionSection.style.display = 'none';
         
         const tabUsers = document.getElementById('tabUsers');
+        const tabReports = document.getElementById('tabReports');
         if (tabUsers) tabUsers.classList.remove('active');
+        if (tabReports) tabReports.classList.remove('active');
         if (tabRawMaterial) tabRawMaterial.classList.remove('active');
         tabProducts.classList.remove('active');
         tabPartMaster.classList.remove('active');
@@ -200,6 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Tab Logic
     const tabUsers = document.getElementById('tabUsers');
+    const tabReports = document.getElementById('tabReports');
     if (tabUsers) {
         tabUsers.addEventListener('click', () => {
             currentTab = 'users';
@@ -210,6 +215,18 @@ document.addEventListener('DOMContentLoaded', () => {
             addBtn.style.display = 'none';
             importBtn.style.display = 'none';
             fetchUsers();
+        });
+    }
+
+    if (tabReports) {
+        tabReports.addEventListener('click', () => {
+            currentTab = 'reports';
+            hideAllSections();
+            tabReports.classList.add('active');
+            const reportsSection = document.getElementById('reportsSection');
+            if (reportsSection) reportsSection.style.display = 'block';
+            addBtn.style.display = 'none';
+            importBtn.style.display = 'none';
         });
     }
 
