@@ -962,7 +962,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     return numA - numB;
                 });
                 
-                let rowHtml = `<td>${partno}</td>`;
+                const partSchedules = deptSchedules.filter(s => s.partno === partno);
+                const schedQty = partSchedules.reduce((sum, s) => sum + (s.qty || 0), 0);
+                
+                let rowHtml = `<td>${partno}</td><td>${schedQty}</td>`;
                 
                 // Opn 1 to 10
                 for (let i = 0; i < 10; i++) {
@@ -982,6 +985,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         
                         let balance = currentProd - nextProd;
+                        if (balance < 0) balance = 0;
                         rowHtml += `<td>${balance}</td>`;
                     } else {
                         rowHtml += `<td></td>`;
@@ -1001,7 +1005,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         nextFProd = allLogs.filter(l => l.partno === partno && ['rework', 'nc', 'rfd'].includes((l.opn_no || '').toLowerCase())).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                     }
                     
-                    const fBalance = prod - nextFProd;
+                    let fBalance = prod - nextFProd;
+                    if (fBalance < 0) fBalance = 0;
                     rowHtml += `<td>${fBalance || (prod === 0 ? '' : 0)}</td>`;
                 }
                 
