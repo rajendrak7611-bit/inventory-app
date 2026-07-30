@@ -46,6 +46,7 @@
         <main>
             <div class="tabs">
                 <button class="tab-btn" id="tabUsers" data-screen="users" style="display: none;">Users</button>
+                <button class="tab-btn" id="tabRawMaterial" data-screen="rawmaterial">Raw Material</button>
                 <button class="tab-btn active" id="tabProducts" data-screen="products">Tools</button>
                 <button class="tab-btn" id="tabPartMaster" data-screen="partmaster">Part Master</button>
                 <button class="tab-btn" id="tabMachines" data-screen="machines">Machines</button>
@@ -696,6 +697,7 @@
                             <div class="form-group" style="margin-top: 15px;">
                                 <label style="margin-bottom: 10px; display: block;">Accessible Screens</label>
                                 <div style="display: flex; flex-direction: column; gap: 8px;" id="userScreensList">
+                                    <label><input type="checkbox" value="rawmaterial"> Raw Material</label>
                                     <label><input type="checkbox" value="products"> Tools</label>
                                     <label><input type="checkbox" value="partmaster"> Part Master</label>
                                     <label><input type="checkbox" value="machines"> Machines</label>
@@ -715,6 +717,21 @@
                 </div>
             </div>
             
+            <!-- Raw Materials Section -->
+            <div class="table-container" id="rawMaterialsSection" style="display: none;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Forge PN</th>
+                            <th>Receipt</th>
+                            <th>Despatch</th>
+                            <th>Stock</th>
+                            <th class="action-col">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rawMaterialsBody"></tbody>
+                </table>
+            </div>
         </main>
     </div>
 
@@ -856,6 +873,35 @@
         </div>
     </div>
 
+    <!-- Raw Material Modal -->
+    <div class="modal-overlay" id="rawMaterialModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 id="rmModalTitle">Add Raw Material</h2>
+                <button class="close-btn" id="closeRmModalBtn">&times;</button>
+            </div>
+            <form id="rawMaterialForm">
+                <input type="hidden" id="rmId">
+                <div class="form-group">
+                    <label for="rmForgePn">Forge PN</label>
+                    <input type="text" id="rmForgePn" required>
+                </div>
+                <div class="form-group">
+                    <label for="rmReceipt">Receipt</label>
+                    <input type="number" id="rmReceipt" required value="0">
+                </div>
+                <div class="form-group">
+                    <label for="rmDespatch">Despatch</label>
+                    <input type="number" id="rmDespatch" required value="0">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="cancelRmBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Modal for Part Operations -->
     <div id="operationsModal" class="modal">
         <div class="modal-content" style="max-width: 800px;">
@@ -890,6 +936,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=47"></script>
+    <script src="/static/app.js?v=48"></script>
 </body>
 </html>

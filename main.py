@@ -62,7 +62,7 @@ with Session(engine) as db:
     admin_user = db.query(User).filter(User.username == "admin").first()
     if not admin_user:
         hashed = hashlib.sha256("admin123".encode()).hexdigest()
-        new_admin = User(username="admin", password_hash=hashed, role="admin", accessible_screens='["users","products","partmaster","machines","operators","schedule","status","prodlog","debur","inspection"]')
+        new_admin = User(username="admin", password_hash=hashed, role="admin", accessible_screens='["users","rawmaterial","products","partmaster","machines","operators","schedule","status","prodlog","debur","inspection"]')
         db.add(new_admin)
         db.commit()
 
@@ -83,6 +83,21 @@ class UserResponse(BaseModel):
     username: str
     role: str
     accessible_screens: str
+    class Config:
+        from_attributes = True
+
+class RawMaterialBase(BaseModel):
+    forge_pn: str
+    receipt: Optional[int] = 0
+    despatch: Optional[int] = 0
+    stock: Optional[int] = 0
+
+class RawMaterialCreate(RawMaterialBase):
+    pass
+
+class RawMaterialResponse(RawMaterialBase):
+    id: int
+    
     class Config:
         from_attributes = True
 
@@ -594,6 +609,41 @@ def delete_prodlog(log_id: int, db: Session = Depends(get_db)):
     db.delete(db_log)
     db.commit()
     return {"message": "Log deleted"}
+
+# --- RAW MATERIALS ENDPOINTS ---
+@app.get("/api/rawmaterials", response_model=List[RawMaterialResponse])
+def get_raw_materials(db: Session = Depends(get_db)):
+    return db.query(RawMaterial).all()
+
+@app.post("/api/rawmaterials", response_model=RawMaterialResponse)
+def create_raw_material(rm: RawMaterialCreate, db: Session = Depends(get_db)):
+    db_rm = RawMaterial(**rm.dict())
+    db.add(db_rm)
+    db.commit()
+    db.refresh(db_rm)
+    return db_rm
+
+@app.put("/api/rawmaterials/{rm_id}", response_model=RawMaterialResponse)
+def update_raw_material(rm_id: int, rm: RawMaterialCreate, db: Session = Depends(get_db)):
+    db_rm = db.query(RawMaterial).filter(RawMaterial.id == rm_id).first()
+    if not db_rm:
+        raise HTTPException(status_code=404, detail="Raw Material not found")
+    
+    for key, value in rm.dict().items():
+        setattr(db_rm, key, value)
+        
+    db.commit()
+    db.refresh(db_rm)
+    return db_rm
+
+@app.delete("/api/rawmaterials/{rm_id}")
+def delete_raw_material(rm_id: int, db: Session = Depends(get_db)):
+    db_rm = db.query(RawMaterial).filter(RawMaterial.id == rm_id).first()
+    if not db_rm:
+        raise HTTPException(status_code=404, detail="Raw Material not found")
+    db.delete(db_rm)
+    db.commit()
+    return {"message": "Raw Material deleted"}
 
 @app.get("/api/users", response_model=List[UserResponse])
 def get_users(db: Session = Depends(get_db)):

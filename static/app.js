@@ -94,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let availableMachines = [];
 
     // Tabs
+    const tabRawMaterial = document.getElementById('tabRawMaterial');
     const tabProducts = document.getElementById('tabProducts');
     const tabPartMaster = document.getElementById('tabPartMaster');
     const tabMachines = document.getElementById('tabMachines');
@@ -106,6 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabDebur = document.getElementById('tabDebur');
     const tabInspection = document.getElementById('tabInspection');
     
+    const rawMaterialsSection = document.getElementById('rawMaterialsSection');
     const productsSection = document.getElementById('productsSection');
     const partMasterSection = document.getElementById('partMasterSection');
     const machinesSection = document.getElementById('machinesSection');
@@ -160,6 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function hideAllSections() {
         const usersSection = document.getElementById('usersSection');
         if (usersSection) usersSection.style.display = 'none';
+        if (rawMaterialsSection) rawMaterialsSection.style.display = 'none';
         productsSection.style.display = 'none';
         partMasterSection.style.display = 'none';
         machinesSection.style.display = 'none';
@@ -173,6 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const tabUsers = document.getElementById('tabUsers');
         if (tabUsers) tabUsers.classList.remove('active');
+        if (tabRawMaterial) tabRawMaterial.classList.remove('active');
         tabProducts.classList.remove('active');
         tabPartMaster.classList.remove('active');
         tabMachines.classList.remove('active');
@@ -198,6 +202,18 @@ document.addEventListener('DOMContentLoaded', () => {
             addBtn.style.display = 'none';
             importBtn.style.display = 'none';
             fetchUsers();
+        });
+    }
+
+    if (tabRawMaterial) {
+        tabRawMaterial.addEventListener('click', () => {
+            currentTab = 'rawmaterial';
+            hideAllSections();
+            tabRawMaterial.classList.add('active');
+            if (rawMaterialsSection) rawMaterialsSection.style.display = 'block';
+            addBtn.style.display = 'inline-flex';
+            importBtn.style.display = 'none';
+            fetchRawMaterials();
         });
     }
 
@@ -304,6 +320,12 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (currentTab === 'partmaster') openPartModal(false);
         else if (currentTab === 'machines') openMachineModal(false);
         else if (currentTab === 'operators') openOperatorModal(false);
+        else if (currentTab === 'rawmaterial') {
+            document.getElementById('rmModalTitle').innerText = 'Add Raw Material';
+            document.getElementById('rawMaterialForm').reset();
+            document.getElementById('rmId').value = '';
+            document.getElementById('rawMaterialModal').classList.add('show');
+        }
     });
 
     // Excel Import Logic
@@ -1644,6 +1666,99 @@ document.addEventListener('DOMContentLoaded', () => {
             XLSX.writeFile(wb, `Production_Logs_${new Date().toISOString().slice(0,10)}.xlsx`);
         });
     }
+
+    // --- RAW MATERIAL LOGIC ---
+    let allRawMaterials = [];
+    async function fetchRawMaterials() {
+        try {
+            const res = await fetch('/api/rawmaterials');
+            allRawMaterials = await res.json();
+            const tbody = document.getElementById('rawMaterialsBody');
+            if (tbody) {
+                tbody.innerHTML = '';
+                allRawMaterials.forEach(rm => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${rm.forge_pn}</td>
+                        <td>${rm.receipt}</td>
+                        <td>${rm.despatch}</td>
+                        <td>${rm.stock}</td>
+                        <td class="action-col">
+                            <button class="btn btn-primary btn-sm" onclick="editRawMaterial(${rm.id})">Edit</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteRawMaterial(${rm.id})">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        } catch (e) {
+            console.error('Error fetching raw materials', e);
+        }
+    }
+
+    const rawMaterialModal = document.getElementById('rawMaterialModal');
+    const rawMaterialForm = document.getElementById('rawMaterialForm');
+    if (rawMaterialForm) {
+        rawMaterialForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('rmId').value;
+            const forge_pn = document.getElementById('rmForgePn').value;
+            const receipt = parseInt(document.getElementById('rmReceipt').value) || 0;
+            const despatch = parseInt(document.getElementById('rmDespatch').value) || 0;
+            const stock = receipt - despatch;
+            
+            const payload = { forge_pn, receipt, despatch, stock };
+            
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/rawmaterials/${id}` : '/api/rawmaterials';
+            
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    rawMaterialModal.classList.remove('show');
+                    fetchRawMaterials();
+                } else {
+                    alert('Failed to save raw material');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        });
+        
+        document.getElementById('closeRmModalBtn').addEventListener('click', () => {
+            rawMaterialModal.classList.remove('show');
+        });
+        document.getElementById('cancelRmBtn').addEventListener('click', () => {
+            rawMaterialModal.classList.remove('show');
+        });
+    }
+
+    window.editRawMaterial = (id) => {
+        const rm = allRawMaterials.find(r => r.id === id);
+        if (rm) {
+            document.getElementById('rmModalTitle').innerText = 'Edit Raw Material';
+            document.getElementById('rmId').value = rm.id;
+            document.getElementById('rmForgePn').value = rm.forge_pn;
+            document.getElementById('rmReceipt').value = rm.receipt;
+            document.getElementById('rmDespatch').value = rm.despatch;
+            rawMaterialModal.classList.add('show');
+        }
+    };
+
+    window.deleteRawMaterial = async (id) => {
+        if (confirm('Are you sure you want to delete this raw material?')) {
+            try {
+                const res = await fetch(`/api/rawmaterials/${id}`, { method: 'DELETE' });
+                if (res.ok) fetchRawMaterials();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+    };
 
     // --- USER MANAGEMENT LOGIC ---
     async function fetchUsers() {
