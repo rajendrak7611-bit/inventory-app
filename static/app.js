@@ -1708,8 +1708,11 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const id = document.getElementById('rmId').value;
             const forge_pn = document.getElementById('rmForgePn').value;
-            const receipt = parseInt(document.getElementById('rmReceipt').value) || 0;
+            const quantity = parseInt(document.getElementById('rmQuantity').value) || 0;
             const despatch = parseInt(document.getElementById('rmDespatch').value) || 0;
+            
+            // Map quantity to receipt, stock is receipt - despatch
+            const receipt = quantity;
             const stock = receipt - despatch;
             
             const payload = { forge_pn, receipt, despatch, stock };
@@ -1748,7 +1751,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('rmModalTitle').innerText = 'Edit Raw Material';
             document.getElementById('rmId').value = rm.id;
             document.getElementById('rmForgePn').value = rm.forge_pn;
-            document.getElementById('rmReceipt').value = rm.receipt;
+            document.getElementById('rmQuantity').value = rm.receipt;
             document.getElementById('rmDespatch').value = rm.despatch;
             rawMaterialModal.classList.add('show');
         }
