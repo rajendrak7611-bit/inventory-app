@@ -101,6 +101,24 @@ class RawMaterialResponse(RawMaterialBase):
     class Config:
         from_attributes = True
 
+class RawMaterialLogBase(BaseModel):
+    type: str
+    date: str
+    forge_pn: str
+    qty: int
+
+class RawMaterialLogCreate(RawMaterialLogBase):
+    pass
+
+class RawMaterialLogResponse(RawMaterialLogBase):
+    id: int
+    
+    class Config:
+        from_attributes = True
+
+class BulkImportRmLogPayload(BaseModel):
+    logs: List[RawMaterialLogBase]
+
 class ProductBase(BaseModel):
     family: str
     spec: str
@@ -644,6 +662,51 @@ def delete_raw_material(rm_id: int, db: Session = Depends(get_db)):
     db.delete(db_rm)
     db.commit()
     return {"message": "Raw Material deleted"}
+
+@app.get("/api/rawmateriallogs", response_model=List[RawMaterialLogResponse])
+def get_raw_material_logs(db: Session = Depends(get_db)):
+    return db.query(RawMaterialLog).all()
+
+@app.post("/api/rawmateriallogs", response_model=RawMaterialLogResponse)
+def create_raw_material_log(log: RawMaterialLogCreate, db: Session = Depends(get_db)):
+    db_log = RawMaterialLog(**log.dict())
+    db.add(db_log)
+    
+    # Update master RawMaterial
+    master = db.query(RawMaterial).filter(RawMaterial.forge_pn == log.forge_pn).first()
+    if not master:
+        master = RawMaterial(forge_pn=log.forge_pn, receipt=0, despatch=0, stock=0)
+        db.add(master)
+        
+    if log.type == 'receipt':
+        master.receipt += log.qty
+    elif log.type == 'despatch':
+        master.despatch += log.qty
+    master.stock = master.receipt - master.despatch
+    
+    db.commit()
+    db.refresh(db_log)
+    return db_log
+
+@app.post("/api/rawmateriallogs/bulk")
+def bulk_import_raw_material_logs(payload: BulkImportRmLogPayload, db: Session = Depends(get_db)):
+    for log in payload.logs:
+        db_log = RawMaterialLog(**log.dict())
+        db.add(db_log)
+        
+        master = db.query(RawMaterial).filter(RawMaterial.forge_pn == log.forge_pn).first()
+        if not master:
+            master = RawMaterial(forge_pn=log.forge_pn, receipt=0, despatch=0, stock=0)
+            db.add(master)
+            
+        if log.type == 'receipt':
+            master.receipt += log.qty
+        elif log.type == 'despatch':
+            master.despatch += log.qty
+        master.stock = master.receipt - master.despatch
+        
+    db.commit()
+    return {"message": f"{len(payload.logs)} logs imported successfully"}
 
 @app.get("/api/users", response_model=List[UserResponse])
 def get_users(db: Session = Depends(get_db)):

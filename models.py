@@ -98,3 +98,20 @@ class ProductionLog(Base):
     idle_reason_3 = Column(String)
     multiple_mc = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class RawMaterial(Base):
+    __tablename__ = "raw_materials"
+    id = Column(Integer, primary_key=True, index=True)
+    forge_pn = Column(String, index=True)
+    receipt = Column(Integer, default=0)
+    despatch = Column(Integer, default=0)
+    stock = Column(Integer, default=0)
+
+class RawMaterialLog(Base):
+    __tablename__ = "raw_material_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    type = Column(String) # 'receipt' or 'despatch'
+    date = Column(String)
+    forge_pn = Column(String)
+    qty = Column(Integer, default=0)
+
