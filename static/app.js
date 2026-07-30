@@ -765,20 +765,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/partmaster');
             allPartMasters = await res.json();
         }
-        schedulePartNo.innerHTML = '<option value="">-- Select Part No --</option>';
-        allPartMasters.forEach(p => {
-            schedulePartNo.innerHTML += `<option value="${p.partno}">${p.partno}</option>`;
-        });
+        // Force trigger change to populate datalist if dept is already selected
+        scheduleDept.dispatchEvent(new Event('change'));
     }
 
-    schedulePartNo.addEventListener('change', (e) => {
-        const selectedPartNo = e.target.value;
-        const part = allPartMasters.find(p => p.partno === selectedPartNo);
-        if (part) {
-            scheduleDept.value = part.department || '';
-        } else {
-            scheduleDept.value = '';
+    scheduleDept.addEventListener('change', (e) => {
+        const selectedDept = e.target.value;
+        const datalist = document.getElementById('schedulePartNoList');
+        if (!datalist) return;
+        datalist.innerHTML = '';
+        if (selectedDept) {
+            const filteredParts = allPartMasters.filter(p => p.department === selectedDept);
+            filteredParts.forEach(p => {
+                datalist.innerHTML += `<option value="${p.partno}">`;
+            });
         }
+        schedulePartNo.value = ''; // Reset part no input when dept changes
     });
 
     async function fetchSchedulesForList() {
