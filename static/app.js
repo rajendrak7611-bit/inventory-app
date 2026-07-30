@@ -112,6 +112,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabInspection = document.getElementById('tabInspection');
     
     const rawMaterialsSection = document.getElementById('rawMaterialsSection');
+    const rmReceiptSection = document.getElementById('rmReceiptSection');
+    const rmDespatchSection = document.getElementById('rmDespatchSection');
     const productsSection = document.getElementById('productsSection');
     const partMasterSection = document.getElementById('partMasterSection');
     const machinesSection = document.getElementById('machinesSection');
@@ -167,6 +169,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const usersSection = document.getElementById('usersSection');
         if (usersSection) usersSection.style.display = 'none';
         if (rawMaterialsSection) rawMaterialsSection.style.display = 'none';
+        if (rmReceiptSection) rmReceiptSection.style.display = 'none';
+        if (rmDespatchSection) rmDespatchSection.style.display = 'none';
         productsSection.style.display = 'none';
         partMasterSection.style.display = 'none';
         machinesSection.style.display = 'none';
@@ -209,11 +213,46 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (tabRawMaterial) {
-        tabRawMaterial.addEventListener('click', () => {
+    if (menuRmReceipt) {
+        menuRmReceipt.addEventListener('click', (e) => {
+            e.preventDefault();
+            currentTab = 'rm_receipt';
+            hideAllSections();
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            tabRawMaterial.classList.add('active');
+            tabRawMaterial.innerText = 'Receipt ▼';
+            if (rmReceiptSection) rmReceiptSection.style.display = 'block';
+            addBtn.style.display = 'inline-flex';
+            addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Receipt';
+            importBtn.style.display = 'inline-flex';
+            fetchRmLogs('receipt');
+        });
+    }
+
+    if (menuRmDespatch) {
+        menuRmDespatch.addEventListener('click', (e) => {
+            e.preventDefault();
+            currentTab = 'rm_despatch';
+            hideAllSections();
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            tabRawMaterial.classList.add('active');
+            tabRawMaterial.innerText = 'Despatch ▼';
+            if (rmDespatchSection) rmDespatchSection.style.display = 'block';
+            addBtn.style.display = 'inline-flex';
+            addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Despatch';
+            importBtn.style.display = 'inline-flex';
+            fetchRmLogs('despatch');
+        });
+    }
+
+    if (menuRmMaster) {
+        menuRmMaster.addEventListener('click', (e) => {
+            e.preventDefault();
             currentTab = 'rawmaterial';
             hideAllSections();
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             tabRawMaterial.classList.add('active');
+            tabRawMaterial.innerText = 'RM Status ▼';
             if (rawMaterialsSection) rawMaterialsSection.style.display = 'block';
             addBtn.style.display = 'inline-flex';
             addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Raw Material';
@@ -331,6 +370,25 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('rmId').value = '';
             document.getElementById('rawMaterialModal').classList.add('show');
         }
+        else if (currentTab === 'rm_receipt' || currentTab === 'rm_despatch') {
+            const isReceipt = currentTab === 'rm_receipt';
+            document.getElementById('rmLogModalTitle').innerText = isReceipt ? 'Add Receipt' : 'Add Despatch';
+            document.getElementById('rmLogForm').reset();
+            document.getElementById('rmLogType').value = isReceipt ? 'receipt' : 'despatch';
+            
+            // Populate datalist with forge PNs
+            const list = document.getElementById('forgePnList');
+            list.innerHTML = '';
+            allRawMaterials.forEach(rm => {
+                const opt = document.createElement('option');
+                opt.value = rm.forge_pn;
+                list.appendChild(opt);
+            });
+            
+            // Default date to today
+            document.getElementById('rmLogDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('rmLogModal').classList.add('show');
+        }
     });
 
     // Excel Import Logic
@@ -418,10 +476,34 @@ document.addEventListener('DOMContentLoaded', () => {
                         const despatch = 0;
                         const stock = quantity;
                         
-                        rawmaterials.push({ forge_pn, receipt, despatch, stock });
                     });
                     endpoint = '/api/rawmaterials/bulk';
                     bodyData = JSON.stringify({ rawmaterials: rawmaterials });
+                } else if (currentTab === 'rm_receipt' || currentTab === 'rm_despatch') {
+                    const logs = [];
+                    const type = currentTab === 'rm_receipt' ? 'receipt' : 'despatch';
+                    json.forEach(row => {
+                        const forge_pn = String(row['Forge PN'] || row['Forge Pn'] || row['forge_pn'] || row['Forge pn'] || '').trim();
+                        if (!forge_pn) return;
+                        
+                        const qty = parseInt(row['Quantity'] || row['Qty'] || row['qty'] || 0) || 0;
+                        if (qty <= 0) return;
+                        
+                        let date = row['Date'] || row['date'];
+                        if (!date) {
+                            date = new Date().toISOString().split('T')[0];
+                        } else {
+                            // Excel serial dates mapping if it's a number
+                            if (typeof date === 'number') {
+                                const d = new Date((date - 25569) * 86400 * 1000);
+                                date = d.toISOString().split('T')[0];
+                            }
+                        }
+                        
+                        logs.push({ type, date, forge_pn, qty });
+                    });
+                    endpoint = '/api/rawmateriallogs/bulk';
+                    bodyData = JSON.stringify({ logs: logs });
                 }
 
                 if (!endpoint) {
@@ -448,6 +530,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     else if (currentTab === 'machines') fetchMachines();
                     else if (currentTab === 'operators') fetchOperators();
                     else if (currentTab === 'rawmaterial') fetchRawMaterials();
+                    else if (currentTab === 'rm_receipt') fetchRmLogs('receipt');
+                    else if (currentTab === 'rm_despatch') fetchRmLogs('despatch');
                 } else {
                     alert('Import failed. Please check the console.');
                 }
@@ -1689,6 +1773,33 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- RM Logs Fetch Logic ---
+    async function fetchRmLogs(type) {
+        try {
+            const res = await fetch('/api/rawmateriallogs');
+            const logs = await res.json();
+            const filteredLogs = logs.filter(l => l.type === type);
+            filteredLogs.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            const tbodyId = type === 'receipt' ? 'rmReceiptBody' : 'rmDespatchBody';
+            const tbody = document.getElementById(tbodyId);
+            if (tbody) {
+                tbody.innerHTML = '';
+                filteredLogs.forEach(log => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${log.date}</td>
+                        <td>${log.forge_pn}</td>
+                        <td>${log.qty}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
     // --- RAW MATERIAL LOGIC ---
     let allRawMaterials = [];
     async function fetchRawMaterials() {
@@ -1759,6 +1870,43 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         document.getElementById('cancelRmBtn').addEventListener('click', () => {
             rawMaterialModal.classList.remove('show');
+        });
+    }
+
+    const rmLogModal = document.getElementById('rmLogModal');
+    const rmLogForm = document.getElementById('rmLogForm');
+    if (rmLogForm) {
+        rmLogForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const type = document.getElementById('rmLogType').value;
+            const date = document.getElementById('rmLogDate').value;
+            const forge_pn = document.getElementById('rmLogForgePn').value;
+            const qty = parseInt(document.getElementById('rmLogQty').value) || 0;
+            
+            const payload = { type, date, forge_pn, qty };
+            
+            try {
+                const res = await fetch('/api/rawmateriallogs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    rmLogModal.classList.remove('show');
+                    fetchRmLogs(type);
+                } else {
+                    alert('Failed to save log');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        });
+        
+        document.getElementById('closeRmLogModalBtn').addEventListener('click', () => {
+            rmLogModal.classList.remove('show');
+        });
+        document.getElementById('cancelRmLogBtn').addEventListener('click', () => {
+            rmLogModal.classList.remove('show');
         });
     }
 
