@@ -347,7 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    addBtn.addEventListener('click', () => {
+    addBtn.addEventListener('click', async () => {
         if (currentTab === 'products') openProductModal(false);
         else if (currentTab === 'partmaster') openPartModal(false);
         else if (currentTab === 'machines') openMachineModal(false);
