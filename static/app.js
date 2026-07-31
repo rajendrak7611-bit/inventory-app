@@ -174,256 +174,168 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelOperatorBtn = document.getElementById('cancelOperatorBtn');
     const operatorModalTitle = document.getElementById('operatorModalTitle');
 
+
     function hideAllSections() {
-        const usersSection = document.getElementById('usersSection');
-        const reportsSection = document.getElementById('reportsSection');
-        const rmRequirementSection = document.getElementById('rmRequirementSection');
-        if (usersSection) usersSection.style.display = 'none';
-        if (reportsSection) reportsSection.style.display = 'none';
-        if (rmRequirementSection) rmRequirementSection.style.display = 'none';
-        if (rawMaterialsSection) rawMaterialsSection.style.display = 'none';
-        if (rmReceiptSection) rmReceiptSection.style.display = 'none';
-        if (rmDespatchSection) rmDespatchSection.style.display = 'none';
-        productsSection.style.display = 'none';
-        partMasterSection.style.display = 'none';
-        machinesSection.style.display = 'none';
-        operatorsSection.style.display = 'none';
-        scheduleCreateSection.style.display = 'none';
-        scheduleRunSection.style.display = 'none';
-        scheduleStatusSection.style.display = 'none';
-        prodLogSection.style.display = 'none';
-        deburSection.style.display = 'none';
-        inspectionSection.style.display = 'none';
-        
-        const maintenanceSection = document.getElementById('maintenanceSection');
-        const hrSection = document.getElementById('hrSection');
-        if (maintenanceSection) maintenanceSection.style.display = 'none';
-        if (hrSection) hrSection.style.display = 'none';
+        const sections = [
+            'usersSection', 'reportsSection', 'rmRequirementSection', 
+            'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
+            'productsSection', 'partMasterSection', 'machinesSection',
+            'operatorsSection', 'scheduleCreateSection', 'scheduleRunSection',
+            'scheduleStatusSection', 'prodLogSection', 'deburSection',
+            'inspectionSection', 'maintenanceSection', 'hrSection'
+        ];
+        sections.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
         
         document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.sub-tab').forEach(btn => btn.classList.remove('active'));
         importBtn.style.display = 'none';
         addBtn.style.display = 'inline-flex';
     }
 
-    // Sidebar Accordion Logic
-    const submenuParents = document.querySelectorAll('.sidebar-item.has-submenu');
-    submenuParents.forEach(parent => {
-        parent.addEventListener('click', (e) => {
+    function hideAllSubmenus() {
+        document.querySelectorAll('.sub-group').forEach(grp => {
+            grp.style.display = 'none';
+        });
+    }
+
+    // Main Menu Click Handler
+    document.querySelectorAll('.sidebar-item').forEach(item => {
+        item.addEventListener('click', (e) => {
             e.preventDefault();
-            const submenu = parent.nextElementSibling;
-            const chevron = parent.querySelector('.chevron');
-            if (submenu && submenu.classList.contains('sidebar-submenu')) {
-                submenu.classList.toggle('open');
-                if (chevron) {
-                    chevron.style.transform = submenu.classList.contains('open') ? 'rotate(180deg)' : 'rotate(0deg)';
+            document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
+            item.classList.add('active');
+            
+            const group = item.getAttribute('data-group');
+            const screen = item.getAttribute('data-screen');
+            
+            if (group) {
+                hideAllSubmenus();
+                const submenu = document.getElementById('submenu' + group.charAt(0).toUpperCase() + group.slice(1));
+                if (submenu) {
+                    submenu.style.display = 'flex';
+                    // Auto-click first tab in submenu
+                    const firstTab = submenu.querySelector('.sub-tab');
+                    if (firstTab) firstTab.click();
+                }
+            } else if (screen) {
+                hideAllSubmenus();
+                hideAllSections();
+                
+                // Specific direct links
+                if (screen === 'products') {
+                    currentTab = 'products';
+                    productsSection.style.display = 'block';
+                    fetchProducts();
+                } else if (screen === 'users') {
+                    currentTab = 'users';
+                    const usersSection = document.getElementById('usersSection');
+                    if (usersSection) usersSection.style.display = 'block';
+                    addBtn.style.display = 'none';
+                    fetchUsers();
+                } else if (screen === 'inspection') {
+                    currentTab = 'inspection';
+                    inspectionSection.style.display = 'block';
+                    addBtn.style.display = 'none';
+                    initInspection();
+                } else if (screen === 'maintenance') {
+                    currentTab = 'maintenance';
+                    const mSec = document.getElementById('maintenanceSection');
+                    if (mSec) mSec.style.display = 'block';
+                    addBtn.style.display = 'none';
+                } else if (screen === 'hr') {
+                    currentTab = 'hr';
+                    const hrSec = document.getElementById('hrSection');
+                    if (hrSec) hrSec.style.display = 'block';
+                    addBtn.style.display = 'none';
                 }
             }
         });
     });
 
-    // Tab Logic
-    const sidebarUsers = document.getElementById('sidebarUsers');
-    const tabReports = document.getElementById('tabReports');
-    if (sidebarUsers) {
-        sidebarUsers.addEventListener('click', () => {
-            currentTab = 'users';
-            hideAllSections();
-            sidebarUsers.classList.add('active');
-            const usersSection = document.getElementById('usersSection');
-            if (usersSection) usersSection.style.display = 'block';
-            addBtn.style.display = 'none';
-            importBtn.style.display = 'none';
-            fetchUsers();
-        });
-    }
-
-    const sidebarRmRequirement = document.getElementById('sidebarRmRequirement');
-    if (sidebarRmRequirement) {
-        sidebarRmRequirement.addEventListener('click', (e) => {
-            e.preventDefault();
-            currentTab = 'rm_requirement';
-            hideAllSections();
-            document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
-            if (tabReports) tabReports.classList.add('active');
-            const rmReqSec = document.getElementById('rmRequirementSection');
-            if (rmReqSec) rmReqSec.style.display = 'block';
-            addBtn.style.display = 'none';
-            importBtn.style.display = 'none';
-            fetchRmRequirement();
-        });
-    }
-
-    if (sidebarRmReceipt) {
-        sidebarRmReceipt.addEventListener('click', (e) => {
-            e.preventDefault();
-            currentTab = 'rm_receipt';
-            hideAllSections();
-            document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
-            tabRawMaterial.classList.add('active');
-            tabRawMaterial.innerText = 'Receipt ▼';
+    // Sub-tab Click Handlers
+    const subTabs = {
+        'sidebarPartMaster': { tab: 'partmaster', action: () => { 
+            partMasterSection.style.display = 'block'; 
+            fetchPartMaster(); 
+        }},
+        'sidebarMachines': { tab: 'machines', action: () => { 
+            machinesSection.style.display = 'block'; 
+            addBtn.style.display = 'none'; 
+            fetchMachines(); 
+        }},
+        'sidebarOperators': { tab: 'operators', action: () => { 
+            operatorsSection.style.display = 'block'; 
+            addBtn.style.display = 'none'; 
+            fetchOperators(); 
+        }},
+        'sidebarRmReceipt': { tab: 'rm_receipt', action: () => { 
             if (rmReceiptSection) rmReceiptSection.style.display = 'block';
-            addBtn.style.display = 'inline-flex';
             addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Receipt';
             importBtn.style.display = 'inline-flex';
             fetchRmLogs('receipt');
-        });
-    }
-
-    if (sidebarRmDespatch) {
-        sidebarRmDespatch.addEventListener('click', (e) => {
-            e.preventDefault();
-            currentTab = 'rm_despatch';
-            hideAllSections();
-            document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
-            tabRawMaterial.classList.add('active');
-            tabRawMaterial.innerText = 'Despatch ▼';
+        }},
+        'sidebarRmDespatch': { tab: 'rm_despatch', action: () => { 
             if (rmDespatchSection) rmDespatchSection.style.display = 'block';
-            addBtn.style.display = 'inline-flex';
             addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Despatch';
             importBtn.style.display = 'inline-flex';
             fetchRmLogs('despatch');
-        });
-    }
-
-    if (sidebarRmMaster) {
-        sidebarRmMaster.addEventListener('click', (e) => {
-            e.preventDefault();
-            currentTab = 'rawmaterial';
-            hideAllSections();
-            document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
-            tabRawMaterial.classList.add('active');
-            tabRawMaterial.innerText = 'RM Status ▼';
+        }},
+        'sidebarRmMaster': { tab: 'rawmaterial', action: () => { 
             if (rawMaterialsSection) rawMaterialsSection.style.display = 'block';
-            addBtn.style.display = 'inline-flex';
             addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Raw Material';
             importBtn.style.display = 'inline-flex';
             fetchRawMaterials();
-        });
-    }
+        }},
+        'sidebarRmRequirement': { tab: 'rm_requirement', action: () => { 
+            const rmReqSec = document.getElementById('rmRequirementSection');
+            if (rmReqSec) rmReqSec.style.display = 'block';
+            addBtn.style.display = 'none';
+            fetchRmRequirement();
+        }},
+        'sidebarScheduleCreate': { tab: 'schedule_create', action: () => { 
+            scheduleCreateSection.style.display = 'block'; 
+            addBtn.style.display = 'none'; 
+            fetchScheduleOptions(); 
+        }},
+        'sidebarScheduleRun': { tab: 'schedule_run', action: () => { 
+            scheduleRunSection.style.display = 'block'; 
+            addBtn.style.display = 'none'; 
+            fetchScheduleRuns(); 
+        }},
+        'sidebarStatus': { tab: 'status', action: () => { 
+            scheduleStatusSection.style.display = 'block'; 
+            addBtn.style.display = 'none'; 
+            initScheduleStatus(); 
+        }},
+        'sidebarProdLog': { tab: 'prodlog', action: () => { 
+            prodLogSection.style.display = 'block'; 
+            addBtn.style.display = 'none'; 
+            initProdLog(); 
+        }},
+        'sidebarDebur': { tab: 'debur', action: () => { 
+            deburSection.style.display = 'block'; 
+            addBtn.style.display = 'none'; 
+            initDebur(); 
+        }}
+    };
 
-    sidebarProducts.addEventListener('click', () => {
-        currentTab = 'products';
-        hideAllSections();
-        sidebarProducts.classList.add('active');
-        productsSection.style.display = 'block';
-        addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Tool`;
-        fetchProducts();
-    });
-
-    sidebarPartMaster.addEventListener('click', () => {
-        currentTab = 'partmaster';
-        hideAllSections();
-        sidebarPartMaster.classList.add('active');
-        partMasterSection.style.display = 'block';
-        importBtn.style.display = 'inline-block';
-        addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Part`;
-        fetchPartMasters();
-    });
-
-    sidebarMachines.addEventListener('click', () => {
-        currentTab = 'machines';
-        hideAllSections();
-        sidebarMachines.classList.add('active');
-        machinesSection.style.display = 'block';
-        importBtn.style.display = 'inline-block';
-        addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Machine`;
-        fetchMachines();
-    });
-
-    sidebarOperators.addEventListener('click', () => {
-        currentTab = 'operators';
-        hideAllSections();
-        sidebarOperators.classList.add('active');
-        operatorsSection.style.display = 'block';
-        importBtn.style.display = 'inline-block';
-        addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Operator`;
-        fetchOperators();
-    });
-
-    sidebarScheduleCreate.addEventListener('click', (e) => {
-        e.preventDefault();
-        currentTab = 'schedule-create';
-        hideAllSections();
-        tabSchedule.classList.add('active');
-        scheduleCreateSection.style.display = 'block';
-        addBtn.style.display = 'none';
-        loadSchedulePartNos();
-    });
-
-    sidebarScheduleRun.addEventListener('click', (e) => {
-        e.preventDefault();
-        currentTab = 'schedule-run';
-        hideAllSections();
-        tabSchedule.classList.add('active');
-        scheduleRunSection.style.display = 'block';
-        addBtn.style.display = 'none';
-        fetchRunSchedule();
-    });
-
-    if (sidebarStatus) {
-        sidebarStatus.addEventListener('click', (e) => {
+    document.querySelectorAll('.sub-tab').forEach(tab => {
+        tab.addEventListener('click', (e) => {
             e.preventDefault();
-            currentTab = 'schedule-status';
             hideAllSections();
-            sidebarStatus.classList.add('active');
-            scheduleStatusSection.style.display = 'block';
-            addBtn.style.display = 'none';
-            initScheduleStatus();
+            document.querySelectorAll('.sub-tab').forEach(btn => btn.classList.remove('active'));
+            tab.classList.add('active');
+            
+            const config = subTabs[tab.id];
+            if (config) {
+                currentTab = config.tab;
+                config.action();
+            }
         });
-    }
-
-    sidebarProdLog.addEventListener('click', () => {
-        currentTab = 'prod-log';
-        hideAllSections();
-        sidebarProdLog.classList.add('active');
-        prodLogSection.style.display = 'block';
-        addBtn.style.display = 'none';
-        initProdLog();
     });
-
-    sidebarDebur.addEventListener('click', () => {
-        currentTab = 'debur';
-        hideAllSections();
-        sidebarDebur.classList.add('active');
-        deburSection.style.display = 'block';
-        addBtn.style.display = 'none';
-        initDebur();
-    });
-
-    sidebarInspection.addEventListener('click', () => {
-        currentTab = 'inspection';
-        hideAllSections();
-        sidebarInspection.classList.add('active');
-        inspectionSection.style.display = 'block';
-        addBtn.style.display = 'none';
-        initInspection();
-    });
-
-    const sidebarMaintenance = document.getElementById('sidebarMaintenance');
-    if (sidebarMaintenance) {
-        sidebarMaintenance.addEventListener('click', () => {
-            currentTab = 'maintenance';
-            hideAllSections();
-            sidebarMaintenance.classList.add('active');
-            const maintenanceSection = document.getElementById('maintenanceSection');
-            if (maintenanceSection) maintenanceSection.style.display = 'block';
-            addBtn.style.display = 'none';
-            importBtn.style.display = 'none';
-        });
-    }
-
-    const sidebarHR = document.getElementById('sidebarHR');
-    if (sidebarHR) {
-        sidebarHR.addEventListener('click', () => {
-            currentTab = 'hr';
-            hideAllSections();
-            sidebarHR.classList.add('active');
-            const hrSection = document.getElementById('hrSection');
-            if (hrSection) hrSection.style.display = 'block';
-            addBtn.style.display = 'none';
-            importBtn.style.display = 'none';
-        });
-    }
 
     addBtn.addEventListener('click', () => {
         if (currentTab === 'products') openProductModal(false);

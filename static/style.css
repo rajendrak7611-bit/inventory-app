@@ -29,25 +29,26 @@ body {
 }
 
 .app-container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 2rem;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 10px 10px;
 }
 
-/* Sidebar Layout */
+/* Sidebar & Content Layout */
 .layout-wrapper {
     display: flex;
-    gap: 2rem;
+    gap: 1rem;
     align-items: flex-start;
 }
 
 .sidebar {
-    width: 250px;
+    width: 150px;
     flex-shrink: 0;
     background: var(--card-bg);
-    border-radius: 12px;
-    padding: 1rem 0;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    border-radius: 8px;
+    padding: 0.5rem 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     border: 1px solid var(--border-color);
 }
 
@@ -58,10 +59,11 @@ body {
 }
 
 .sidebar-item {
-    padding: 0.75rem 1.5rem;
+    padding: 0.5rem 1rem;
     cursor: pointer;
     color: var(--text-muted);
     font-weight: 500;
+    font-size: 0.9rem;
     transition: all 0.2s ease;
     display: flex;
     justify-content: space-between;
@@ -75,32 +77,33 @@ body {
     border-left-color: var(--primary);
 }
 
-.sidebar-submenu {
-    list-style: none;
-    display: none;
-    flex-direction: column;
-    background: rgba(0,0,0,0.02);
+/* Horizontal Sub Menu */
+.sub-menu-bar {
+    margin-bottom: 1rem;
 }
 
-.sidebar-submenu.open {
+.sub-group {
     display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
-.sidebar-submenu .sidebar-item {
-    padding-left: 3rem;
-    font-size: 0.95rem;
-    border-left: none;
+.sub-tab {
+    padding: 0.4rem 1rem;
+    border-radius: 20px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-weight: 500;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
 
-.sidebar-submenu .sidebar-item:hover, .sidebar-submenu .sidebar-item.active {
-    background: transparent;
-    color: var(--primary);
-}
-
-.chevron {
-    display: inline-block;
-    transition: transform 0.2s ease;
-    font-size: 0.75rem;
+.sub-tab:hover, .sub-tab.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
 }
 
 .content {
@@ -112,8 +115,8 @@ header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 3rem;
-    padding-bottom: 1.5rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
     border-bottom: 1px solid var(--border-color);
 }
 
@@ -256,12 +259,12 @@ header {
 }
 
 .table-container {
-    background: var(--glass-bg);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--glass-border);
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    background: var(--card-bg);
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+    overflow-x: auto;
+    padding: 0.5rem;
+    font-size: 0.85rem;
 }
 
 table {
@@ -270,7 +273,7 @@ table {
 }
 
 th, td {
-    padding: 0.5rem 0.75rem;
+    padding: 0.3rem 0.5rem;
     text-align: left;
 }
 

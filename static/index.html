@@ -44,53 +44,42 @@
         </header>
 
         <div class="layout-wrapper">
-            <aside class="sidebar">
+            <aside class="sidebar main-sidebar">
                 <nav class="sidebar-menu">
                     <div class="sidebar-item" id="sidebarUsers" data-screen="users" style="display: none;">Users</div>
-                    
-                    <div class="sidebar-item has-submenu" id="sidebarMaster">
-                        <span>Master</span>
-                        <span class="chevron">▼</span>
-                    </div>
-                    <div class="sidebar-submenu" id="submenuMaster">
-                        <div class="sidebar-item" id="sidebarPartMaster" data-screen="partmaster">Part Master</div>
-                        <div class="sidebar-item" id="sidebarMachines" data-screen="machines">Machines</div>
-                        <div class="sidebar-item" id="sidebarOperators" data-screen="operators">Operators</div>
-                    </div>
-                    
-                    <div class="sidebar-item has-submenu" id="sidebarInventory">
-                        <span>Inventory</span>
-                        <span class="chevron">▼</span>
-                    </div>
-                    <div class="sidebar-submenu" id="submenuInventory">
-                        <div class="sidebar-item" id="sidebarRmReceipt" data-screen="rawmaterial">Receipt</div>
-                        <div class="sidebar-item" id="sidebarRmDespatch" data-screen="rawmaterial">Despatch</div>
-                        <div class="sidebar-item" id="sidebarRmMaster" data-screen="rawmaterial">RM Status</div>
-                        <div class="sidebar-item" id="sidebarRmRequirement" data-screen="reports">RM Requirement</div>
-                    </div>
-                    
-                    <div class="sidebar-item has-submenu" id="sidebarProduction">
-                        <span>Production</span>
-                        <span class="chevron">▼</span>
-                    </div>
-                    <div class="sidebar-submenu" id="submenuProduction">
-                        <div class="sidebar-item" id="sidebarScheduleCreate" data-screen="schedule">Schedule Create</div>
-                        <div class="sidebar-item" id="sidebarScheduleRun" data-screen="schedule">Schedule Run</div>
-                        <div class="sidebar-item" id="sidebarStatus" data-screen="status">Status</div>
-                        <div class="sidebar-item" id="sidebarProdLog" data-screen="prodlog">Prod Log</div>
-                        <div class="sidebar-item" id="sidebarDebur" data-screen="debur">Debur</div>
-                    </div>
-                    
+                    <div class="sidebar-item" id="sidebarMaster" data-group="master">Master</div>
+                    <div class="sidebar-item" id="sidebarInventory" data-group="inventory">Inventory</div>
+                    <div class="sidebar-item" id="sidebarProduction" data-group="production">Production</div>
                     <div class="sidebar-item active" id="sidebarProducts" data-screen="products">Tool Crib</div>
-                    
                     <div class="sidebar-item" id="sidebarInspection" data-screen="inspection">Inspection</div>
-                    
+                    <div class="sidebar-item" id="sidebarReports" data-group="reports">Reports</div>
                     <div class="sidebar-item" id="sidebarMaintenance" data-screen="maintenance">Maintenance</div>
-                    
                     <div class="sidebar-item" id="sidebarHR" data-screen="hr">Human Resource</div>
                 </nav>
             </aside>
             <main class="content">
+                <nav class="sub-menu-bar">
+                    <div class="sub-group" id="submenuMaster" style="display: none;">
+                        <button class="sub-tab" id="sidebarPartMaster" data-screen="partmaster">Part Master</button>
+                        <button class="sub-tab" id="sidebarMachines" data-screen="machines">Machines</button>
+                        <button class="sub-tab" id="sidebarOperators" data-screen="operators">Operators</button>
+                    </div>
+                    <div class="sub-group" id="submenuInventory" style="display: none;">
+                        <button class="sub-tab" id="sidebarRmReceipt" data-screen="rawmaterial">Receipt</button>
+                        <button class="sub-tab" id="sidebarRmDespatch" data-screen="rawmaterial">Despatch</button>
+                        <button class="sub-tab" id="sidebarRmMaster" data-screen="rawmaterial">RM Status</button>
+                    </div>
+                    <div class="sub-group" id="submenuProduction" style="display: none;">
+                        <button class="sub-tab" id="sidebarScheduleCreate" data-screen="schedule">Schedule Create</button>
+                        <button class="sub-tab" id="sidebarScheduleRun" data-screen="schedule">Schedule Run</button>
+                        <button class="sub-tab" id="sidebarStatus" data-screen="status">Status</button>
+                        <button class="sub-tab" id="sidebarProdLog" data-screen="prodlog">Prod Log</button>
+                        <button class="sub-tab" id="sidebarDebur" data-screen="debur">Debur</button>
+                    </div>
+                    <div class="sub-group" id="submenuReports" style="display: none;">
+                        <button class="sub-tab" id="sidebarRmRequirement" data-screen="reports">RM Requirement</button>
+                    </div>
+                </nav>
 
             <div class="table-container" id="productsSection">
                 <table id="productsTable">
