@@ -679,15 +679,19 @@ document.addEventListener('DOMContentLoaded', () => {
             <td><input type="text" class="opn-no" value="${op.opn_no}" style="width: 100%; padding: 8px;"></td>
             <td><input type="text" class="op-desc" value="${op.description}" style="width: 100%; padding: 8px;"></td>
             <td>
-                <input type="text" class="op-mach" list="${uniqueListId}" placeholder="Type or select a Machine" style="width: 100%; padding: 8px;">
-                <datalist id="${uniqueListId}">
+                <select class="op-mach" style="width: 100%; padding: 8px;">
                     ${currentMachineOptions}
-                </datalist>
+                </select>
             </td>
             <td><input type="number" step="0.01" class="op-time" value="${op.cycle_time || ''}" style="width: 100%; padding: 8px;"></td>
         `;
-        if (op.machine) tr.querySelector('.op-mach').value = op.machine;
+        const selectEl = tr.querySelector('.op-mach');
+        if (op.machine) selectEl.value = op.machine;
         operationsBody.appendChild(tr);
+        new TomSelect(selectEl, {
+            create: true,
+            sortField: { field: "text", direction: "asc" }
+        });
     }
 
     document.getElementById('addOperationRowBtn').addEventListener('click', () => {
