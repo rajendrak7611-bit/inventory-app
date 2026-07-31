@@ -29,9 +29,83 @@ body {
 }
 
 .app-container {
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
     padding: 2rem;
+}
+
+/* Sidebar Layout */
+.layout-wrapper {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+}
+
+.sidebar {
+    width: 250px;
+    flex-shrink: 0;
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 1rem 0;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    border: 1px solid var(--border-color);
+}
+
+.sidebar-menu {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-item {
+    padding: 0.75rem 1.5rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-left: 3px solid transparent;
+}
+
+.sidebar-item:hover, .sidebar-item.active {
+    background: rgba(59, 130, 246, 0.05);
+    color: var(--primary);
+    border-left-color: var(--primary);
+}
+
+.sidebar-submenu {
+    list-style: none;
+    display: none;
+    flex-direction: column;
+    background: rgba(0,0,0,0.02);
+}
+
+.sidebar-submenu.open {
+    display: flex;
+}
+
+.sidebar-submenu .sidebar-item {
+    padding-left: 3rem;
+    font-size: 0.95rem;
+    border-left: none;
+}
+
+.sidebar-submenu .sidebar-item:hover, .sidebar-submenu .sidebar-item.active {
+    background: transparent;
+    color: var(--primary);
+}
+
+.chevron {
+    display: inline-block;
+    transition: transform 0.2s ease;
+    font-size: 0.75rem;
+}
+
+.content {
+    flex: 1;
+    min-width: 0;
 }
 
 header {

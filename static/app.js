@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loginOverlay.style.display = 'none';
         
         // Access Control Logic
-        const allTabs = document.querySelectorAll('.tabs [data-screen]');
+        const allTabs = document.querySelectorAll('.sidebar-menu [data-screen]');
         let firstAvailableTab = null;
         let accessibleScreens = [];
         try {
@@ -34,12 +34,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
+        // Hide parent submenu if all children are hidden
+        document.querySelectorAll('.sidebar-item.has-submenu').forEach(parent => {
+            const submenu = parent.nextElementSibling;
+            if (submenu && submenu.classList.contains('sidebar-submenu')) {
+                const visibleChildren = Array.from(submenu.querySelectorAll('.sidebar-item')).some(child => child.style.display !== 'none');
+                parent.style.display = visibleChildren ? 'flex' : 'none';
+            }
+        });
+        
         // Special case for Users tab
-        const tabUsers = document.getElementById('tabUsers');
+        const sidebarUsers = document.getElementById('sidebarUsers');
         if (userObj.role === 'admin') {
-            tabUsers.style.display = 'inline-block';
+            sidebarUsers.style.display = 'inline-block';
         } else {
-            tabUsers.style.display = 'none';
+            sidebarUsers.style.display = 'none';
         }
 
         // Add logout button to header actions div
@@ -95,21 +104,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Tabs
     const tabRawMaterial = document.getElementById('tabRawMaterial');
-    const menuRmMaster = document.getElementById('menuRmMaster');
-    const menuRmReceipt = document.getElementById('menuRmReceipt');
-    const menuRmDespatch = document.getElementById('menuRmDespatch');
+    const sidebarRmMaster = document.getElementById('sidebarRmMaster');
+    const sidebarRmReceipt = document.getElementById('sidebarRmReceipt');
+    const sidebarRmDespatch = document.getElementById('sidebarRmDespatch');
     
-    const tabProducts = document.getElementById('tabProducts');
-    const tabPartMaster = document.getElementById('tabPartMaster');
-    const tabMachines = document.getElementById('tabMachines');
-    const tabOperators = document.getElementById('tabOperators');
+    const sidebarProducts = document.getElementById('sidebarProducts');
+    const sidebarPartMaster = document.getElementById('sidebarPartMaster');
+    const sidebarMachines = document.getElementById('sidebarMachines');
+    const sidebarOperators = document.getElementById('sidebarOperators');
     const tabSchedule = document.getElementById('tabSchedule');
-    const menuScheduleCreate = document.getElementById('menuScheduleCreate');
-    const menuScheduleRun = document.getElementById('menuScheduleRun');
-    const tabStatus = document.getElementById('tabStatus');
-    const tabProdLog = document.getElementById('tabProdLog');
-    const tabDebur = document.getElementById('tabDebur');
-    const tabInspection = document.getElementById('tabInspection');
+    const sidebarScheduleCreate = document.getElementById('sidebarScheduleCreate');
+    const sidebarScheduleRun = document.getElementById('sidebarScheduleRun');
+    const sidebarStatus = document.getElementById('sidebarStatus');
+    const sidebarProdLog = document.getElementById('sidebarProdLog');
+    const sidebarDebur = document.getElementById('sidebarDebur');
+    const sidebarInspection = document.getElementById('sidebarInspection');
     
     const rawMaterialsSection = document.getElementById('rawMaterialsSection');
     const rmReceiptSection = document.getElementById('rmReceiptSection');
@@ -186,32 +195,40 @@ document.addEventListener('DOMContentLoaded', () => {
         deburSection.style.display = 'none';
         inspectionSection.style.display = 'none';
         
-        const tabUsers = document.getElementById('tabUsers');
-        const tabReports = document.getElementById('tabReports');
-        if (tabUsers) tabUsers.classList.remove('active');
-        if (tabReports) tabReports.classList.remove('active');
-        if (tabRawMaterial) tabRawMaterial.classList.remove('active');
-        tabProducts.classList.remove('active');
-        tabPartMaster.classList.remove('active');
-        tabMachines.classList.remove('active');
-        tabOperators.classList.remove('active');
-        tabSchedule.classList.remove('active');
-        if (tabStatus) tabStatus.classList.remove('active');
-        tabProdLog.classList.remove('active');
-        tabDebur.classList.remove('active');
-        tabInspection.classList.remove('active');
+        const maintenanceSection = document.getElementById('maintenanceSection');
+        const hrSection = document.getElementById('hrSection');
+        if (maintenanceSection) maintenanceSection.style.display = 'none';
+        if (hrSection) hrSection.style.display = 'none';
+        
+        document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
         importBtn.style.display = 'none';
         addBtn.style.display = 'inline-flex';
     }
 
+    // Sidebar Accordion Logic
+    const submenuParents = document.querySelectorAll('.sidebar-item.has-submenu');
+    submenuParents.forEach(parent => {
+        parent.addEventListener('click', (e) => {
+            e.preventDefault();
+            const submenu = parent.nextElementSibling;
+            const chevron = parent.querySelector('.chevron');
+            if (submenu && submenu.classList.contains('sidebar-submenu')) {
+                submenu.classList.toggle('open');
+                if (chevron) {
+                    chevron.style.transform = submenu.classList.contains('open') ? 'rotate(180deg)' : 'rotate(0deg)';
+                }
+            }
+        });
+    });
+
     // Tab Logic
-    const tabUsers = document.getElementById('tabUsers');
+    const sidebarUsers = document.getElementById('sidebarUsers');
     const tabReports = document.getElementById('tabReports');
-    if (tabUsers) {
-        tabUsers.addEventListener('click', () => {
+    if (sidebarUsers) {
+        sidebarUsers.addEventListener('click', () => {
             currentTab = 'users';
             hideAllSections();
-            tabUsers.classList.add('active');
+            sidebarUsers.classList.add('active');
             const usersSection = document.getElementById('usersSection');
             if (usersSection) usersSection.style.display = 'block';
             addBtn.style.display = 'none';
@@ -220,13 +237,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const menuRmRequirement = document.getElementById('menuRmRequirement');
-    if (menuRmRequirement) {
-        menuRmRequirement.addEventListener('click', (e) => {
+    const sidebarRmRequirement = document.getElementById('sidebarRmRequirement');
+    if (sidebarRmRequirement) {
+        sidebarRmRequirement.addEventListener('click', (e) => {
             e.preventDefault();
             currentTab = 'rm_requirement';
             hideAllSections();
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
             if (tabReports) tabReports.classList.add('active');
             const rmReqSec = document.getElementById('rmRequirementSection');
             if (rmReqSec) rmReqSec.style.display = 'block';
@@ -236,12 +253,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (menuRmReceipt) {
-        menuRmReceipt.addEventListener('click', (e) => {
+    if (sidebarRmReceipt) {
+        sidebarRmReceipt.addEventListener('click', (e) => {
             e.preventDefault();
             currentTab = 'rm_receipt';
             hideAllSections();
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
             tabRawMaterial.classList.add('active');
             tabRawMaterial.innerText = 'Receipt ▼';
             if (rmReceiptSection) rmReceiptSection.style.display = 'block';
@@ -252,12 +269,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (menuRmDespatch) {
-        menuRmDespatch.addEventListener('click', (e) => {
+    if (sidebarRmDespatch) {
+        sidebarRmDespatch.addEventListener('click', (e) => {
             e.preventDefault();
             currentTab = 'rm_despatch';
             hideAllSections();
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
             tabRawMaterial.classList.add('active');
             tabRawMaterial.innerText = 'Despatch ▼';
             if (rmDespatchSection) rmDespatchSection.style.display = 'block';
@@ -268,12 +285,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (menuRmMaster) {
-        menuRmMaster.addEventListener('click', (e) => {
+    if (sidebarRmMaster) {
+        sidebarRmMaster.addEventListener('click', (e) => {
             e.preventDefault();
             currentTab = 'rawmaterial';
             hideAllSections();
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
             tabRawMaterial.classList.add('active');
             tabRawMaterial.innerText = 'RM Status ▼';
             if (rawMaterialsSection) rawMaterialsSection.style.display = 'block';
@@ -284,46 +301,46 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    tabProducts.addEventListener('click', () => {
+    sidebarProducts.addEventListener('click', () => {
         currentTab = 'products';
         hideAllSections();
-        tabProducts.classList.add('active');
+        sidebarProducts.classList.add('active');
         productsSection.style.display = 'block';
         addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Tool`;
         fetchProducts();
     });
 
-    tabPartMaster.addEventListener('click', () => {
+    sidebarPartMaster.addEventListener('click', () => {
         currentTab = 'partmaster';
         hideAllSections();
-        tabPartMaster.classList.add('active');
+        sidebarPartMaster.classList.add('active');
         partMasterSection.style.display = 'block';
         importBtn.style.display = 'inline-block';
         addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Part`;
         fetchPartMasters();
     });
 
-    tabMachines.addEventListener('click', () => {
+    sidebarMachines.addEventListener('click', () => {
         currentTab = 'machines';
         hideAllSections();
-        tabMachines.classList.add('active');
+        sidebarMachines.classList.add('active');
         machinesSection.style.display = 'block';
         importBtn.style.display = 'inline-block';
         addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Machine`;
         fetchMachines();
     });
 
-    tabOperators.addEventListener('click', () => {
+    sidebarOperators.addEventListener('click', () => {
         currentTab = 'operators';
         hideAllSections();
-        tabOperators.classList.add('active');
+        sidebarOperators.classList.add('active');
         operatorsSection.style.display = 'block';
         importBtn.style.display = 'inline-block';
         addBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Operator`;
         fetchOperators();
     });
 
-    menuScheduleCreate.addEventListener('click', (e) => {
+    sidebarScheduleCreate.addEventListener('click', (e) => {
         e.preventDefault();
         currentTab = 'schedule-create';
         hideAllSections();
@@ -333,7 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadSchedulePartNos();
     });
 
-    menuScheduleRun.addEventListener('click', (e) => {
+    sidebarScheduleRun.addEventListener('click', (e) => {
         e.preventDefault();
         currentTab = 'schedule-run';
         hideAllSections();
@@ -343,44 +360,70 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchRunSchedule();
     });
 
-    if (tabStatus) {
-        tabStatus.addEventListener('click', (e) => {
+    if (sidebarStatus) {
+        sidebarStatus.addEventListener('click', (e) => {
             e.preventDefault();
             currentTab = 'schedule-status';
             hideAllSections();
-            tabStatus.classList.add('active');
+            sidebarStatus.classList.add('active');
             scheduleStatusSection.style.display = 'block';
             addBtn.style.display = 'none';
             initScheduleStatus();
         });
     }
 
-    tabProdLog.addEventListener('click', () => {
+    sidebarProdLog.addEventListener('click', () => {
         currentTab = 'prod-log';
         hideAllSections();
-        tabProdLog.classList.add('active');
+        sidebarProdLog.classList.add('active');
         prodLogSection.style.display = 'block';
         addBtn.style.display = 'none';
         initProdLog();
     });
 
-    tabDebur.addEventListener('click', () => {
+    sidebarDebur.addEventListener('click', () => {
         currentTab = 'debur';
         hideAllSections();
-        tabDebur.classList.add('active');
+        sidebarDebur.classList.add('active');
         deburSection.style.display = 'block';
         addBtn.style.display = 'none';
         initDebur();
     });
 
-    tabInspection.addEventListener('click', () => {
+    sidebarInspection.addEventListener('click', () => {
         currentTab = 'inspection';
         hideAllSections();
-        tabInspection.classList.add('active');
+        sidebarInspection.classList.add('active');
         inspectionSection.style.display = 'block';
         addBtn.style.display = 'none';
         initInspection();
     });
+
+    const sidebarMaintenance = document.getElementById('sidebarMaintenance');
+    if (sidebarMaintenance) {
+        sidebarMaintenance.addEventListener('click', () => {
+            currentTab = 'maintenance';
+            hideAllSections();
+            sidebarMaintenance.classList.add('active');
+            const maintenanceSection = document.getElementById('maintenanceSection');
+            if (maintenanceSection) maintenanceSection.style.display = 'block';
+            addBtn.style.display = 'none';
+            importBtn.style.display = 'none';
+        });
+    }
+
+    const sidebarHR = document.getElementById('sidebarHR');
+    if (sidebarHR) {
+        sidebarHR.addEventListener('click', () => {
+            currentTab = 'hr';
+            hideAllSections();
+            sidebarHR.classList.add('active');
+            const hrSection = document.getElementById('hrSection');
+            if (hrSection) hrSection.style.display = 'block';
+            addBtn.style.display = 'none';
+            importBtn.style.display = 'none';
+        });
+    }
 
     addBtn.addEventListener('click', () => {
         if (currentTab === 'products') openProductModal(false);
@@ -1030,7 +1073,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Call fetchSchedulesForList when opening the create tab
-    menuScheduleCreate.addEventListener('click', (e) => {
+    sidebarScheduleCreate.addEventListener('click', (e) => {
         fetchSchedulesForList();
     });
 
