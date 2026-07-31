@@ -42,6 +42,10 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
     except Exception:
         pass
     try:
+        conn.execute(text("ALTER TABLE production_logs ADD COLUMN cycle_time FLOAT DEFAULT 0.0;"))
+    except Exception:
+        pass
+    try:
         conn.execute(text("UPDATE schedules SET status = 'Pending';"))
         conn.execute(text("UPDATE schedules SET status = 'Completed' WHERE qty <= (SELECT COALESCE(SUM(prod_qty), 0) FROM production_logs WHERE production_logs.partno = schedules.partno AND opn_no = 'rfd');"))
     except Exception:
@@ -582,6 +586,7 @@ class ProdLogCreate(BaseModel):
     opn_no: str
     description: str
     runtime: float
+    cycle_time: Optional[float] = 0.0
     target_qty: float
     prod_qty: float
     efficiency: float

@@ -87,6 +87,7 @@ class ProductionLog(Base):
     opn_no = Column(String)
     description = Column(String)
     runtime = Column(Float)
+    cycle_time = Column(Float)
     target_qty = Column(Float)
     prod_qty = Column(Float)
     efficiency = Column(Float)

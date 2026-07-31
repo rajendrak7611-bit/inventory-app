@@ -418,26 +418,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (currentTab === 'partmaster') {
                     const partsMap = {};
                     json.forEach(row => {
-                        const partno = String(row['part no'] || row['Part no'] || row['Part No'] || row['partno'] || '').trim();
+                        let partno = '', family = '', forge_pn = '', department = '', va = '';
+                        let opn_no = '', description = '', machine = '', cycle_time = 0;
+                        for (let k in row) {
+                            let key = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+                            let val = String(row[k]).trim();
+                            if (key === 'partno') partno = val;
+                            else if (key === 'family') family = val;
+                            else if (key === 'forgepn') forge_pn = val;
+                            else if (key === 'dept' || key === 'department') department = val;
+                            else if (key === 'va') va = val;
+                            else if (key === 'opnno') opn_no = val;
+                            else if (key === 'description') description = val;
+                            else if (key === 'machine') machine = val;
+                            else if (key === 'cycletime') cycle_time = parseFloat(val) || 0;
+                        }
                         if (!partno) return;
 
                         if (!partsMap[partno]) {
                             partsMap[partno] = {
-                                family: String(row['Family'] || row['family'] || '').trim(),
-                                forge_pn: String(row['Forge pn'] || row['forge_pn'] || row['Forge PN'] || '').trim(),
-                                partno: partno,
-                                department: String(row['Dept'] || row['dept'] || row['Department'] || row['department'] || '').trim(),
-                                va: String(row['VA'] || row['va'] || row['Va'] || '').trim(),
-                                operations: []
+                                family, forge_pn, partno, department, va, operations: []
                             };
                         }
 
-                        if (row['Opn no'] !== undefined || row['Description']) {
+                        if (opn_no || description) {
                             partsMap[partno].operations.push({
-                                opn_no: String(row['Opn no'] || row['opn_no'] || row['Opn No'] || '').trim(),
-                                description: String(row['Description'] || row['description'] || '').trim(),
-                                machine: String(row['Machine'] || row['machine'] || '').trim(),
-                                cycle_time: parseFloat(row['cycle time'] || row['Cycle time'] || row['Cycle Time'] || row['cycle_time']) || 0
+                                opn_no, description, machine, cycle_time
                             });
                         }
                     });
@@ -446,11 +452,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (currentTab === 'machines') {
                     const machines = [];
                     json.forEach(row => {
-                        const name = String(row['Machine Name'] || row['machine name'] || row['Machine'] || '').trim();
+                        let name = '';
+                        let dept = '';
+                        for (let k in row) {
+                            let key = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+                            if (key === 'machinename' || key === 'machine' || key === 'name') name = String(row[k]).trim();
+                            if (key === 'dept' || key === 'department') dept = String(row[k]).trim();
+                        }
                         if (!name) return;
                         machines.push({
                             name: name,
-                            department: String(row['Dept'] || row['dept'] || row['Department'] || row['department'] || '').trim()
+                            department: dept
                         });
                     });
                     endpoint = '/api/machines/bulk_import';
@@ -458,11 +470,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (currentTab === 'operators') {
                     const operators = [];
                     json.forEach(row => {
-                        const name = String(row['Name'] || row['name'] || row['Operator Name'] || '').trim();
+                        let name = '';
+                        let dept = '';
+                        for (let k in row) {
+                            let key = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+                            if (key === 'name' || key === 'operatorname' || key === 'operator') name = String(row[k]).trim();
+                            if (key === 'dept' || key === 'department') dept = String(row[k]).trim();
+                        }
                         if (!name) return;
                         operators.push({
                             name: name,
-                            department: String(row['Dept'] || row['dept'] || row['Department'] || row['department'] || '').trim()
+                            department: dept
                         });
                     });
                     endpoint = '/api/operators/bulk_import';
@@ -470,16 +488,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (currentTab === 'rawmaterial') {
                     const rawmaterials = [];
                     json.forEach(row => {
-                        const forge_pn = String(row['Forge PN'] || row['FORGE PN'] || row['Forge Pn'] || row['forge_pn'] || row['Forge pn'] || '').trim();
+                        let forge_pn = '', quantity = 0;
+                        for (let k in row) {
+                            let key = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+                            let val = String(row[k]).trim();
+                            if (key === 'forgepn') forge_pn = val;
+                            else if (key === 'quantity' || key === 'qty' || key === 'stock' || key === 'receipt') quantity = parseInt(val) || 0;
+                        }
                         if (!forge_pn) return;
-                        
-                        // Treat 'Quantity' or 'Stock' or 'Receipt' column as the quantity
-                        const quantity = parseInt(row['Quantity'] || row['QUANTITY'] || row['Qty'] || row['qty'] || row['Stock'] || row['Receipt'] || 0) || 0;
-                        const receipt = quantity;
-                        const despatch = 0;
-                        const stock = quantity;
-                        
-                        rawmaterials.push({ forge_pn, receipt, despatch, stock });
+                        rawmaterials.push({ forge_pn, receipt: quantity, despatch: 0, stock: quantity });
                     });
                     
                     if (rawmaterials.length === 0) {
@@ -493,17 +510,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     const logs = [];
                     const type = currentTab === 'rm_receipt' ? 'receipt' : 'despatch';
                     json.forEach(row => {
-                        const forge_pn = String(row['Forge PN'] || row['FORGE PN'] || row['Forge Pn'] || row['forge_pn'] || row['Forge pn'] || '').trim();
-                        if (!forge_pn) return;
+                        let forge_pn = '', qty = 0, date = '';
+                        for (let k in row) {
+                            let key = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+                            let val = String(row[k]).trim();
+                            if (key === 'forgepn') forge_pn = val;
+                            else if (key === 'quantity' || key === 'qty') qty = parseInt(val) || 0;
+                            else if (key === 'date') date = row[k];
+                        }
+                        if (!forge_pn || qty <= 0) return;
                         
-                        const qty = parseInt(row['Quantity'] || row['QUANTITY'] || row['Qty'] || row['qty'] || 0) || 0;
-                        if (qty <= 0) return;
-                        
-                        let date = row['Date'] || row['DATE'] || row['date'];
                         if (!date) {
                             date = new Date().toISOString().split('T')[0];
                         } else {
-                            // Excel serial dates mapping if it's a number
                             if (typeof date === 'number') {
                                 const d = new Date((date - 25569) * 86400 * 1000);
                                 date = d.toISOString().split('T')[0];
@@ -1291,6 +1310,7 @@ document.addEventListener('DOMContentLoaded', () => {
             opn_no: 'debur', // Use debur as the operation
             description: '',
             runtime: parseFloat(document.getElementById('deburHours').value) || 0,
+            cycle_time: 0,
             target_qty: 0,
             prod_qty: parseInt(document.getElementById('deburQty').value) || 0,
             efficiency: 0,
@@ -1466,7 +1486,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const createPayload = (opn_no, qty) => ({
             dept, date, shift: '', setter: '', machine: '',
             operator, partno, opn_no, description: '', runtime,
-            target_qty: 0, prod_qty: qty, efficiency: 0,
+            cycle_time: 0, target_qty: 0, prod_qty: qty, efficiency: 0,
             idle_hours: 0, idle_reason: ''
         });
         
@@ -1766,6 +1786,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 partno: document.getElementById('prodLogPartNo').value,
                 opn_no: document.getElementById('prodLogOpnNo').value,
                 description: document.getElementById('prodLogDescription').value,
+                cycle_time: parseFloat(document.getElementById('prodLogCycleTime').value) || 0,
                 runtime: parseFloat(document.getElementById('prodLogRuntime').value) || 0,
                 target_qty: parseFloat(document.getElementById('prodLogTargetQty').value) || 0,
                 prod_qty: parseFloat(document.getElementById('prodLogProdQty').value) || 0,
