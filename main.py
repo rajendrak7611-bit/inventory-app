@@ -234,7 +234,7 @@ class ScheduleResponse(ScheduleBase):
 
 # API Routes
 @app.get("/api/products", response_model=List[ProductResponse])
-def read_products(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_products(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db)):
     products = db.query(Product).offset(skip).limit(limit).all()
     return products
 
@@ -271,7 +271,7 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
 # --- Part Master API Routes ---
 
 @app.get("/api/partmaster", response_model=List[PartMasterResponse])
-def read_partmasters(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_partmasters(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db)):
     parts = db.query(PartMaster).offset(skip).limit(limit).all()
     return parts
 
@@ -358,7 +358,7 @@ def bulk_import_partmaster(payload: BulkImportPayload, db: Session = Depends(get
 # --- Machine API Routes ---
 
 @app.get("/api/machines", response_model=List[MachineResponse])
-def read_machines(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_machines(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db)):
     return db.query(Machine).offset(skip).limit(limit).all()
 
 @app.post("/api/machines", response_model=MachineResponse)
@@ -403,7 +403,7 @@ def bulk_import_machines(payload: BulkImportMachinePayload, db: Session = Depend
 # --- Operator API Routes ---
 
 @app.get("/api/operators", response_model=List[OperatorResponse])
-def read_operators(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_operators(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db)):
     return db.query(Operator).offset(skip).limit(limit).all()
 
 @app.post("/api/operators", response_model=OperatorResponse)
@@ -448,7 +448,7 @@ def bulk_import_operators(payload: BulkImportOperatorPayload, db: Session = Depe
 # --- Schedule API Routes ---
 
 @app.get("/api/schedule", response_model=List[ScheduleResponse])
-def read_schedules(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_schedules(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db)):
     return db.query(Schedule).offset(skip).limit(limit).all()
 
 @app.post("/api/schedule", response_model=ScheduleResponse)
