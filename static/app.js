@@ -311,7 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'sidebarScheduleRun': { tab: 'schedule_run', action: () => { 
             scheduleRunSection.style.display = 'block'; 
             addBtn.style.display = 'none'; 
-            fetchScheduleRuns(); 
+            fetchRunSchedule(); 
         }},
         'sidebarStatus': { tab: 'status', action: () => { 
             scheduleStatusSection.style.display = 'block'; 
