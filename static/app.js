@@ -1001,6 +1001,13 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchSchedulesForList();
     });
 
+    document.getElementById('exportRunBtn').addEventListener('click', () => {
+        const table = document.getElementById('scheduleRunTable');
+        if (!table) return;
+        const wb = XLSX.utils.table_to_book(table, {sheet: "Schedule Run"});
+        XLSX.writeFile(wb, `Schedule_Run_${new Date().toISOString().slice(0,10)}.xlsx`);
+    });
+
     async function fetchRunSchedule() {
         try {
             const res = await fetch('/api/schedule/run');
