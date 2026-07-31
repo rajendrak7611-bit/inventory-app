@@ -35,10 +35,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         // Hide parent submenu if all children are hidden
-        document.querySelectorAll('.sidebar-item.has-submenu').forEach(parent => {
+        document.querySelectorAll('.main-tab.has-submenu').forEach(parent => {
             const submenu = parent.nextElementSibling;
             if (submenu && submenu.classList.contains('sidebar-submenu')) {
-                const visibleChildren = Array.from(submenu.querySelectorAll('.sidebar-item')).some(child => child.style.display !== 'none');
+                const visibleChildren = Array.from(submenu.querySelectorAll('.main-tab')).some(child => child.style.display !== 'none');
                 parent.style.display = visibleChildren ? 'flex' : 'none';
             }
         });
@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (el) el.style.display = 'none';
         });
         
-        document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.main-tab').forEach(btn => btn.classList.remove('active'));
         document.querySelectorAll('.sub-tab').forEach(btn => btn.classList.remove('active'));
         importBtn.style.display = 'none';
         addBtn.style.display = 'inline-flex';
@@ -202,10 +202,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Main Menu Click Handler
-    document.querySelectorAll('.sidebar-item').forEach(item => {
+    document.querySelectorAll('.main-tab').forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
-            document.querySelectorAll('.sidebar-item').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.main-tab').forEach(btn => btn.classList.remove('active'));
             item.classList.add('active');
             
             const group = item.getAttribute('data-group');
