@@ -101,6 +101,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const importFile = document.getElementById('importFile');
     let currentTab = 'products';
     let availableMachines = [];
+    let allRawMaterials = [];
+    let rmLogForgePnSelect = null;
 
     // Tabs
     const tabRawMaterial = document.getElementById('tabRawMaterial');
@@ -362,13 +364,28 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('rmLogForm').reset();
             document.getElementById('rmLogType').value = isReceipt ? 'receipt' : 'despatch';
             
-            // Populate datalist with forge PNs
-            const list = document.getElementById('forgePnList');
-            list.innerHTML = '';
+            // Fetch if empty
+            if (allRawMaterials.length === 0) {
+                const rRes = await fetch('/api/rawmaterials');
+                allRawMaterials = await rRes.json();
+            }
+
+            // Populate select with forge PNs
+            const selectEl = document.getElementById('rmLogForgePn');
+            selectEl.innerHTML = '<option value="">-- Select Forge PN --</option>';
             allRawMaterials.forEach(rm => {
                 const opt = document.createElement('option');
                 opt.value = rm.forge_pn;
-                list.appendChild(opt);
+                opt.textContent = rm.forge_pn;
+                selectEl.appendChild(opt);
+            });
+            
+            if (rmLogForgePnSelect) {
+                rmLogForgePnSelect.destroy();
+            }
+            rmLogForgePnSelect = new TomSelect(selectEl, {
+                create: true,
+                sortField: { field: "text", direction: "asc" }
             });
             
             // Default date to today
@@ -1817,7 +1834,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- RAW MATERIAL LOGIC ---
-    let allRawMaterials = [];
     async function fetchRawMaterials() {
         try {
             const res = await fetch('/api/rawmaterials');
