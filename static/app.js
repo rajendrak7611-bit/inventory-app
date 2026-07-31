@@ -228,6 +228,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (screen === 'products') {
                     currentTab = 'products';
                     productsSection.style.display = 'block';
+                    addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Tool';
+                    addBtn.style.display = 'inline-flex';
                     fetchProducts();
                 } else if (screen === 'users') {
                     currentTab = 'users';
@@ -259,16 +261,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const subTabs = {
         'sidebarPartMaster': { tab: 'partmaster', action: () => { 
             partMasterSection.style.display = 'block'; 
-            fetchPartMaster(); 
+            importBtn.style.display = 'inline-block';
+            addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Part';
+            fetchPartMasters(); 
         }},
         'sidebarMachines': { tab: 'machines', action: () => { 
             machinesSection.style.display = 'block'; 
-            addBtn.style.display = 'none'; 
+            importBtn.style.display = 'inline-block';
+            addBtn.style.display = 'inline-flex';
+            addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Machine';
             fetchMachines(); 
         }},
         'sidebarOperators': { tab: 'operators', action: () => { 
             operatorsSection.style.display = 'block'; 
-            addBtn.style.display = 'none'; 
+            importBtn.style.display = 'inline-block';
+            addBtn.style.display = 'inline-flex';
+            addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Operator';
             fetchOperators(); 
         }},
         'sidebarRmReceipt': { tab: 'rm_receipt', action: () => { 
