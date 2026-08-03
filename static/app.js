@@ -381,6 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (currentTab === 'partmaster') openPartModal(false);
         else if (currentTab === 'machines') openMachineModal(false);
         else if (currentTab === 'operators') openOperatorModal(false);
+        else if (currentTab === 'dept') openDeptModal();
         else if (currentTab === 'rawmaterial') {
             document.getElementById('rmModalTitle').innerText = 'Add Raw Material';
             document.getElementById('rawMaterialForm').reset();
