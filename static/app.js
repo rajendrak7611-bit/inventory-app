@@ -1216,13 +1216,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!dept) return;
 
         try {
-            const [schedRes, logRes] = await Promise.all([
+            const [schedRes, logRes, rmLogRes] = await Promise.all([
                 fetch('/api/schedule'),
-                fetch('/api/prodlog')
+                fetch('/api/prodlog'),
+                fetch('/api/rawmateriallogs')
             ]);
             
             const allSchedules = await schedRes.json();
             const allLogs = await logRes.json();
+            const allRmLogs = await rmLogRes.json();
             
             const deptSchedules = allSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase() && (s.status === 'Pending' || !s.status));
             const uniqueParts = [...new Set(deptSchedules.map(s => s.partno))];
@@ -1275,7 +1277,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const fixedOps = ['debur', 'for ins', 'rework', 'nc', 'rfd', 'desp'];
                 for (let i = 0; i < fixedOps.length; i++) {
                     const fOp = fixedOps[i];
-                    const prod = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === fOp).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                    let prod = 0;
+                    if (fOp === 'desp') {
+                        prod = allRmLogs.filter(l => l.finish_part_no === partno && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
+                    } else {
+                        prod = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === fOp).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                    }
                     
                     let nextFProd = 0;
                     if (fOp === 'debur') {
@@ -1283,7 +1290,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else if (fOp === 'for ins') {
                         nextFProd = allLogs.filter(l => l.partno === partno && ['rework', 'nc', 'rfd'].includes((l.opn_no || '').toLowerCase())).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                     } else if (fOp === 'rfd') {
-                        nextFProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'desp').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                        nextFProd = allRmLogs.filter(l => l.finish_part_no === partno && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
                     }
                     
                     let fBalance = prod - nextFProd;
