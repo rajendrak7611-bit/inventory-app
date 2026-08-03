@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function hideAllSections() {
         const sections = [
-            'usersSection', 'reportsSection', 'rmRequirementSection', 
+            'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
             'productsSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'scheduleCreateSection', 'scheduleRunSection',
@@ -306,6 +306,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (rmReqSec) rmReqSec.style.display = 'block';
             addBtn.style.display = 'none';
             fetchRmRequirement();
+        }},
+        'sidebarMcUtil': { tab: 'mc_util', action: () => { 
+            const mcUtilSec = document.getElementById('mcUtilSection');
+            if (mcUtilSec) mcUtilSec.style.display = 'block';
+            addBtn.style.display = 'none';
+            // Set default dates if empty
+            if (!document.getElementById('mcUtilToDate').value) {
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('mcUtilToDate').value = today;
+                document.getElementById('mcUtilFromDate').value = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
+            }
         }},
         'sidebarScheduleCreate': { tab: 'schedule_create', action: () => { 
             scheduleCreateSection.style.display = 'block'; 
@@ -2253,4 +2264,109 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+});
+    // ====== M/C UTIL REPORT ======
+    const generateMcUtilBtn = document.getElementById('generateMcUtilBtn');
+    if (generateMcUtilBtn) {
+        generateMcUtilBtn.addEventListener('click', async () => {
+            const fromDate = document.getElementById('mcUtilFromDate').value;
+            const toDate = document.getElementById('mcUtilToDate').value;
+            const dept = document.getElementById('mcUtilDept').value;
+            
+            if (!fromDate || !toDate) {
+                alert('Please select both From and To dates');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/prodlog');
+                const allLogs = await res.json();
+                
+                // Filter
+                const filtered = allLogs.filter(l => {
+                    if (dept && (l.dept || '').toUpperCase() !== dept.toUpperCase()) return false;
+                    if (l.date < fromDate || l.date > toDate) return false;
+                    return true;
+                });
+                
+                // Collect unique idle reasons
+                const idleReasonsSet = new Set();
+                filtered.forEach(l => {
+                    if (l.idle_reason) idleReasonsSet.add(l.idle_reason.trim());
+                    if (l.idle_reason_2) idleReasonsSet.add(l.idle_reason_2.trim());
+                    if (l.idle_reason_3) idleReasonsSet.add(l.idle_reason_3.trim());
+                });
+                const idleReasons = Array.from(idleReasonsSet).filter(r => r).sort();
+                
+                // Group by machine
+                const machineData = {};
+                filtered.forEach(l => {
+                    const mc = (l.machine || 'Unknown').trim();
+                    if (!machineData[mc]) {
+                        machineData[mc] = { runtime: 0, idleTotal: 0 };
+                        idleReasons.forEach(r => machineData[mc][r] = 0);
+                    }
+                    
+                    machineData[mc].runtime += (l.runtime || 0);
+                    
+                    let idle1 = l.idle_hours || 0;
+                    let idle2 = l.idle_hours_2 || 0;
+                    let idle3 = l.idle_hours_3 || 0;
+                    
+                    machineData[mc].idleTotal += (idle1 + idle2 + idle3);
+                    
+                    if (l.idle_reason && idle1 > 0) machineData[mc][l.idle_reason.trim()] += idle1;
+                    if (l.idle_reason_2 && idle2 > 0) machineData[mc][l.idle_reason_2.trim()] += idle2;
+                    if (l.idle_reason_3 && idle3 > 0) machineData[mc][l.idle_reason_3.trim()] += idle3;
+                });
+                
+                // Render table
+                const thead = document.getElementById('mcUtilHead');
+                const tbody = document.getElementById('mcUtilBody');
+                
+                let headHtml = `<tr>
+                    <th>Machine</th>
+                    <th>Total Runtime (Hrs)</th>
+                    <th>Total Idle Time (Hrs)</th>`;
+                idleReasons.forEach(r => {
+                    headHtml += `<th>${r}</th>`;
+                });
+                headHtml += `</tr>`;
+                thead.innerHTML = headHtml;
+                
+                tbody.innerHTML = '';
+                
+                const sortedMachines = Object.keys(machineData).sort();
+                if (sortedMachines.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="${3 + idleReasons.length}" style="text-align:center; color: var(--text-muted);">No data found for selected period</td></tr>`;
+                } else {
+                    let totalRowHtml = '';
+                    sortedMachines.forEach(mc => {
+                        const d = machineData[mc];
+                        let rowHtml = `<tr>
+                            <td style="font-weight: 500;">${mc}</td>
+                            <td>${d.runtime.toFixed(2)}</td>
+                            <td>${d.idleTotal.toFixed(2)}</td>`;
+                        idleReasons.forEach(r => {
+                            rowHtml += `<td>${d[r] ? d[r].toFixed(2) : '-'}</td>`;
+                        });
+                        rowHtml += `</tr>`;
+                        totalRowHtml += rowHtml;
+                    });
+                    tbody.innerHTML = totalRowHtml;
+                }
+                
+            } catch(e) {
+                console.error('Error generating M/c Util report:', e);
+                alert('Error generating report');
+            }
+        });
+    }
+
+    const exportMcUtilBtn = document.getElementById('exportMcUtilBtn');
+    if (exportMcUtilBtn) {
+        exportMcUtilBtn.addEventListener('click', () => {
+            exportTableToExcel('mcUtilTable', 'Machine_Utilization_Report');
+        });
+    }
 });

@@ -78,6 +78,7 @@
             </div>
             <div class="sub-group" id="submenuReports" style="display: none;">
                 <button class="sub-tab" id="sidebarRmRequirement" data-screen="reports">RM Requirement</button>
+                <button class="sub-tab" id="sidebarMcUtil" data-screen="reports">M/c Util</button>
             </div>
         </nav>
     </div>
@@ -714,6 +715,51 @@
                             </tr>
                         </thead>
                         <tbody id="rmRequirementBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Machine Utilization Report Section -->
+            <div id="mcUtilSection" style="display: none; padding: 2rem; color: var(--text-main);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 style="margin: 0;">Machine Utilization Report</h2>
+                    <button id="exportMcUtilBtn" class="btn btn-outline">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Export Excel
+                    </button>
+                </div>
+                <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; align-items: flex-end;">
+                    <div style="flex: 1; min-width: 150px;">
+                        <label for="mcUtilFromDate" style="display: block; margin-bottom: 5px; font-weight: 500;">From Date</label>
+                        <input type="date" id="mcUtilFromDate" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <label for="mcUtilToDate" style="display: block; margin-bottom: 5px; font-weight: 500;">To Date</label>
+                        <input type="date" id="mcUtilToDate" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <label for="mcUtilDept" style="display: block; margin-bottom: 5px; font-weight: 500;">Department</label>
+                        <select id="mcUtilDept" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+                            <option value="">-- All Departments --</option>
+                            <option value="WIPRO">WIPRO</option>
+                            <option value="WIPRO FORK">WIPRO FORK</option>
+                            <option value="BEML">BEML</option>
+                            <option value="TATA">TATA</option>
+                            <option value="U34">U34</option>
+                            <option value="DANFOSS">DANFOSS</option>
+                            <option value="OTHERS">OTHERS</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button id="generateMcUtilBtn" class="btn btn-primary" style="padding: 0.5rem 1rem;">Generate</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="styled-table" id="mcUtilTable">
+                        <thead id="mcUtilHead">
+                            <!-- Dynamic Headers -->
+                        </thead>
+                        <tbody id="mcUtilBody"></tbody>
                     </table>
                 </div>
             </div>
