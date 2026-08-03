@@ -943,26 +943,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let schedulePartNoSelect = null;
     
-    scheduleDept.addEventListener('change', (e) => {
-        const selectedDept = e.target.value;
-        const selectEl = document.getElementById('schedulePartNo');
-        
-        if (schedulePartNoSelect) {
-            schedulePartNoSelect.destroy();
-        }
-        
-        selectEl.innerHTML = '<option value="">Type or select a Part No</option>';
-        if (selectedDept) {
-            const filteredParts = allPartMasters.filter(p => p.department === selectedDept);
-            filteredParts.forEach(p => {
-                selectEl.innerHTML += `<option value="${p.partno}">${p.partno}</option>`;
-            });
-        }
-        
-        schedulePartNoSelect = new TomSelect(selectEl, {
+    // Initialize TomSelect immediately
+    const schedulePartNoEl = document.getElementById('schedulePartNo');
+    if (schedulePartNoEl) {
+        schedulePartNoSelect = new TomSelect(schedulePartNoEl, {
             create: false,
             sortField: { field: "text", direction: "asc" }
         });
+    }
+    
+    scheduleDept.addEventListener('change', (e) => {
+        const selectedDept = e.target.value;
+        
+        if (schedulePartNoSelect) {
+            schedulePartNoSelect.clearOptions();
+            schedulePartNoSelect.addOption({value: "", text: "Type or select a Part No"});
+            if (selectedDept) {
+                const filteredParts = allPartMasters.filter(p => p.department === selectedDept);
+                filteredParts.forEach(p => {
+                    schedulePartNoSelect.addOption({value: p.partno, text: p.partno});
+                });
+            }
+            schedulePartNoSelect.refreshOptions(false);
+        }
     });
 
     async function fetchSchedulesForList() {
@@ -1046,6 +1049,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Call fetchSchedulesForList when opening the create tab
     sidebarScheduleCreate.addEventListener('click', (e) => {
+        loadSchedulePartNos();
         fetchSchedulesForList();
     });
 
