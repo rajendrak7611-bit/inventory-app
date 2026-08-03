@@ -63,6 +63,7 @@
                 <button class="sub-tab" id="sidebarPartMaster" data-screen="partmaster">Part Master</button>
                 <button class="sub-tab" id="sidebarMachines" data-screen="machines">Machines</button>
                 <button class="sub-tab" id="sidebarOperators" data-screen="operators">Operators</button>
+                <button class="sub-tab" id="sidebarDept" data-screen="dept">Dept</button>
             </div>
             <div class="sub-group" id="submenuInventory" style="display: none;">
                 <button class="sub-tab" id="sidebarRmReceipt" data-screen="rawmaterial">Receipt</button>
@@ -137,6 +138,19 @@
                 </table>
             </div>
 
+            <div class="table-container" id="departmentsSection" style="display: none;">
+                <table id="departmentsTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="departmentsBody"></tbody>
+                </table>
+            </div>
+
             <div class="table-container" id="operatorsSection" style="display: none;">
                 <table id="operatorsTable">
                     <thead>
@@ -166,10 +180,6 @@
                                 <label for="scheduleDept">Dept</label>
                                 <select id="scheduleDept" required style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif; font-size: 0.95rem;">
                                     <option value="">-- Select Dept --</option>
-                                    <option value="WIPRO">WIPRO</option>
-                                    <option value="SPIDER">SPIDER</option>
-                                    <option value="BC">BC</option>
-                                    <option value="GEAR">GEAR</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -247,10 +257,6 @@
                         <h2 style="margin: 0;">Schedule Status</h2>
                         <select id="statusDeptSelect" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
                             <option value="">-- Select Dept --</option>
-                            <option value="WIPRO">WIPRO</option>
-                            <option value="SPIDER">SPIDER</option>
-                            <option value="BC">BC</option>
-                            <option value="GEAR">GEAR</option>
                         </select>
                     </div>
                     <button id="exportStatusBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
@@ -296,10 +302,6 @@
                     <h2 style="margin: 0;">Debur</h2>
                     <select id="deburDeptSelect" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
                         <option value="">-- Select Dept --</option>
-                        <option value="WIPRO">WIPRO</option>
-                        <option value="SPIDER">SPIDER</option>
-                        <option value="BC">BC</option>
-                        <option value="GEAR">GEAR</option>
                     </select>
                 </div>
                 
@@ -380,10 +382,6 @@
                     <h2 style="margin: 0;">Inspection</h2>
                     <select id="inspDeptSelect" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
                         <option value="">-- Select Dept --</option>
-                        <option value="WIPRO">WIPRO</option>
-                        <option value="SPIDER">SPIDER</option>
-                        <option value="BC">BC</option>
-                        <option value="GEAR">GEAR</option>
                     </select>
                 </div>
                 
@@ -483,10 +481,6 @@
                                 <label for="prodLogDept">Dept</label>
                                 <select id="prodLogDept" required style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
                                     <option value="">-- Select Dept --</option>
-                                    <option value="WIPRO">WIPRO</option>
-                                    <option value="SPIDER">SPIDER</option>
-                                    <option value="BC">BC</option>
-                                    <option value="GEAR">GEAR</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -741,13 +735,6 @@
                         <label for="mcUtilDept" style="display: block; margin-bottom: 5px; font-weight: 500;">Department</label>
                         <select id="mcUtilDept" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
                             <option value="">-- All Departments --</option>
-                            <option value="WIPRO">WIPRO</option>
-                            <option value="WIPRO FORK">WIPRO FORK</option>
-                            <option value="BEML">BEML</option>
-                            <option value="TATA">TATA</option>
-                            <option value="U34">U34</option>
-                            <option value="DANFOSS">DANFOSS</option>
-                            <option value="OTHERS">OTHERS</option>
                         </select>
                     </div>
                     <div>
@@ -938,7 +925,9 @@
                 
                 <div class="form-group">
                     <label for="partDept">Dept</label>
-                    <input type="text" id="partDept" placeholder="e.g. Assembly">
+                    <select id="partDept" required>
+                        <option value="">-- Select Dept --</option>
+                    </select>
                 </div>
                 
                 <div class="form-group">
@@ -969,10 +958,32 @@
                 </div>
                 <div class="form-group">
                     <label for="machineDept">Dept</label>
-                    <input type="text" id="machineDept" placeholder="e.g. Milling">
+                    <select id="machineDept" required>
+                        <option value="">-- Select Dept --</option>
+                    </select>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" id="cancelMachineBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Details</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Department Add/Edit -->
+    <div id="deptModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="deptModalTitle">Add Department</h2>
+            </div>
+            <form id="deptForm">
+                <input type="hidden" id="deptId">
+                <div class="form-group">
+                    <label for="deptName">Department Name</label>
+                    <input type="text" id="deptName" required placeholder="e.g. Assembly">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="cancelDeptBtn">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Details</button>
                 </div>
             </form>

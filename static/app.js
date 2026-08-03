@@ -116,6 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebarPartMaster = document.getElementById('sidebarPartMaster');
     const sidebarMachines = document.getElementById('sidebarMachines');
     const sidebarOperators = document.getElementById('sidebarOperators');
+    const sidebarDept = document.getElementById('sidebarDept');
     const tabSchedule = document.getElementById('tabSchedule');
     const sidebarScheduleCreate = document.getElementById('sidebarScheduleCreate');
     const sidebarScheduleRun = document.getElementById('sidebarScheduleRun');
@@ -131,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const partMasterSection = document.getElementById('partMasterSection');
     const machinesSection = document.getElementById('machinesSection');
     const operatorsSection = document.getElementById('operatorsSection');
+    const departmentsSection = document.getElementById('departmentsSection');
     const scheduleCreateSection = document.getElementById('scheduleCreateSection');
     const scheduleRunSection = document.getElementById('scheduleRunSection');
     const scheduleStatusSection = document.getElementById('scheduleStatusSection');
@@ -178,13 +180,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelOperatorBtn = document.getElementById('cancelOperatorBtn');
     const operatorModalTitle = document.getElementById('operatorModalTitle');
 
+    const deptModal = document.getElementById('deptModal');
+    const deptForm = document.getElementById('deptForm');
+    const cancelDeptBtn = document.getElementById('cancelDeptBtn');
+    const deptIdInput = document.getElementById('deptId');
+    const deptNameInput = document.getElementById('deptName');
+    const deptModalTitle = document.getElementById('deptModalTitle');
+
 
     function hideAllSections() {
         const sections = [
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
             'productsSection', 'partMasterSection', 'machinesSection',
-            'operatorsSection', 'scheduleCreateSection', 'scheduleRunSection',
+            'operatorsSection', 'departmentsSection', 'scheduleCreateSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
             'inspectionSection', 'maintenanceSection', 'hrSection'
         ];
@@ -282,6 +291,13 @@ document.addEventListener('DOMContentLoaded', () => {
             addBtn.style.display = 'inline-flex';
             addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Operator';
             fetchOperators(); 
+        }},
+        'sidebarDept': { tab: 'dept', action: () => {
+            departmentsSection.style.display = 'block';
+            importBtn.style.display = 'none';
+            addBtn.style.display = 'inline-flex';
+            addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Dept';
+            fetchDepartments();
         }},
         'sidebarRmReceipt': { tab: 'rm_receipt', action: () => { 
             if (rmReceiptSection) rmReceiptSection.style.display = 'block';
@@ -2264,6 +2280,143 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+
+    // ====== DEPARTMENTS CRUD ======
+    async function fetchDepartments() {
+        try {
+            const res = await fetch('/api/departments');
+            if (res.ok) {
+                const depts = await res.json();
+                renderDepartments(depts);
+                populateDeptDropdowns(depts); // Also update dropdowns whenever departments are fetched
+            }
+        } catch (e) { console.error('Error fetching departments', e); }
+    }
+
+    function renderDepartments(depts) {
+        const tbody = document.getElementById('departmentsBody');
+        tbody.innerHTML = '';
+        depts.forEach(d => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${d.id}</td>
+                <td>${d.name}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-outline edit-dept-btn" data-id="${d.id}" data-name="${d.name}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit</button>
+                    <button class="btn btn-outline delete-dept-btn" data-id="${d.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.querySelectorAll('.edit-dept-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.target.getAttribute('data-id');
+                const name = e.target.getAttribute('data-name');
+                openDeptModal({ id, name });
+            });
+        });
+
+        document.querySelectorAll('.delete-dept-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (confirm('Delete this department?')) {
+                    const id = e.target.getAttribute('data-id');
+                    try {
+                        const res = await fetch(`/api/departments/${id}`, { method: 'DELETE' });
+                        if (res.ok) fetchDepartments();
+                        else alert('Error deleting department');
+                    } catch (err) { console.error(err); }
+                }
+            });
+        });
+    }
+
+    function openDeptModal(dept = null) {
+        if (dept) {
+            deptModalTitle.textContent = 'Edit Department';
+            deptIdInput.value = dept.id;
+            deptNameInput.value = dept.name;
+        } else {
+            deptModalTitle.textContent = 'Add Department';
+            deptForm.reset();
+            deptIdInput.value = '';
+        }
+        deptModal.classList.add('show');
+    }
+
+    if (cancelDeptBtn) {
+        cancelDeptBtn.addEventListener('click', () => {
+            deptModal.classList.remove('show');
+        });
+    }
+
+    if (deptForm) {
+        deptForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                name: deptNameInput.value
+            };
+            const id = deptIdInput.value;
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/departments/${id}` : '/api/departments';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    deptModal.classList.remove('show');
+                    fetchDepartments();
+                } else {
+                    alert('Error saving department');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error saving department');
+            }
+        });
+    }
+
+    function populateDeptDropdowns(depts) {
+        const selects = [
+            'scheduleDept', 'statusDeptSelect', 'deburDeptSelect', 
+            'inspDeptSelect', 'prodLogDept', 'partDept', 'machineDept'
+        ];
+        
+        selects.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                const currentVal = el.value;
+                let html = '<option value="">-- Select Dept --</option>';
+                depts.forEach(d => {
+                    html += `<option value="${d.name}">${d.name}</option>`;
+                });
+                el.innerHTML = html;
+                if (currentVal && depts.find(d => d.name === currentVal)) {
+                    el.value = currentVal;
+                }
+            }
+        });
+
+        // mcUtilDept has a different first option "-- All Departments --"
+        const mcUtilDept = document.getElementById('mcUtilDept');
+        if (mcUtilDept) {
+            const currentVal = mcUtilDept.value;
+            let html = '<option value="">-- All Departments --</option>';
+            depts.forEach(d => {
+                html += `<option value="${d.name}">${d.name}</option>`;
+            });
+            mcUtilDept.innerHTML = html;
+            if (currentVal && depts.find(d => d.name === currentVal)) {
+                mcUtilDept.value = currentVal;
+            }
+        }
+    }
+    
+    // Initial fetch to populate dropdowns on page load
+    fetchDepartments();
 
     // ====== M/C UTIL REPORT ======
     const generateMcUtilBtn = document.getElementById('generateMcUtilBtn');

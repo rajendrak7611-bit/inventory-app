@@ -230,6 +230,18 @@ class OperatorResponse(OperatorBase):
     class Config:
         from_attributes = True
 
+class DepartmentBase(BaseModel):
+    name: str
+
+class DepartmentCreate(DepartmentBase):
+    pass
+
+class DepartmentResponse(DepartmentBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
 class ScheduleBase(BaseModel):
     department: Optional[str] = ""
     partno: str
@@ -447,6 +459,39 @@ def delete_operator(operator_id: int, db: Session = Depends(get_db)):
     db.delete(db_operator)
     db.commit()
     return {"message": "Operator deleted successfully"}
+
+# --- Department Endpoints ---
+@app.get("/api/departments", response_model=List[DepartmentResponse])
+def read_departments(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return db.query(Department).offset(skip).limit(limit).all()
+
+@app.post("/api/departments", response_model=DepartmentResponse)
+def create_department(department: DepartmentCreate, db: Session = Depends(get_db)):
+    db_dept = Department(**department.model_dump())
+    db.add(db_dept)
+    db.commit()
+    db.refresh(db_dept)
+    return db_dept
+
+@app.put("/api/departments/{dept_id}", response_model=DepartmentResponse)
+def update_department(dept_id: int, department: DepartmentCreate, db: Session = Depends(get_db)):
+    db_dept = db.query(Department).filter(Department.id == dept_id).first()
+    if not db_dept:
+        raise HTTPException(status_code=404, detail="Department not found")
+    for key, value in department.model_dump().items():
+        setattr(db_dept, key, value)
+    db.commit()
+    db.refresh(db_dept)
+    return db_dept
+
+@app.delete("/api/departments/{dept_id}")
+def delete_department(dept_id: int, db: Session = Depends(get_db)):
+    db_dept = db.query(Department).filter(Department.id == dept_id).first()
+    if not db_dept:
+        raise HTTPException(status_code=404, detail="Department not found")
+    db.delete(db_dept)
+    db.commit()
+    return {"message": "Department deleted successfully"}
 
 @app.post("/api/operators/bulk_import")
 def bulk_import_operators(payload: BulkImportOperatorPayload, db: Session = Depends(get_db)):
