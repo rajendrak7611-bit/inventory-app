@@ -43,7 +43,15 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         pass
     try:
         conn.execute(text("ALTER TABLE production_logs ADD COLUMN cycle_time FLOAT DEFAULT 0.0;"))
-    except Exception:
+    except:
+        pass
+    try:
+        conn.execute(text("ALTER TABLE raw_material_logs ADD COLUMN dc_no VARCHAR;"))
+    except:
+        pass
+    try:
+        conn.execute(text("ALTER TABLE raw_material_logs ADD COLUMN finish_part_no VARCHAR;"))
+    except:
         pass
     try:
         conn.execute(text("UPDATE schedules SET status = 'Pending';"))
@@ -110,6 +118,8 @@ class RawMaterialLogBase(BaseModel):
     type: str
     date: str
     forge_pn: str
+    dc_no: Optional[str] = None
+    finish_part_no: Optional[str] = None
     qty: int
 
 class RawMaterialLogCreate(RawMaterialLogBase):

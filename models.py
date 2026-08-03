@@ -114,5 +114,7 @@ class RawMaterialLog(Base):
     type = Column(String) # 'receipt' or 'despatch'
     date = Column(String)
     forge_pn = Column(String)
+    dc_no = Column(String, nullable=True)
+    finish_part_no = Column(String, nullable=True)
     qty = Column(Integer, default=0)
 

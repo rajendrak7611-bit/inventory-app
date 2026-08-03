@@ -808,6 +808,8 @@
                         <tr>
                             <th>Date</th>
                             <th>Forge PN</th>
+                            <th>Finish Part No</th>
+                            <th>DC No</th>
                             <th>Despatch Qty</th>
                         </tr>
                     </thead>
@@ -994,6 +996,14 @@
                 <div class="form-group">
                     <label for="rmLogDate">Date</label>
                     <input type="date" id="rmLogDate" required>
+                </div>
+                <div class="form-group" id="rmLogDcNoGroup" style="display: none;">
+                    <label for="rmLogDcNo">DC No</label>
+                    <input type="text" id="rmLogDcNo">
+                </div>
+                <div class="form-group" id="rmLogFinishPartNoGroup" style="display: none;">
+                    <label for="rmLogFinishPartNo">Finish Part No</label>
+                    <select id="rmLogFinishPartNo" style="width: 100%;"></select>
                 </div>
                 <div class="form-group">
                     <label for="rmLogForgePn">Forge PN</label>

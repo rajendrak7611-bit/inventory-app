@@ -103,6 +103,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let availableMachines = [];
     let allRawMaterials = [];
     let rmLogForgePnSelect = null;
+    let rmLogFinishPartNoSelect = null;
+    let globalPartMasters = [];
 
     // Tabs
     const tabRawMaterial = document.getElementById('tabRawMaterial');
@@ -387,6 +389,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 create: true,
                 sortField: { field: "text", direction: "asc" }
             });
+            
+            if (isReceipt) {
+                document.getElementById('rmLogDcNoGroup').style.display = 'none';
+                document.getElementById('rmLogFinishPartNoGroup').style.display = 'none';
+            } else {
+                document.getElementById('rmLogDcNoGroup').style.display = 'block';
+                document.getElementById('rmLogFinishPartNoGroup').style.display = 'block';
+                
+                if (globalPartMasters.length === 0) {
+                    const pmRes = await fetch('/api/partmaster');
+                    globalPartMasters = await pmRes.json();
+                }
+                
+                const fpSelectEl = document.getElementById('rmLogFinishPartNo');
+                fpSelectEl.innerHTML = '<option value="">-- Select Finish Part No --</option>';
+                globalPartMasters.forEach(pm => {
+                    const opt = document.createElement('option');
+                    opt.value = pm.partno;
+                    opt.textContent = pm.partno;
+                    fpSelectEl.appendChild(opt);
+                });
+                
+                if (rmLogFinishPartNoSelect) {
+                    rmLogFinishPartNoSelect.destroy();
+                }
+                rmLogFinishPartNoSelect = new TomSelect(fpSelectEl, {
+                    create: false,
+                    sortField: { field: "text", direction: "asc" }
+                });
+                
+                rmLogFinishPartNoSelect.on('change', (val) => {
+                    if (!val) return;
+                    const selected = globalPartMasters.find(p => p.partno === val);
+                    if (selected && selected.forge_pn && rmLogForgePnSelect) {
+                        rmLogForgePnSelect.setValue(selected.forge_pn);
+                    }
+                });
+            }
             
             // Default date to today
             document.getElementById('rmLogDate').value = new Date().toISOString().split('T')[0];
@@ -1908,9 +1948,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 tbody.innerHTML = '';
                 filteredLogs.forEach(log => {
                     const tr = document.createElement('tr');
+                    let extraCols = '';
+                    if (type === 'despatch') {
+                        extraCols = `
+                            <td>${log.finish_part_no || '-'}</td>
+                            <td>${log.dc_no || '-'}</td>
+                        `;
+                    }
                     tr.innerHTML = `
                         <td>${log.date}</td>
                         <td>${log.forge_pn}</td>
+                        ${extraCols}
                         <td>${log.qty}</td>
                     `;
                     tbody.appendChild(tr);
@@ -2001,9 +2049,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const type = document.getElementById('rmLogType').value;
             const date = document.getElementById('rmLogDate').value;
             const forge_pn = document.getElementById('rmLogForgePn').value;
+            const dc_no = type === 'despatch' ? document.getElementById('rmLogDcNo').value : null;
+            const finish_part_no = type === 'despatch' ? document.getElementById('rmLogFinishPartNo').value : null;
             const qty = parseInt(document.getElementById('rmLogQty').value) || 0;
             
-            const payload = { type, date, forge_pn, qty };
+            const payload = { type, date, forge_pn, dc_no, finish_part_no, qty };
             
             try {
                 const res = await fetch('/api/rawmateriallogs', {
