@@ -988,6 +988,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td>${s.target_date}</td>
                         <td>${s.qty}</td>
                         <td><span style="padding: 2px 8px; background-color: rgba(59, 130, 246, 0.1); color: var(--primary); border-radius: 12px; font-size: 0.85em;">${s.status || 'Pending'}</span></td>
+                        <td>
+                            <button onclick="editSchedule(${s.id})" style="background: none; border: none; color: var(--primary); cursor: pointer; margin-right: 8px;">Edit</button>
+                            <button onclick="deleteSchedule(${s.id})" style="background: none; border: none; color: #ef4444; cursor: pointer;">Delete</button>
+                        </td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -996,6 +1000,8 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error fetching schedules:', e);
         }
     }
+
+    let editingScheduleId = null;
 
     if (scheduleCreateForm) {
         scheduleCreateForm.addEventListener('submit', async (e) => {
@@ -1007,26 +1013,69 @@ document.addEventListener('DOMContentLoaded', () => {
                 qty: parseInt(document.getElementById('scheduleQty').value)
             };
             try {
-                const response = await fetch('/api/schedule', {
-                    method: 'POST',
+                const method = editingScheduleId ? 'PUT' : 'POST';
+                const url = editingScheduleId ? `/api/schedule/${editingScheduleId}` : '/api/schedule';
+                const response = await fetch(url, {
+                    method: method,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
                 if (response.ok) {
-                    alert('Schedule created successfully!');
+                    alert(editingScheduleId ? 'Schedule updated successfully!' : 'Schedule created successfully!');
                     scheduleCreateForm.reset();
+                    editingScheduleId = null;
+                    document.querySelector('#scheduleCreateForm button').textContent = 'Create Schedule';
                     scheduleDept.value = ''; // Reset dept field
                     if (schedulePartNoSelect) schedulePartNoSelect.clear();
                     scheduleDept.dispatchEvent(new Event('change'));
                     fetchSchedulesForList();
                 } else {
-                    alert('Error creating schedule.');
+                    alert('Error saving schedule.');
                 }
             } catch (error) {
                 console.error('Error:', error);
             }
         });
     }
+
+    window.editSchedule = async function(id) {
+        try {
+            const res = await fetch('/api/schedule');
+            const schedules = await res.json();
+            const s = schedules.find(x => x.id === id);
+            if (!s) return;
+            
+            editingScheduleId = id;
+            
+            document.getElementById('scheduleDept').value = s.department;
+            scheduleDept.dispatchEvent(new Event('change'));
+            
+            setTimeout(() => {
+                if (schedulePartNoSelect) schedulePartNoSelect.setValue(s.partno);
+            }, 100);
+            
+            document.getElementById('scheduleTargetDate').value = s.target_date;
+            document.getElementById('scheduleQty').value = s.qty;
+            
+            document.querySelector('#scheduleCreateForm button').textContent = 'Update Schedule';
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    window.deleteSchedule = async function(id) {
+        if (!confirm('Are you sure you want to delete this schedule?')) return;
+        try {
+            const res = await fetch(`/api/schedule/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                fetchSchedulesForList();
+            } else {
+                alert('Failed to delete schedule.');
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
 
     const clearScheduleBtn = document.getElementById('clearScheduleBtn');
     if (clearScheduleBtn) {

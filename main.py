@@ -467,7 +467,28 @@ def create_schedule(schedule: ScheduleCreate, db: Session = Depends(get_db)):
 def clear_all_schedules(db: Session = Depends(get_db)):
     db.query(Schedule).delete()
     db.commit()
-    return {"message": "All schedules cleared"}
+    return {"ok": True}
+
+@app.put("/api/schedule/{schedule_id}", response_model=ScheduleResponse)
+def update_schedule(schedule_id: int, schedule: ScheduleCreate, db: Session = Depends(get_db)):
+    db_schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+    if not db_schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    for key, value in schedule.model_dump().items():
+        setattr(db_schedule, key, value)
+    db.commit()
+    db.refresh(db_schedule)
+    return db_schedule
+
+@app.delete("/api/schedule/{schedule_id}")
+def delete_schedule(schedule_id: int, db: Session = Depends(get_db)):
+    db_schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+    if not db_schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    db.delete(db_schedule)
+    db.commit()
+    return {"ok": True}
+
 @app.get("/api/schedule/run")
 def get_run_schedule(db: Session = Depends(get_db)):
     from datetime import date, timedelta
