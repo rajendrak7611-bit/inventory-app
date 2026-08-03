@@ -2264,7 +2264,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-});
+
     // ====== M/C UTIL REPORT ======
     const generateMcUtilBtn = document.getElementById('generateMcUtilBtn');
     if (generateMcUtilBtn) {
