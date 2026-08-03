@@ -1231,8 +1231,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
                 
-                // fixed columns: debur, for ins, rework, nc, rfd
-                const fixedOps = ['debur', 'for ins', 'rework', 'nc', 'rfd'];
+                // fixed columns: debur, for ins, rework, nc, rfd, desp
+                const fixedOps = ['debur', 'for ins', 'rework', 'nc', 'rfd', 'desp'];
                 for (let i = 0; i < fixedOps.length; i++) {
                     const fOp = fixedOps[i];
                     const prod = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === fOp).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
@@ -1242,6 +1242,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         nextFProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                     } else if (fOp === 'for ins') {
                         nextFProd = allLogs.filter(l => l.partno === partno && ['rework', 'nc', 'rfd'].includes((l.opn_no || '').toLowerCase())).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                    } else if (fOp === 'rfd') {
+                        nextFProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'desp').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                     }
                     
                     let fBalance = prod - nextFProd;
