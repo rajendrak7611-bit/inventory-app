@@ -941,18 +941,28 @@ document.addEventListener('DOMContentLoaded', () => {
         scheduleDept.dispatchEvent(new Event('change'));
     }
 
+    let schedulePartNoSelect = null;
+    
     scheduleDept.addEventListener('change', (e) => {
         const selectedDept = e.target.value;
-        const datalist = document.getElementById('schedulePartNoList');
-        if (!datalist) return;
-        datalist.innerHTML = '';
+        const selectEl = document.getElementById('schedulePartNo');
+        
+        if (schedulePartNoSelect) {
+            schedulePartNoSelect.destroy();
+        }
+        
+        selectEl.innerHTML = '<option value="">Type or select a Part No</option>';
         if (selectedDept) {
             const filteredParts = allPartMasters.filter(p => p.department === selectedDept);
             filteredParts.forEach(p => {
-                datalist.innerHTML += `<option value="${p.partno}">`;
+                selectEl.innerHTML += `<option value="${p.partno}">${p.partno}</option>`;
             });
         }
-        schedulePartNo.value = ''; // Reset part no input when dept changes
+        
+        schedulePartNoSelect = new TomSelect(selectEl, {
+            create: false,
+            sortField: { field: "text", direction: "asc" }
+        });
     });
 
     async function fetchSchedulesForList() {
@@ -1003,6 +1013,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert('Schedule created successfully!');
                     scheduleCreateForm.reset();
                     scheduleDept.value = ''; // Reset dept field
+                    if (schedulePartNoSelect) schedulePartNoSelect.clear();
+                    scheduleDept.dispatchEvent(new Event('change'));
                     fetchSchedulesForList();
                 } else {
                     alert('Error creating schedule.');

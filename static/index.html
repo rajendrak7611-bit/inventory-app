@@ -173,10 +173,9 @@
                             </div>
                             <div class="form-group">
                                 <label for="schedulePartNo">Part No</label>
-                                <input type="text" id="schedulePartNo" list="schedulePartNoList" required placeholder="Type or select a Part No" style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif; font-size: 0.95rem;">
-                                <datalist id="schedulePartNoList">
-                                    <!-- Populated by JS based on Dept -->
-                                </datalist>
+                                <select id="schedulePartNo" required style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif; font-size: 0.95rem;">
+                                    <option value="">Type or select a Part No</option>
+                                </select>
                             </div>
                             <div class="form-group">
                                 <label for="scheduleTargetDate">Target Date</label>
