@@ -2480,8 +2480,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 let headHtml = `<tr>
                     <th>Machine</th>
-                    <th>Total Runtime (Hrs)</th>
-                    <th>Total Idle Time (Hrs)</th>`;
+                    <th>Run Time</th>
+                    <th>Idle Time</th>
+                    <th>Log Time</th>
+                    <th>Util %</th>`;
                 idleReasons.forEach(r => {
                     headHtml += `<th>${r}</th>`;
                 });
@@ -2492,15 +2494,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const sortedMachines = Object.keys(machineData).sort();
                 if (sortedMachines.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="${3 + idleReasons.length}" style="text-align:center; color: var(--text-muted);">No data found for selected period</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="${5 + idleReasons.length}" style="text-align:center; color: var(--text-muted);">No data found for selected period</td></tr>`;
                 } else {
                     let totalRowHtml = '';
                     sortedMachines.forEach(mc => {
                         const d = machineData[mc];
+                        const logTime = d.runtime + d.idleTotal;
+                        const utilPercent = (d.runtime / 21) * 100;
                         let rowHtml = `<tr>
                             <td style="font-weight: 500;">${mc}</td>
                             <td>${d.runtime.toFixed(2)}</td>
-                            <td>${d.idleTotal.toFixed(2)}</td>`;
+                            <td>${d.idleTotal.toFixed(2)}</td>
+                            <td>${logTime.toFixed(2)}</td>
+                            <td>${utilPercent.toFixed(2)}%</td>`;
                         idleReasons.forEach(r => {
                             rowHtml += `<td>${d[r] ? d[r].toFixed(2) : '-'}</td>`;
                         });
