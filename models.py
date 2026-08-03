@@ -29,6 +29,7 @@ class PartMaster(Base):
     family = Column(String, index=True)
     forge_pn = Column(String, index=True)
     partno = Column(String, index=True)
+    customer = Column(String, index=True)
     department = Column(String, index=True)
     va = Column(String)
 

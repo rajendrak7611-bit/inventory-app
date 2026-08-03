@@ -718,13 +718,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const parts = await response.json();
             partMasterBody.innerHTML = '';
             if (parts.length === 0) {
-                partMasterBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">No part masters found.</td></tr>';
+                partMasterBody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">No part masters found.</td></tr>';
                 return;
             }
             parts.forEach(p => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${p.id}</td><td>${p.department || ''}</td><td>${p.family}</td><td>${p.forge_pn}</td><td>${p.partno}</td><td>${p.va || ''}</td>
+                    <td>${p.id}</td><td>${p.customer || ''}</td><td>${p.department || ''}</td><td>${p.family}</td><td>${p.forge_pn}</td><td>${p.partno}</td><td>${p.va || ''}</td>
                     <td class="actions">
                         <button class="btn btn-outline" style="margin-right: 5px;" onclick="openOperations(${p.id})">Operations</button>
                         <button class="btn btn-edit" onclick="editPartMaster(${p.id})">Edit</button>
@@ -748,6 +748,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = {
             family: document.getElementById('partFamily').value, forge_pn: document.getElementById('forgePn').value,
             partno: document.getElementById('partno').value, department: document.getElementById('partDept').value,
+            customer: document.getElementById('partCustomer').value,
             va: document.getElementById('partVa').value
         };
         const url = id ? `/api/partmaster/${id}` : '/api/partmaster';
@@ -767,6 +768,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (p) {
             document.getElementById('partId').value = p.id; document.getElementById('partFamily').value = p.family;
             document.getElementById('forgePn').value = p.forge_pn; document.getElementById('partno').value = p.partno;
+            document.getElementById('partCustomer').value = p.customer || '';
             document.getElementById('partDept').value = p.department || '';
             document.getElementById('partVa').value = p.va || '';
             openPartModal(true);

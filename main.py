@@ -21,6 +21,11 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
     except Exception:
         pass
     try:
+        conn.execute(text("ALTER TABLE part_masters ADD COLUMN customer VARCHAR;"))
+        conn.execute(text("CREATE INDEX ix_part_masters_customer ON part_masters (customer);"))
+    except Exception:
+        pass
+    try:
         conn.execute(text("ALTER TABLE part_masters ADD COLUMN va VARCHAR;"))
     except Exception:
         pass
@@ -157,6 +162,7 @@ class PartMasterBase(BaseModel):
     family: Optional[str] = ""
     forge_pn: Optional[str] = ""
     partno: Optional[str] = ""
+    customer: Optional[str] = ""
     department: Optional[str] = ""
     va: Optional[str] = ""
 
