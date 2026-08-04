@@ -1379,22 +1379,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         prod = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === fOp).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                     }
-                    } else if (fOp === 'rfd') {
-                        nextFProd = allRmLogs.filter(l => l.finish_part_no === partno && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
-                    }
-                    
-                    let fBalance = prod - nextFProd;
-                    if (fBalance < 0) fBalance = 0;
-                    rowHtml += `<td>${fBalance || (prod === 0 ? '' : 0)}</td>`;
+                    rowHtml += `<td>${prod}</td>`;
                 }
                 
                 const tr = document.createElement('tr');
                 tr.innerHTML = rowHtml;
                 tbody.appendChild(tr);
             }
-            
+
+            if (dept.trim().toUpperCase() === 'SPIDER') {
+                renderSpiderReport(allSchedules, allLogs, allRmLogs, allHtLogs, allHtReceiptLogs);
+            } else {
+                const spiderContainer = document.getElementById('spiderReportContainer');
+                if (spiderContainer) spiderContainer.style.display = 'none';
+            }
         } catch (e) {
-            console.error('Error fetching schedule status', e);
+            console.error('Error fetching schedule status:', e);
         }
     }
 
