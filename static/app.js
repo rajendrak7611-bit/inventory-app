@@ -358,6 +358,11 @@ document.addEventListener('DOMContentLoaded', () => {
             addBtn.style.display = 'none';
             fetchRmRequirement();
         }},
+        'sidebarScheduleCreate': { tab: 'schedule_create', action: () => {
+            if (scheduleCreateSection) scheduleCreateSection.style.display = 'block';
+            addBtn.style.display = 'none';
+            fetchSchedulesForList();
+        }},
         'sidebarMcUtil': { tab: 'mc_util', action: () => { 
             const mcUtilSec = document.getElementById('mcUtilSection');
             if (mcUtilSec) mcUtilSec.style.display = 'block';
@@ -2839,18 +2844,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const tbody = document.getElementById('htAvailablePartsBody');
         if (!tbody) return;
         tbody.innerHTML = '';
-        if (!parts || parts.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No SPIDER parts with Opn 50 production found</td></tr>';
+        
+        // Filter out parts with available_qty <= 0
+        const availableParts = (parts || []).filter(p => (p.available_qty || 0) > 0);
+
+        if (!availableParts || availableParts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No SPIDER parts with available Opn 50 quantity found</td></tr>';
             return;
         }
-        parts.forEach(p => {
+        availableParts.forEach(p => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><strong>${p.partno}</strong></td>
                 <td>${p.department || 'SPIDER'}</td>
                 <td>${p.produced_qty}</td>
                 <td>${p.ht_sent_qty}</td>
-                <td><span style="font-weight: bold; color: ${p.available_qty > 0 ? '#16a34a' : '#ef4444'};">${p.available_qty}</span></td>
+                <td><span style="font-weight: bold; color: #16a34a;">${p.available_qty}</span></td>
                 <td>
                     <button class="btn btn-primary send-part-ht-btn" data-partno="${p.partno}" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">
                         Send to HT
@@ -2938,7 +2947,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Fetch SPIDER parts
         try {
             const pRes = await fetch('/api/ht/spider_parts');
-            currentSpiderParts = await pRes.json();
+            const allParts = await pRes.json();
+            currentSpiderParts = allParts.filter(p => (p.available_qty || 0) > 0 || p.partno === preselectedPartNo);
             let pHtml = '<option value="">-- Select Part --</option>';
             currentSpiderParts.forEach(p => {
                 pHtml += `<option value="${p.partno}">${p.partno} (Avail: ${p.available_qty})</option>`;
