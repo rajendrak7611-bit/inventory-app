@@ -1381,17 +1381,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 // fixed columns: debur, for ins, rework, nc, rfd, desp
-                const fixedOps = ['debur', 'for ins', 'rework', 'nc', 'rfd', 'desp'];
-                for (let i = 0; i < fixedOps.length; i++) {
-                    const fOp = fixedOps[i];
-                    let prod = 0;
-                    if (fOp === 'desp') {
-                        prod = allRmLogs.filter(l => l.finish_part_no === partno && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
-                    } else {
-                        prod = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === fOp).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                    }
-                    rowHtml += `<td>${prod}</td>`;
-                }
+                const deburProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const forInsProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const reworkProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const ncProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const rfdProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const despProd = allRmLogs.filter(l => l.finish_part_no === partno && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
+
+                const deburBal = Math.max(0, deburProd - forInsProd);
+                const forInsBal = Math.max(0, forInsProd - (rfdProd + reworkProd + ncProd));
+                const rfdBal = Math.max(0, rfdProd - despProd);
+
+                rowHtml += `<td>${deburBal}</td>`;
+                rowHtml += `<td>${forInsBal}</td>`;
+                rowHtml += `<td>${reworkProd}</td>`;
+                rowHtml += `<td>${ncProd}</td>`;
+                rowHtml += `<td>${rfdBal}</td>`;
+                rowHtml += `<td>${despProd}</td>`;
                 
                 const tr = document.createElement('tr');
                 tr.innerHTML = rowHtml;
@@ -1579,9 +1585,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     return Math.max(0, currentProd - nextProd);
                 };
 
-                const inspec = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const rfd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const desp = allRmLogs.filter(l => (l.finish_part_no || '').trim().toUpperCase() === pName.trim().toUpperCase() && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
+                const forInsProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const reworkProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const ncProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const rfdProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const despProd = allRmLogs.filter(l => (l.finish_part_no || '').trim().toUpperCase() === pName.trim().toUpperCase() && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
+
+                const inspecBal = Math.max(0, forInsProd - (rfdProd + reworkProd + ncProd));
+                const rfdBal = Math.max(0, rfdProd - despProd);
 
                 const trRow = document.createElement('tr');
                 let rowContent = `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">${pName}</td>`;
@@ -1601,9 +1612,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(3)}</td>`;
                 }
 
-                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${inspec}</td>`;
-                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${rfd}</td>`;
-                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${desp}</td>`;
+                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${inspecBal}</td>`;
+                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${rfdBal}</td>`;
+                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${despProd}</td>`;
 
                 trRow.innerHTML = rowContent;
                 tbody.appendChild(trRow);
