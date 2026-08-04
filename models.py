@@ -153,3 +153,12 @@ class HTLog(Base):
     qty = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class HTReceiptLog(Base):
+    __tablename__ = "ht_receipt_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(String)
+    vendor = Column(String, index=True)
+    partno = Column(String, index=True)
+    qty = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+

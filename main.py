@@ -8,7 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog
+from models import Product, PartMaster, Machine, Operator, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -285,6 +285,21 @@ class HTLogCreate(HTLogBase):
     pass
 
 class HTLogResponse(HTLogBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+class HTReceiptLogBase(BaseModel):
+    date: str
+    vendor: str
+    partno: str
+    qty: int
+
+class HTReceiptLogCreate(HTReceiptLogBase):
+    pass
+
+class HTReceiptLogResponse(HTReceiptLogBase):
     id: int
 
     class Config:
@@ -659,6 +674,53 @@ def get_spider_parts(db: Session = Depends(get_db)):
             "produced_qty": produced_qty,
             "ht_sent_qty": ht_sent_qty,
             "available_qty": available_qty
+        })
+    return result
+
+# --- HT RECEIPT ENDPOINTS ---
+@app.get("/api/ht_receipt_logs", response_model=List[HTReceiptLogResponse])
+def get_ht_receipt_logs(skip: int = 0, limit: int = 200, db: Session = Depends(get_db)):
+    return db.query(HTReceiptLog).order_by(HTReceiptLog.id.desc()).offset(skip).limit(limit).all()
+
+@app.post("/api/ht_receipt_logs", response_model=HTReceiptLogResponse)
+def create_ht_receipt_log(log: HTReceiptLogCreate, db: Session = Depends(get_db)):
+    db_log = HTReceiptLog(**log.model_dump())
+    db.add(db_log)
+    db.commit()
+    db.refresh(db_log)
+    return db_log
+
+@app.delete("/api/ht_receipt_logs/{log_id}")
+def delete_ht_receipt_log(log_id: int, db: Session = Depends(get_db)):
+    db_log = db.query(HTReceiptLog).filter(HTReceiptLog.id == log_id).first()
+    if not db_log:
+        raise HTTPException(status_code=404, detail="HT Receipt log not found")
+    db.delete(db_log)
+    db.commit()
+    return {"message": "HT receipt log deleted"}
+
+@app.get("/api/ht/vendor_pending_parts")
+def get_vendor_pending_parts(db: Session = Depends(get_db)):
+    dispatches = db.query(HTLog.vendor, HTLog.partno).distinct().all()
+    result = []
+    for vendor, partno in dispatches:
+        if not vendor or not partno:
+            continue
+        
+        sent_logs = db.query(HTLog).filter(HTLog.vendor == vendor, HTLog.partno == partno).all()
+        sent_qty = int(sum((l.qty or 0) for l in sent_logs))
+        
+        rec_logs = db.query(HTReceiptLog).filter(HTReceiptLog.vendor == vendor, HTReceiptLog.partno == partno).all()
+        rec_qty = int(sum((l.qty or 0) for l in rec_logs))
+        
+        pending_qty = max(0, sent_qty - rec_qty)
+        
+        result.append({
+            "vendor": vendor,
+            "partno": partno,
+            "sent_qty": sent_qty,
+            "received_qty": rec_qty,
+            "pending_qty": pending_qty
         })
     return result
 

@@ -908,8 +908,8 @@
                     </table>
                 </div>
 
-                <div>
-                    <h3 style="margin-bottom: 0.5rem; color: var(--text-main); font-size: 1.05rem; font-weight: 600;">HT Dispatch Log</h3>
+                <div style="margin-bottom: 1.5rem;">
+                    <h3 style="margin-bottom: 0.5rem; color: var(--text-main); font-size: 1.05rem; font-weight: 600;">HT Dispatch Log (Parts Sent to Vendors)</h3>
                     <table id="htTable">
                         <thead>
                             <tr>
@@ -923,6 +923,40 @@
                             </tr>
                         </thead>
                         <tbody id="htBody"></tbody>
+                    </table>
+                </div>
+
+                <div style="margin-bottom: 1.5rem;">
+                    <h3 style="margin-bottom: 0.5rem; color: var(--text-main); font-size: 1.05rem; font-weight: 600;">Parts Pending at HT Vendors (Awaiting Receipt)</h3>
+                    <table id="htVendorPendingTable">
+                        <thead>
+                            <tr>
+                                <th>Vendor</th>
+                                <th>Part No</th>
+                                <th>Total Sent</th>
+                                <th>Total Received</th>
+                                <th>Pending at Vendor</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="htVendorPendingBody"></tbody>
+                    </table>
+                </div>
+
+                <div>
+                    <h3 style="margin-bottom: 0.5rem; color: var(--text-main); font-size: 1.05rem; font-weight: 600;">HT Receipt Log (Received from Vendors -> Opn 60)</h3>
+                    <table id="htReceiptTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Date</th>
+                                <th>Vendor</th>
+                                <th>Part No</th>
+                                <th>Qty Received</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="htReceiptBody"></tbody>
                     </table>
                 </div>
             </div>
@@ -1160,6 +1194,46 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" id="cancelHtBtn">Cancel</button>
                     <button type="submit" class="btn btn-primary">Send to HT</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for HT Receipt -->
+    <div id="htReceiptModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="htReceiptModalTitle">Receive Parts from HT</h2>
+                <button class="close-btn" id="closeHtReceiptModalBtn">&times;</button>
+            </div>
+            <form id="htReceiptForm">
+                <div class="form-group">
+                    <label for="htReceiptDate">Date</label>
+                    <input type="date" id="htReceiptDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="htReceiptVendor">Vendor</label>
+                    <select id="htReceiptVendor" required>
+                        <option value="">-- Select Vendor --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="htReceiptPartNo">Part No</label>
+                    <select id="htReceiptPartNo" required>
+                        <option value="">-- Select Part --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="htReceiptPendingQty">Pending at Vendor</label>
+                    <input type="text" id="htReceiptPendingQty" readonly placeholder="0" style="background-color: rgba(0,0,0,0.05); font-weight: bold; color: var(--primary-color, #2563eb);">
+                </div>
+                <div class="form-group">
+                    <label for="htReceiptQty">Received Qty (Opn 60)</label>
+                    <input type="number" id="htReceiptQty" required min="1" placeholder="e.g. 50">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="cancelHtReceiptBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Receive from HT</button>
                 </div>
             </form>
         </div>

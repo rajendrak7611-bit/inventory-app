@@ -2796,9 +2796,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeHtModalBtn = document.getElementById('closeHtModalBtn');
 
     let currentSpiderParts = [];
+    let currentVendorPending = [];
 
     async function fetchHtData() {
-        await Promise.all([fetchAvailableHtParts(), fetchHtLogs()]);
+        await Promise.all([
+            fetchAvailableHtParts(),
+            fetchHtLogs(),
+            fetchHtVendorPendingParts(),
+            fetchHtReceiptLogs()
+        ]);
     }
 
     async function fetchAvailableHtParts() {
@@ -2981,6 +2987,217 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 console.error(err);
                 alert('Error saving HT record');
+            }
+        });
+    }
+
+    // ====== HT RECEIPT LOG CRUD ======
+    const htReceiptModal = document.getElementById('htReceiptModal');
+    const htReceiptForm = document.getElementById('htReceiptForm');
+    const htReceiptDateInput = document.getElementById('htReceiptDate');
+    const htReceiptVendorSelect = document.getElementById('htReceiptVendor');
+    const htReceiptPartNoSelect = document.getElementById('htReceiptPartNo');
+    const htReceiptPendingQtyInput = document.getElementById('htReceiptPendingQty');
+    const htReceiptQtyInput = document.getElementById('htReceiptQty');
+    const cancelHtReceiptBtn = document.getElementById('cancelHtReceiptBtn');
+    const closeHtReceiptModalBtn = document.getElementById('closeHtReceiptModalBtn');
+
+    async function fetchHtVendorPendingParts() {
+        try {
+            const res = await fetch('/api/ht/vendor_pending_parts');
+            const data = await res.json();
+            currentVendorPending = data;
+            renderHtVendorPendingParts(data);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderHtVendorPendingParts(pendingList) {
+        const tbody = document.getElementById('htVendorPendingBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const activePending = (pendingList || []).filter(p => p.pending_qty > 0);
+        
+        if (activePending.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No parts currently pending at HT vendors</td></tr>';
+            return;
+        }
+
+        activePending.forEach(p => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${p.vendor}</strong></td>
+                <td>${p.partno}</td>
+                <td>${p.sent_qty}</td>
+                <td>${p.received_qty}</td>
+                <td><span style="font-weight: bold; color: #d97706;">${p.pending_qty}</span></td>
+                <td>
+                    <button class="btn btn-primary receive-part-ht-btn" data-vendor="${p.vendor}" data-partno="${p.partno}" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background-color: #059669; border-color: #059669;">
+                        Receive from HT
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.querySelectorAll('.receive-part-ht-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const vendor = e.currentTarget.getAttribute('data-vendor');
+                const partno = e.currentTarget.getAttribute('data-partno');
+                openHtReceiptModal(vendor, partno);
+            });
+        });
+    }
+
+    async function fetchHtReceiptLogs() {
+        try {
+            const res = await fetch('/api/ht_receipt_logs');
+            const data = await res.json();
+            renderHtReceiptLogs(data);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderHtReceiptLogs(logs) {
+        const tbody = document.getElementById('htReceiptBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!logs || logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No HT receipt records found</td></tr>';
+            return;
+        }
+        logs.forEach(l => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${l.id}</td>
+                <td>${l.date}</td>
+                <td>${l.vendor}</td>
+                <td>${l.partno}</td>
+                <td><span style="font-weight: bold; color: #059669;">+${l.qty}</span></td>
+                <td class="actions-cell">
+                    <button class="btn btn-outline delete-ht-receipt-btn" data-id="${l.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.querySelectorAll('.delete-ht-receipt-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (confirm('Delete this HT receipt record?')) {
+                    const id = e.target.getAttribute('data-id');
+                    try {
+                        const res = await fetch(`/api/ht_receipt_logs/${id}`, { method: 'DELETE' });
+                        if (res.ok) fetchHtData();
+                        else alert('Error deleting HT receipt record');
+                    } catch (err) { console.error(err); }
+                }
+            });
+        });
+    }
+
+    async function openHtReceiptModal(preVendor = null, prePartNo = null) {
+        if (!htReceiptModal) return;
+        htReceiptForm.reset();
+        htReceiptPendingQtyInput.value = '0';
+
+        if (!htReceiptDateInput.value) {
+            htReceiptDateInput.valueAsDate = new Date();
+        }
+
+        // Fetch vendor pending list
+        try {
+            const res = await fetch('/api/ht/vendor_pending_parts');
+            currentVendorPending = await res.json();
+            
+            // Populate Vendors dropdown (unique vendors with pending > 0)
+            const uniqueVendors = [...new Set(currentVendorPending.filter(p => p.pending_qty > 0).map(p => p.vendor))];
+            let vHtml = '<option value="">-- Select Vendor --</option>';
+            uniqueVendors.forEach(v => {
+                vHtml += `<option value="${v}">${v}</option>`;
+            });
+            htReceiptVendorSelect.innerHTML = vHtml;
+
+            if (preVendor) {
+                htReceiptVendorSelect.value = preVendor;
+                updateHtReceiptPartsDropdown(preVendor, prePartNo);
+            }
+        } catch (err) { console.error(err); }
+
+        htReceiptModal.classList.add('show');
+    }
+
+    function updateHtReceiptPartsDropdown(vendor, prePartNo = null) {
+        const matching = currentVendorPending.filter(p => p.vendor === vendor && p.pending_qty > 0);
+        let pHtml = '<option value="">-- Select Part --</option>';
+        matching.forEach(m => {
+            pHtml += `<option value="${m.partno}">${m.partno} (Pending: ${m.pending_qty})</option>`;
+        });
+        htReceiptPartNoSelect.innerHTML = pHtml;
+
+        if (prePartNo) {
+            htReceiptPartNoSelect.value = prePartNo;
+            const found = matching.find(m => m.partno === prePartNo);
+            htReceiptPendingQtyInput.value = found ? found.pending_qty : 0;
+        } else {
+            htReceiptPendingQtyInput.value = '0';
+        }
+    }
+
+    if (htReceiptVendorSelect) {
+        htReceiptVendorSelect.addEventListener('change', (e) => {
+            const vendor = e.target.value;
+            updateHtReceiptPartsDropdown(vendor);
+        });
+    }
+
+    if (htReceiptPartNoSelect) {
+        htReceiptPartNoSelect.addEventListener('change', (e) => {
+            const vendor = htReceiptVendorSelect.value;
+            const partno = e.target.value;
+            const found = currentVendorPending.find(p => p.vendor === vendor && p.partno === partno);
+            htReceiptPendingQtyInput.value = found ? found.pending_qty : 0;
+        });
+    }
+
+    if (cancelHtReceiptBtn) {
+        cancelHtReceiptBtn.addEventListener('click', () => htReceiptModal.classList.remove('show'));
+    }
+    if (closeHtReceiptModalBtn) {
+        closeHtReceiptModalBtn.addEventListener('click', () => htReceiptModal.classList.remove('show'));
+    }
+
+    if (htReceiptForm) {
+        htReceiptForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const qty = parseInt(htReceiptQtyInput.value) || 0;
+            const pending = parseInt(htReceiptPendingQtyInput.value) || 0;
+
+            if (qty > pending) {
+                if (!confirm(`Warning: Entered received quantity (${qty}) is greater than pending quantity at vendor (${pending}). Do you still want to proceed?`)) {
+                    return;
+                }
+            }
+
+            const payload = {
+                date: htReceiptDateInput.value,
+                vendor: htReceiptVendorSelect.value,
+                partno: htReceiptPartNoSelect.value,
+                qty: qty
+            };
+
+            try {
+                const res = await fetch('/api/ht_receipt_logs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    htReceiptModal.classList.remove('show');
+                    fetchHtData();
+                } else {
+                    alert('Error saving HT receipt record');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error saving HT receipt record');
             }
         });
     }
