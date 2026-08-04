@@ -1379,12 +1379,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         prod = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === fOp).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                     }
-                    
-                    let nextFProd = 0;
-                    if (fOp === 'debur') {
-                        nextFProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                    } else if (fOp === 'for ins') {
-                        nextFProd = allLogs.filter(l => l.partno === partno && ['rework', 'nc', 'rfd'].includes((l.opn_no || '').toLowerCase())).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                     } else if (fOp === 'rfd') {
                         nextFProd = allRmLogs.filter(l => l.finish_part_no === partno && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
                     }

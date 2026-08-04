@@ -321,12 +321,27 @@
                                 <th>desp</th>
                             </tr>
                         </thead>
-                        <tbody id="statusBody">
-                            <!-- Populated by JS -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                          <tbody id="statusBody">
+                              <!-- Populated by JS -->
+                          </tbody>
+                      </table>
+                  </div>
+
+                  <div id="spiderReportContainer" style="display: none; margin-top: 2rem; border-top: 2px solid var(--border-color); padding-top: 1.5rem;">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                          <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main); font-weight: 600;">SPIDER Department Detailed Report</h3>
+                          <button id="exportSpiderReportBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                              Export SPIDER Report Excel
+                          </button>
+                      </div>
+                      <div style="overflow-x: auto;">
+                          <table id="spiderReportTable" class="compact-table" style="width: 100%; white-space: nowrap; border-collapse: collapse;">
+                              <tbody id="spiderReportBody"></tbody>
+                          </table>
+                      </div>
+                  </div>
+              </div>
             
             <!-- Debur Section -->
             <div class="table-container" id="deburSection" style="display: none; padding: 2rem; color: var(--text-main);">
