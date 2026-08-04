@@ -1409,6 +1409,215 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function renderSpiderReport(allSchedules, allLogs, allRmLogs, allHtLogs, allHtReceiptLogs) {
+        const spiderContainer = document.getElementById('spiderReportContainer');
+        const tbody = document.getElementById('spiderReportBody');
+        if (!spiderContainer || !tbody) return;
+
+        spiderContainer.style.display = 'block';
+        tbody.innerHTML = '';
+
+        let allRms = [];
+        try {
+            const rmRes = await fetch('/api/rawmaterials');
+            allRms = await rmRes.json();
+        } catch (e) { console.error(e); }
+
+        const groups = [
+            {
+                name: "Group 1",
+                parts: ["C100", "RS120", "RVI", "Q109", "R149", "RS160"],
+                headers: [
+                    { title: "Part No", rowspan: 2 },
+                    { title: "sch qty", rowspan: 2 },
+                    { title: "F Avail", rowspan: 2 },
+                    { title: "Fac & cen", sub: "OPN 2" },
+                    { title: "Turning", sub: "OPN 3" },
+                    { title: "HT", colspan: 2, subList: ["Anusha", "JMS"] },
+                    { title: "Grinding", sub: "OPN 7" },
+                    { title: "Inspec", rowspan: 2 },
+                    { title: "RFD", rowspan: 2 },
+                    { title: "Despatch", rowspan: 2 }
+                ]
+            },
+            {
+                name: "Group 2",
+                parts: ["QD", "AMW", "15 I", "15 i"],
+                headers: [
+                    { title: "Part No", rowspan: 2 },
+                    { title: "sch qty", rowspan: 2 },
+                    { title: "F Avail", rowspan: 2 },
+                    { title: "Boring", sub: "OPN 1" },
+                    { title: "Fac & cen", sub: "OPN 2" },
+                    { title: "turning", sub: "OPN 3" },
+                    { title: "drilling", sub: "OPN 4" },
+                    { title: "Inspec", rowspan: 2 },
+                    { title: "RFD", rowspan: 2 },
+                    { title: "Despatch", rowspan: 2 }
+                ]
+            },
+            {
+                name: "Group 3",
+                parts: ["HR Forward"],
+                headers: [
+                    { title: "Part No", rowspan: 2 },
+                    { title: "sch qty", rowspan: 2 },
+                    { title: "F Avail", rowspan: 2 },
+                    { title: "Boring", sub: "OPN 1" },
+                    { title: "Fac & cen", sub: "OPN 2" },
+                    { title: "Pre Turn", sub: "OPN 3" },
+                    { title: "Spherical", sub: "OPN 4" },
+                    { title: "Inspec", rowspan: 2 },
+                    { title: "RFD", rowspan: 2 },
+                    { title: "Despatch", rowspan: 2 }
+                ]
+            },
+            {
+                name: "Group 4",
+                parts: ["HR Rear"],
+                headers: [
+                    { title: "Part No", rowspan: 2 },
+                    { title: "sch qty", rowspan: 2 },
+                    { title: "F Avail", rowspan: 2 },
+                    { title: "Boring", sub: "OPN 1" },
+                    { title: "Thickness", sub: "OPN 2" },
+                    { title: "Fac & cen", sub: "OPN 3" },
+                    { title: "Turning", sub: "OPN 4" },
+                    { title: "Inspec", rowspan: 2 },
+                    { title: "RFD", rowspan: 2 },
+                    { title: "Despatch", rowspan: 2 }
+                ]
+            }
+        ];
+
+        const spiderScheds = allSchedules.filter(s => (s.department || '').trim().toUpperCase() === 'SPIDER' && (s.status === 'Pending' || !s.status));
+
+        for (const group of groups) {
+            const trHeader1 = document.createElement('tr');
+            trHeader1.style.backgroundColor = '#dbeafe';
+            trHeader1.style.fontWeight = 'bold';
+            
+            const trHeader2 = document.createElement('tr');
+            trHeader2.style.backgroundColor = '#eff6ff';
+            trHeader2.style.fontWeight = 'bold';
+
+            group.headers.forEach(h => {
+                if (h.rowspan === 2) {
+                    trHeader1.innerHTML += `<th rowspan="2" style="border:1px solid #cbd5e1; padding:6px; text-align:center; background:#dbeafe;">${h.title}</th>`;
+                } else if (h.colspan === 2) {
+                    trHeader1.innerHTML += `<th colspan="2" style="border:1px solid #cbd5e1; padding:6px; text-align:center; background:#dbeafe;">${h.title}</th>`;
+                    if (h.subList) {
+                        h.subList.forEach(sub => {
+                            trHeader2.innerHTML += `<th style="border:1px solid #cbd5e1; padding:6px; text-align:center; background:#eff6ff;">${sub}</th>`;
+                        });
+                    }
+                } else {
+                    trHeader1.innerHTML += `<th style="border:1px solid #cbd5e1; padding:6px; text-align:center; background:#dbeafe;">${h.title}</th>`;
+                    trHeader2.innerHTML += `<th style="border:1px solid #cbd5e1; padding:6px; text-align:center; background:#eff6ff;">${h.sub || ''}</th>`;
+                }
+            });
+
+            tbody.appendChild(trHeader1);
+            if (trHeader2.children.length > 0) {
+                tbody.appendChild(trHeader2);
+            }
+
+            for (const pName of group.parts) {
+                const partObj = statusAllParts.find(p => (p.partno || '').trim().toUpperCase() === pName.trim().toUpperCase());
+                
+                const pScheds = spiderScheds.filter(s => (s.partno || '').trim().toUpperCase() === pName.trim().toUpperCase());
+                const schQty = pScheds.reduce((sum, s) => sum + (s.qty || 0), 0);
+
+                const fpn = partObj ? (partObj.forge_pn || '') : '';
+                const rmObj = allRms.find(r => (r.forge_pn || '').trim().toUpperCase() === fpn.trim().toUpperCase());
+                const fAvail = rmObj ? (rmObj.stock || 0) : 0;
+
+                const sentAnusha = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.vendor || '').toLowerCase().includes('anusha')).reduce((sum, l) => sum + (l.qty || 0), 0);
+                const recAnusha = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.vendor || '').toLowerCase().includes('anusha')).reduce((sum, l) => sum + (l.qty || 0), 0);
+                const pendingAnusha = Math.max(0, sentAnusha - recAnusha);
+
+                const sentJMS = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.vendor || '').toLowerCase().includes('jms')).reduce((sum, l) => sum + (l.qty || 0), 0);
+                const recJMS = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.vendor || '').toLowerCase().includes('jms')).reduce((sum, l) => sum + (l.qty || 0), 0);
+                const pendingJMS = Math.max(0, sentJMS - recJMS);
+
+                let ops = [];
+                if (partObj) {
+                    try {
+                        const opsRes = await fetch(`/api/partmaster/${partObj.id}/operations`);
+                        ops = await opsRes.json();
+                        ops.sort((a, b) => (parseInt(a.opn_no) || 0) - (parseInt(b.opn_no) || 0));
+                    } catch (e) { console.error(e); }
+                }
+
+                const getOpBalance = (opnNoStr) => {
+                    if (!opnNoStr) return 0;
+                    const opIndex = ops.findIndex(o => (o.opn_no || '').trim().toLowerCase() === opnNoStr.trim().toLowerCase());
+                    if (opIndex < 0) return 0;
+                    const currentOp = ops[opIndex];
+                    const nextOp = ops[opIndex + 1];
+
+                    let currentProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === opnNoStr.trim().toLowerCase()).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                    
+                    if (opnNoStr === '50') {
+                        const htSent = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                        currentProd -= htSent;
+                    }
+                    if (opnNoStr === '60') {
+                        const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                        currentProd += htRec;
+                    }
+
+                    let nextProd = 0;
+                    if (nextOp) {
+                        nextProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === (nextOp.opn_no || '').trim().toLowerCase()).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                    } else {
+                        nextProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                    }
+                    return Math.max(0, currentProd - nextProd);
+                };
+
+                const inspec = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const rfd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const desp = allRmLogs.filter(l => (l.finish_part_no || '').trim().toUpperCase() === pName.trim().toUpperCase() && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
+
+                const trRow = document.createElement('tr');
+                let rowContent = `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">${pName}</td>`;
+                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${schQty || 0}</td>`;
+                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${fAvail || 0}</td>`;
+
+                if (group.name === 'Group 1') {
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalance('20')}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalance('30')}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingAnusha}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingJMS}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalance('70')}</td>`;
+                } else if (group.name === 'Group 2' || group.name === 'Group 3' || group.name === 'Group 4') {
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalance('10')}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalance('20')}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalance('30')}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalance('40')}</td>`;
+                }
+
+                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${inspec}</td>`;
+                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${rfd}</td>`;
+                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${desp}</td>`;
+
+                trRow.innerHTML = rowContent;
+                tbody.appendChild(trRow);
+            }
+        }
+    }
+
+    const exportSpiderBtn = document.getElementById('exportSpiderReportBtn');
+    if (exportSpiderBtn) {
+        exportSpiderBtn.addEventListener('click', () => {
+            const table = document.getElementById('spiderReportTable');
+            if (!table) return;
+            const wb = XLSX.utils.table_to_book(table, {sheet: "SPIDER Report"});
+            XLSX.writeFile(wb, `SPIDER_Detailed_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+        });
+    }
+
     // --- DEBUR LOGIC ---
     let deburAllParts = [];
     let deburOperatorsLoaded = false;
