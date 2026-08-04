@@ -137,6 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const operatorsSection = document.getElementById('operatorsSection');
     const departmentsSection = document.getElementById('departmentsSection');
     const shiftsSection = document.getElementById('shiftsSection');
+    const vendorsSection = document.getElementById('vendorsSection');
     const scheduleCreateSection = document.getElementById('scheduleCreateSection');
     const scheduleRunSection = document.getElementById('scheduleRunSection');
     const scheduleStatusSection = document.getElementById('scheduleStatusSection');
@@ -317,6 +318,13 @@ document.addEventListener('DOMContentLoaded', () => {
             addBtn.style.display = 'inline-flex';
             addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Shift';
             fetchShifts();
+        }},
+        'sidebarVendors': { tab: 'vendors', action: () => {
+            if (vendorsSection) vendorsSection.style.display = 'block';
+            importBtn.style.display = 'none';
+            addBtn.style.display = 'inline-flex';
+            addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Vendor';
+            fetchVendors();
         }},
         'sidebarRmReceipt': { tab: 'rm_receipt', action: () => { 
             if (rmReceiptSection) rmReceiptSection.style.display = 'block';
