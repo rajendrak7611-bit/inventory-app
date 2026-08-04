@@ -1021,10 +1021,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let allPartMasters = [];
 
     async function loadSchedulePartNos() {
-        if (allPartMasters.length === 0) {
-            const res = await fetch('/api/partmaster');
-            allPartMasters = await res.json();
-        }
+        const res = await fetch('/api/partmaster');
+        allPartMasters = await res.json();
         // Force trigger change to populate datalist if dept is already selected
         scheduleDept.dispatchEvent(new Event('change'));
     }
@@ -1047,7 +1045,8 @@ document.addEventListener('DOMContentLoaded', () => {
             schedulePartNoSelect.clearOptions();
             schedulePartNoSelect.addOption({value: "", text: "Type or select a Part No"});
             if (selectedDept) {
-                const filteredParts = allPartMasters.filter(p => p.department === selectedDept);
+                const selectedLower = selectedDept.trim().toLowerCase();
+                const filteredParts = allPartMasters.filter(p => (p.department || '').trim().toLowerCase() === selectedLower);
                 filteredParts.forEach(p => {
                     schedulePartNoSelect.addOption({value: p.partno, text: p.partno});
                 });
