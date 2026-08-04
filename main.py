@@ -8,7 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift
+from models import Product, PartMaster, Machine, Operator, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
