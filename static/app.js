@@ -1288,15 +1288,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!dept) return;
 
         try {
-            const [schedRes, logRes, rmLogRes] = await Promise.all([
+            const [schedRes, logRes, rmLogRes, htLogRes, htReceiptLogRes] = await Promise.all([
                 fetch('/api/schedule'),
                 fetch('/api/prodlog'),
-                fetch('/api/rawmateriallogs')
+                fetch('/api/rawmateriallogs'),
+                fetch('/api/ht_logs'),
+                fetch('/api/ht_receipt_logs')
             ]);
             
             const allSchedules = await schedRes.json();
             const allLogs = await logRes.json();
             const allRmLogs = await rmLogRes.json();
+            const allHtLogs = await htLogRes.json();
+            const allHtReceiptLogs = await htReceiptLogRes.json();
             
             const deptSchedules = allSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase() && (s.status === 'Pending' || !s.status));
             const uniqueParts = [...new Set(deptSchedules.map(s => s.partno))];
@@ -1326,13 +1330,28 @@ document.addEventListener('DOMContentLoaded', () => {
                         const currentOp = operations[i];
                         const nextOp = operations[i + 1];
                         
-                        // Total produced for current op
-                        const currentProd = allLogs.filter(l => l.partno === partno && l.opn_no === currentOp.opn_no).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                        const opnClean = (currentOp.opn_no || '').trim().toLowerCase();
+                        
+                        // Total produced for current op from logs
+                        let currentProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === opnClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                        
+                        // Deduct HT sent for Opn 50
+                        if (opnClean === '50' || opnClean === 'opn 50' || opnClean === 'opn50') {
+                            const htSent = allHtLogs.filter(l => l.partno === partno).reduce((sum, l) => sum + (l.qty || 0), 0);
+                            currentProd -= htSent;
+                        }
+
+                        // Add HT received for Opn 60
+                        if (opnClean === '60' || opnClean === 'opn 60' || opnClean === 'opn60') {
+                            const htRec = allHtReceiptLogs.filter(l => l.partno === partno).reduce((sum, l) => sum + (l.qty || 0), 0);
+                            currentProd += htRec;
+                        }
                         
                         // Total produced for next op
                         let nextProd = 0;
                         if (nextOp) {
-                            nextProd = allLogs.filter(l => l.partno === partno && l.opn_no === nextOp.opn_no).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                            const nextOpClean = (nextOp.opn_no || '').trim().toLowerCase();
+                            nextProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === nextOpClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                         } else {
                             nextProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                         }
