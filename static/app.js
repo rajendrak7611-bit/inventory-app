@@ -402,6 +402,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (currentTab === 'operators') openOperatorModal(false);
         else if (currentTab === 'dept') openDeptModal();
         else if (currentTab === 'shift') openShiftModal();
+        else if (currentTab === 'vendors') openVendorModal();
         else if (currentTab === 'rawmaterial') {
             document.getElementById('rmModalTitle').innerText = 'Add Raw Material';
             document.getElementById('rawMaterialForm').reset();
@@ -2648,6 +2649,122 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initial fetch to populate dropdowns on page load
     fetchDepartments();
     fetchShifts();
+    fetchVendors();
+
+    // ====== VENDOR CRUD ======
+    const vendorModal = document.getElementById('vendorModal');
+    const vendorForm = document.getElementById('vendorForm');
+    const vendorIdInput = document.getElementById('vendorId');
+    const vendorNameInput = document.getElementById('vendorName');
+    const vendorDetailsInput = document.getElementById('vendorDetails');
+    const vendorModalTitle = document.getElementById('vendorModalTitle');
+    const cancelVendorBtn = document.getElementById('cancelVendorBtn');
+    const closeVendorModalBtn = document.getElementById('closeVendorModalBtn');
+
+    async function fetchVendors() {
+        try {
+            const res = await fetch('/api/vendors');
+            const data = await res.json();
+            renderVendors(data);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderVendors(vendors) {
+        const tbody = document.getElementById('vendorsBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        vendors.forEach(v => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${v.id}</td>
+                <td>${v.name}</td>
+                <td>${v.details || ''}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-outline edit-vendor-btn" data-id="${v.id}" data-name="${v.name}" data-details="${v.details || ''}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit</button>
+                    <button class="btn btn-outline delete-vendor-btn" data-id="${v.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.querySelectorAll('.edit-vendor-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.target.getAttribute('data-id');
+                const name = e.target.getAttribute('data-name');
+                const details = e.target.getAttribute('data-details');
+                openVendorModal({ id, name, details });
+            });
+        });
+
+        document.querySelectorAll('.delete-vendor-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (confirm('Delete this vendor?')) {
+                    const id = e.target.getAttribute('data-id');
+                    try {
+                        const res = await fetch(`/api/vendors/${id}`, { method: 'DELETE' });
+                        if (res.ok) fetchVendors();
+                        else alert('Error deleting vendor');
+                    } catch (err) { console.error(err); }
+                }
+            });
+        });
+    }
+
+    function openVendorModal(vendor = null) {
+        if (!vendorModal) return;
+        if (vendor) {
+            vendorModalTitle.textContent = 'Edit Vendor';
+            vendorIdInput.value = vendor.id;
+            vendorNameInput.value = vendor.name;
+            vendorDetailsInput.value = vendor.details;
+        } else {
+            vendorModalTitle.textContent = 'Add Vendor';
+            vendorForm.reset();
+            vendorIdInput.value = '';
+        }
+        vendorModal.classList.add('show');
+    }
+
+    if (cancelVendorBtn) {
+        cancelVendorBtn.addEventListener('click', () => {
+            vendorModal.classList.remove('show');
+        });
+    }
+    if (closeVendorModalBtn) {
+        closeVendorModalBtn.addEventListener('click', () => {
+            vendorModal.classList.remove('show');
+        });
+    }
+
+    if (vendorForm) {
+        vendorForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                name: vendorNameInput.value,
+                details: vendorDetailsInput.value
+            };
+            const id = vendorIdInput.value;
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/vendors/${id}` : '/api/vendors';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    vendorModal.classList.remove('show');
+                    fetchVendors();
+                } else {
+                    alert('Error saving vendor');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error saving vendor');
+            }
+        });
+    }
 
     // ====== M/C UTIL REPORT ======
     const generateMcUtilBtn = document.getElementById('generateMcUtilBtn');

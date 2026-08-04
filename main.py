@@ -257,7 +257,20 @@ class ShiftCreate(ShiftBase):
 
 class ShiftResponse(ShiftBase):
     id: int
+    
+    class Config:
+        from_attributes = True
 
+class VendorBase(BaseModel):
+    name: str
+    details: Optional[str] = None
+
+class VendorCreate(VendorBase):
+    pass
+
+class VendorResponse(VendorBase):
+    id: int
+    
     class Config:
         from_attributes = True
 
@@ -543,7 +556,40 @@ def delete_shift(shift_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Shift not found")
     db.delete(db_shift)
     db.commit()
-    return {"message": "Shift deleted successfully"}
+    return {"message": "Shift deleted"}
+
+# --- VENDOR ENDPOINTS ---
+@app.get("/api/vendors", response_model=List[VendorResponse])
+def get_vendors(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return db.query(Vendor).offset(skip).limit(limit).all()
+
+@app.post("/api/vendors", response_model=VendorResponse)
+def create_vendor(vendor: VendorCreate, db: Session = Depends(get_db)):
+    db_vendor = Vendor(**vendor.model_dump())
+    db.add(db_vendor)
+    db.commit()
+    db.refresh(db_vendor)
+    return db_vendor
+
+@app.put("/api/vendors/{vendor_id}", response_model=VendorResponse)
+def update_vendor(vendor_id: int, vendor: VendorCreate, db: Session = Depends(get_db)):
+    db_vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not db_vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    for key, value in vendor.model_dump().items():
+        setattr(db_vendor, key, value)
+    db.commit()
+    db.refresh(db_vendor)
+    return db_vendor
+
+@app.delete("/api/vendors/{vendor_id}")
+def delete_vendor(vendor_id: int, db: Session = Depends(get_db)):
+    db_vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not db_vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    db.delete(db_vendor)
+    db.commit()
+    return {"message": "Vendor deleted successfully"}
 
 @app.post("/api/operators/bulk_import")
 def bulk_import_operators(payload: BulkImportOperatorPayload, db: Session = Depends(get_db)):

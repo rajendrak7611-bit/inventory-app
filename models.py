@@ -76,6 +76,14 @@ class Shift(Base):
     hours = Column(Float, default=8.0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class Vendor(Base):
+    __tablename__ = "vendors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True, unique=True)
+    details = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class Schedule(Base):
     __tablename__ = "schedules"
 

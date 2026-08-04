@@ -65,6 +65,7 @@
                 <button class="sub-tab" id="sidebarOperators" data-screen="operators">Operators</button>
                 <button class="sub-tab" id="sidebarDept" data-screen="dept">Dept</button>
                 <button class="sub-tab" id="sidebarShift" data-screen="shift">Shift</button>
+                <button class="sub-tab" id="sidebarVendors" data-screen="vendors">Vendors</button>
             </div>
             <div class="sub-group" id="submenuInventory" style="display: none;">
                 <button class="sub-tab" id="sidebarRmReceipt" data-screen="rawmaterial">Receipt</button>
@@ -164,6 +165,20 @@
                         </tr>
                     </thead>
                     <tbody id="shiftsBody"></tbody>
+                </table>
+            </div>
+
+            <div class="table-container" id="vendorsSection" style="display: none;">
+                <table id="vendorsTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Vendor Name</th>
+                            <th>Details</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="vendorsBody"></tbody>
                 </table>
             </div>
 
@@ -1037,6 +1052,31 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" id="cancelShiftBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Details</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Vendor Add/Edit -->
+    <div id="vendorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="vendorModalTitle">Add Vendor</h2>
+                <button class="close-btn" id="closeVendorModalBtn">&times;</button>
+            </div>
+            <form id="vendorForm">
+                <input type="hidden" id="vendorId">
+                <div class="form-group">
+                    <label for="vendorName">Vendor Name</label>
+                    <input type="text" id="vendorName" required placeholder="e.g. Acme Corp">
+                </div>
+                <div class="form-group">
+                    <label for="vendorDetails">Details</label>
+                    <input type="text" id="vendorDetails" placeholder="Contact, Address, etc.">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="cancelVendorBtn">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Details</button>
                 </div>
             </form>
