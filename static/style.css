@@ -250,7 +250,7 @@ table {
 }
 
 th, td {
-    padding: 0.3rem 0.5rem;
+    padding: 0.15rem 0.3rem;
     text-align: left;
 }
 
@@ -266,7 +266,7 @@ th {
 
 td {
     border-bottom: 1px solid rgba(51, 65, 85, 0.5);
-    font-size: 0.95rem;
+    font-size: 0.85rem;
 }
 
 tbody tr {
