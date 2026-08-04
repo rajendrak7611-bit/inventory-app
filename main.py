@@ -77,11 +77,14 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
 
 # Seed default admin user
 with Session(engine) as db:
-    admin_user = db.query(User).filter(User.username == "admin").first()
+    admin_user = db.query(User).filter(func.lower(User.username) == "admin").first()
+    hashed = hashlib.sha256("admin123".encode()).hexdigest()
     if not admin_user:
-        hashed = hashlib.sha256("admin123".encode()).hexdigest()
         new_admin = User(username="admin", password_hash=hashed, role="admin", accessible_screens='["users","rawmaterial","products","partmaster","machines","operators","schedule","status","prodlog","debur","inspection"]')
         db.add(new_admin)
+        db.commit()
+    else:
+        admin_user.password_hash = hashed
         db.commit()
 
 app = FastAPI(title="Inventory Management API")
@@ -1073,11 +1076,14 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
 
 @app.post("/api/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == req.username).first()
+    clean_username = (req.username or "").strip()
+    clean_password = (req.password or "").strip()
+    
+    user = db.query(User).filter(func.lower(User.username) == clean_username.lower()).first()
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
     
-    hashed = hashlib.sha256(req.password.encode()).hexdigest()
+    hashed = hashlib.sha256(clean_password.encode()).hexdigest()
     if hashed != user.password_hash:
         raise HTTPException(status_code=401, detail="Invalid username or password")
         
