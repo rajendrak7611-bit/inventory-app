@@ -206,7 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
             'productsSection', 'partMasterSection', 'machinesSection',
-            'operatorsSection', 'departmentsSection', 'shiftsSection', 'scheduleCreateSection', 'scheduleRunSection',
+            'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'scheduleCreateSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
             'inspectionSection', 'maintenanceSection', 'hrSection'
         ];
