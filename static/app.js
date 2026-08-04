@@ -105,6 +105,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let rmLogForgePnSelect = null;
     let rmLogFinishPartNoSelect = null;
     let globalPartMasters = [];
+    let allShifts = [];
+    let currentOperatorSessionHours = 0;
 
     // Tabs
     const tabRawMaterial = document.getElementById('tabRawMaterial');
@@ -1852,6 +1854,47 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('prodLogRuntime').addEventListener('input', recalcProdLog);
     document.getElementById('prodLogProdQty').addEventListener('input', recalcProdLog);
 
+    function validateHours() {
+        const shiftName = document.getElementById('prodLogShift').value;
+        const shiftObj = allShifts.find(s => s.name === shiftName);
+        const maxHours = shiftObj ? parseFloat(shiftObj.hours || 0) : 0;
+        
+        const warningEl = document.getElementById('prodLogHoursWarning');
+        if (!warningEl) return;
+        
+        if (maxHours === 0) {
+            warningEl.style.display = 'none';
+            return;
+        }
+
+        const runtime = parseFloat(document.getElementById('prodLogRuntime').value) || 0;
+        const idle1 = parseFloat(document.getElementById('prodLogIdleHours').value) || 0;
+        const idle2 = parseFloat(document.getElementById('prodLogIdleHours2').value) || 0;
+        const idle3 = parseFloat(document.getElementById('prodLogIdleHours3').value) || 0;
+        const totalCurrent = runtime + idle1 + idle2 + idle3;
+        
+        const continueOp = document.getElementById('prodLogContinueOperator') ? document.getElementById('prodLogContinueOperator').value : 'n';
+        
+        let totalToValidate = totalCurrent;
+        if (continueOp === 'y') {
+            totalToValidate += currentOperatorSessionHours;
+        }
+        
+        if (totalToValidate > maxHours) {
+            warningEl.innerText = `Run time & Idle time more than log hours (${maxHours})`;
+            warningEl.style.display = 'block';
+        } else {
+            warningEl.style.display = 'none';
+        }
+    }
+
+    ['prodLogShift', 'prodLogRuntime', 'prodLogIdleHours', 'prodLogIdleHours2', 'prodLogIdleHours3'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', validateHours);
+    });
+    const continueOpEl = document.getElementById('prodLogContinueOperator');
+    if (continueOpEl) continueOpEl.addEventListener('change', validateHours);
+
     async function fetchProdLogs() {
         try {
             const res = await fetch('/api/prodlog');
@@ -1997,7 +2040,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         document.getElementById('prodLogSetter').value = savedSetter;
                         document.getElementById('prodLogOperator').value = savedOperator;
                         document.getElementById('prodLogContinueOperator').value = 'y';
+                        currentOperatorSessionHours += (
+                            (parseFloat(data.runtime) || 0) + 
+                            (parseFloat(data.idle_hours) || 0) + 
+                            (parseFloat(data.idle_hours_2) || 0) + 
+                            (parseFloat(data.idle_hours_3) || 0)
+                        );
                     } else {
+                        currentOperatorSessionHours = 0;
                         const savedDate = document.getElementById('prodLogDate').value;
                         prodLogForm.reset();
                         if (savedDate) document.getElementById('prodLogDate').value = savedDate;
@@ -2006,6 +2056,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             document.getElementById('prodLogContinueOperator').value = 'n';
                         }
                     }
+                    validateHours();
                     
                     fetchProdLogs();
                 } else {
@@ -2477,6 +2528,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch('/api/shifts');
             const data = await res.json();
+            allShifts = data;
             renderShifts(data);
             populateShiftDropdowns(data);
         } catch (err) { console.error(err); }
