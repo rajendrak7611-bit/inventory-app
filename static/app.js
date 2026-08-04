@@ -332,7 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
             importBtn.style.display = 'none';
             addBtn.style.display = 'inline-flex';
             addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Send to HT';
-            fetchHtLogs();
+            fetchHtData();
         }},
         'sidebarRmReceipt': { tab: 'rm_receipt', action: () => { 
             if (rmReceiptSection) rmReceiptSection.style.display = 'block';
@@ -2797,6 +2797,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentSpiderParts = [];
 
+    async function fetchHtData() {
+        await Promise.all([fetchAvailableHtParts(), fetchHtLogs()]);
+    }
+
+    async function fetchAvailableHtParts() {
+        try {
+            const res = await fetch('/api/ht/spider_parts');
+            const data = await res.json();
+            currentSpiderParts = data;
+            renderAvailableHtParts(data);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderAvailableHtParts(parts) {
+        const tbody = document.getElementById('htAvailablePartsBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!parts || parts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No SPIDER parts with Opn 50 production found</td></tr>';
+            return;
+        }
+        parts.forEach(p => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${p.partno}</strong></td>
+                <td>${p.department || 'SPIDER'}</td>
+                <td>${p.produced_qty}</td>
+                <td>${p.ht_sent_qty}</td>
+                <td><span style="font-weight: bold; color: ${p.available_qty > 0 ? '#16a34a' : '#ef4444'};">${p.available_qty}</span></td>
+                <td>
+                    <button class="btn btn-primary send-part-ht-btn" data-partno="${p.partno}" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">
+                        Send to HT
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.querySelectorAll('.send-part-ht-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const partno = e.currentTarget.getAttribute('data-partno');
+                openHtModal(partno);
+            });
+        });
+    }
+
     async function fetchHtLogs() {
         try {
             const res = await fetch('/api/ht_logs');
@@ -2809,6 +2855,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const tbody = document.getElementById('htBody');
         if (!tbody) return;
         tbody.innerHTML = '';
+        if (!logs || logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No HT dispatch records found</td></tr>';
+            return;
+        }
         logs.forEach(l => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -2831,7 +2881,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const id = e.target.getAttribute('data-id');
                     try {
                         const res = await fetch(`/api/ht_logs/${id}`, { method: 'DELETE' });
-                        if (res.ok) fetchHtLogs();
+                        if (res.ok) fetchHtData();
                         else alert('Error deleting HT record');
                     } catch (err) { console.error(err); }
                 }
@@ -2839,15 +2889,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    async function openHtModal() {
+    async function openHtModal(preselectedPartNo = null) {
         if (!htModal) return;
         htForm.reset();
         htAvailableQtyInput.value = '0';
         
-        // Set date
-        if (retainedDate) {
-            htDateInput.value = retainedDate;
-        } else {
+        // Retain current date or set to today
+        if (!htDateInput.value) {
             htDateInput.valueAsDate = new Date();
         }
 
@@ -2871,6 +2919,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 pHtml += `<option value="${p.partno}">${p.partno} (Avail: ${p.available_qty})</option>`;
             });
             htPartNoSelect.innerHTML = pHtml;
+
+            if (preselectedPartNo) {
+                htPartNoSelect.value = preselectedPartNo;
+                const found = currentSpiderParts.find(p => p.partno === preselectedPartNo);
+                htAvailableQtyInput.value = found ? found.available_qty : 0;
+            }
         } catch (err) { console.error(err); }
 
         htModal.classList.add('show');
@@ -2920,7 +2974,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 if (res.ok) {
                     htModal.classList.remove('show');
-                    fetchHtLogs();
+                    fetchHtData();
                 } else {
                     alert('Error saving HT record');
                 }

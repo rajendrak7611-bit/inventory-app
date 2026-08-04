@@ -3,7 +3,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text, func
+from sqlalchemy import text, func, or_
 from typing import List, Optional
 from pydantic import BaseModel
 
@@ -640,7 +640,11 @@ def get_spider_parts(db: Session = Depends(get_db)):
     for partno in sorted(all_partnos):
         prod_logs = db.query(ProductionLog).filter(
             ProductionLog.partno == partno,
-            func.lower(ProductionLog.opn_no) == '50'
+            or_(
+                func.lower(func.trim(ProductionLog.opn_no)) == '50',
+                func.lower(func.trim(ProductionLog.opn_no)) == 'opn 50',
+                func.lower(func.trim(ProductionLog.opn_no)) == 'opn50'
+            )
         ).all()
         produced_qty = int(sum((l.prod_qty or 0) for l in prod_logs))
         
@@ -651,6 +655,7 @@ def get_spider_parts(db: Session = Depends(get_db)):
         
         result.append({
             "partno": partno,
+            "department": "SPIDER",
             "produced_qty": produced_qty,
             "ht_sent_qty": ht_sent_qty,
             "available_qty": available_qty
