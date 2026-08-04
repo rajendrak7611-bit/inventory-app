@@ -3,12 +3,12 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, func
 from typing import List, Optional
 from pydantic import BaseModel
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor
+from models import Product, PartMaster, Machine, Operator, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -271,6 +271,22 @@ class VendorCreate(VendorBase):
 class VendorResponse(VendorBase):
     id: int
     
+    class Config:
+        from_attributes = True
+
+class HTLogBase(BaseModel):
+    date: str
+    dc_no: Optional[str] = ""
+    vendor: str
+    partno: str
+    qty: int
+
+class HTLogCreate(HTLogBase):
+    pass
+
+class HTLogResponse(HTLogBase):
+    id: int
+
     class Config:
         from_attributes = True
 
@@ -590,6 +606,56 @@ def delete_vendor(vendor_id: int, db: Session = Depends(get_db)):
     db.delete(db_vendor)
     db.commit()
     return {"message": "Vendor deleted successfully"}
+
+# --- HT LOG ENDPOINTS ---
+@app.get("/api/ht_logs", response_model=List[HTLogResponse])
+def get_ht_logs(skip: int = 0, limit: int = 200, db: Session = Depends(get_db)):
+    return db.query(HTLog).order_by(HTLog.id.desc()).offset(skip).limit(limit).all()
+
+@app.post("/api/ht_logs", response_model=HTLogResponse)
+def create_ht_log(log: HTLogCreate, db: Session = Depends(get_db)):
+    db_log = HTLog(**log.model_dump())
+    db.add(db_log)
+    db.commit()
+    db.refresh(db_log)
+    return db_log
+
+@app.delete("/api/ht_logs/{log_id}")
+def delete_ht_log(log_id: int, db: Session = Depends(get_db)):
+    db_log = db.query(HTLog).filter(HTLog.id == log_id).first()
+    if not db_log:
+        raise HTTPException(status_code=404, detail="HT Log not found")
+    db.delete(db_log)
+    db.commit()
+    return {"message": "HT log deleted"}
+
+@app.get("/api/ht/spider_parts")
+def get_spider_parts(db: Session = Depends(get_db)):
+    pm_parts = db.query(PartMaster.partno).filter(func.lower(PartMaster.department) == "spider").distinct().all()
+    pl_parts = db.query(ProductionLog.partno).filter(func.lower(ProductionLog.dept) == "spider").distinct().all()
+    
+    all_partnos = set([p[0] for p in pm_parts if p[0]] + [p[0] for p in pl_parts if p[0]])
+    
+    result = []
+    for partno in sorted(all_partnos):
+        prod_logs = db.query(ProductionLog).filter(
+            ProductionLog.partno == partno,
+            func.lower(ProductionLog.opn_no) == '50'
+        ).all()
+        produced_qty = int(sum((l.prod_qty or 0) for l in prod_logs))
+        
+        ht_logs = db.query(HTLog).filter(HTLog.partno == partno).all()
+        ht_sent_qty = int(sum((h.qty or 0) for h in ht_logs))
+        
+        available_qty = max(0, produced_qty - ht_sent_qty)
+        
+        result.append({
+            "partno": partno,
+            "produced_qty": produced_qty,
+            "ht_sent_qty": ht_sent_qty,
+            "available_qty": available_qty
+        })
+    return result
 
 @app.post("/api/operators/bulk_import")
 def bulk_import_operators(payload: BulkImportOperatorPayload, db: Session = Depends(get_db)):

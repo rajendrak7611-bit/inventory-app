@@ -71,6 +71,7 @@
                 <button class="sub-tab" id="sidebarRmReceipt" data-screen="rawmaterial">Receipt</button>
                 <button class="sub-tab" id="sidebarRmDespatch" data-screen="rawmaterial">Despatch</button>
                 <button class="sub-tab" id="sidebarRmMaster" data-screen="rawmaterial">RM Status</button>
+                <button class="sub-tab" id="sidebarHt" data-screen="ht">HT</button>
             </div>
             <div class="sub-group" id="submenuProduction" style="display: none;">
                 <button class="sub-tab" id="sidebarScheduleCreate" data-screen="schedule">Schedule Create</button>
@@ -888,6 +889,23 @@
                     <tbody id="rmDespatchBody"></tbody>
                 </table>
             </div>
+
+            <div class="table-container" id="htSection" style="display: none;">
+                <table id="htTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Date</th>
+                            <th>DC No</th>
+                            <th>Vendor</th>
+                            <th>Part No</th>
+                            <th>Qty Sent</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="htBody"></tbody>
+                </table>
+            </div>
         </main>
         </div>
     </div>
@@ -1078,6 +1096,50 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" id="cancelVendorBtn">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Details</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for HT Entry -->
+    <div id="htModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="htModalTitle">Send Parts for HT</h2>
+                <button class="close-btn" id="closeHtModalBtn">&times;</button>
+            </div>
+            <form id="htForm">
+                <div class="form-group">
+                    <label for="htDate">Date</label>
+                    <input type="date" id="htDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="htDcNo">DC No</label>
+                    <input type="text" id="htDcNo" placeholder="Delivery Challan No">
+                </div>
+                <div class="form-group">
+                    <label for="htVendor">Vendor</label>
+                    <select id="htVendor" required>
+                        <option value="">-- Select Vendor --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="htPartNo">Part No (SPIDER Dept)</label>
+                    <select id="htPartNo" required>
+                        <option value="">-- Select Part --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="htAvailableQty">Available Qty (Opn 50)</label>
+                    <input type="text" id="htAvailableQty" readonly placeholder="0" style="background-color: rgba(0,0,0,0.05); font-weight: bold; color: var(--primary-color, #2563eb);">
+                </div>
+                <div class="form-group">
+                    <label for="htQty">Qty to Send</label>
+                    <input type="number" id="htQty" required min="1" placeholder="e.g. 50">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="cancelHtBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Send to HT</button>
                 </div>
             </form>
         </div>

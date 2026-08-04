@@ -138,6 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const departmentsSection = document.getElementById('departmentsSection');
     const shiftsSection = document.getElementById('shiftsSection');
     const vendorsSection = document.getElementById('vendorsSection');
+    const htSection = document.getElementById('htSection');
     const scheduleCreateSection = document.getElementById('scheduleCreateSection');
     const scheduleRunSection = document.getElementById('scheduleRunSection');
     const scheduleStatusSection = document.getElementById('scheduleStatusSection');
@@ -206,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
             'productsSection', 'partMasterSection', 'machinesSection',
-            'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'scheduleCreateSection', 'scheduleRunSection',
+            'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'htSection', 'scheduleCreateSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
             'inspectionSection', 'maintenanceSection', 'hrSection'
         ];
@@ -326,6 +327,13 @@ document.addEventListener('DOMContentLoaded', () => {
             addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Vendor';
             fetchVendors();
         }},
+        'sidebarHt': { tab: 'ht', action: () => {
+            if (htSection) htSection.style.display = 'block';
+            importBtn.style.display = 'none';
+            addBtn.style.display = 'inline-flex';
+            addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Send to HT';
+            fetchHtLogs();
+        }},
         'sidebarRmReceipt': { tab: 'rm_receipt', action: () => { 
             if (rmReceiptSection) rmReceiptSection.style.display = 'block';
             addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Receipt';
@@ -411,6 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (currentTab === 'dept') openDeptModal();
         else if (currentTab === 'shift') openShiftModal();
         else if (currentTab === 'vendors') openVendorModal();
+        else if (currentTab === 'ht') openHtModal();
         else if (currentTab === 'rawmaterial') {
             document.getElementById('rmModalTitle').innerText = 'Add Raw Material';
             document.getElementById('rawMaterialForm').reset();
@@ -2770,6 +2779,154 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 console.error(err);
                 alert('Error saving vendor');
+            }
+        });
+    }
+
+    // ====== HT LOG CRUD ======
+    const htModal = document.getElementById('htModal');
+    const htForm = document.getElementById('htForm');
+    const htDateInput = document.getElementById('htDate');
+    const htDcNoInput = document.getElementById('htDcNo');
+    const htVendorSelect = document.getElementById('htVendor');
+    const htPartNoSelect = document.getElementById('htPartNo');
+    const htAvailableQtyInput = document.getElementById('htAvailableQty');
+    const htQtyInput = document.getElementById('htQty');
+    const cancelHtBtn = document.getElementById('cancelHtBtn');
+    const closeHtModalBtn = document.getElementById('closeHtModalBtn');
+
+    let currentSpiderParts = [];
+
+    async function fetchHtLogs() {
+        try {
+            const res = await fetch('/api/ht_logs');
+            const data = await res.json();
+            renderHtLogs(data);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderHtLogs(logs) {
+        const tbody = document.getElementById('htBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        logs.forEach(l => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${l.id}</td>
+                <td>${l.date}</td>
+                <td>${l.dc_no || ''}</td>
+                <td>${l.vendor}</td>
+                <td>${l.partno}</td>
+                <td>${l.qty}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-outline delete-ht-btn" data-id="${l.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.querySelectorAll('.delete-ht-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (confirm('Delete this HT record?')) {
+                    const id = e.target.getAttribute('data-id');
+                    try {
+                        const res = await fetch(`/api/ht_logs/${id}`, { method: 'DELETE' });
+                        if (res.ok) fetchHtLogs();
+                        else alert('Error deleting HT record');
+                    } catch (err) { console.error(err); }
+                }
+            });
+        });
+    }
+
+    async function openHtModal() {
+        if (!htModal) return;
+        htForm.reset();
+        htAvailableQtyInput.value = '0';
+        
+        // Set date
+        if (retainedDate) {
+            htDateInput.value = retainedDate;
+        } else {
+            htDateInput.valueAsDate = new Date();
+        }
+
+        // Fetch vendors
+        try {
+            const vRes = await fetch('/api/vendors');
+            const vendors = await vRes.json();
+            let vHtml = '<option value="">-- Select Vendor --</option>';
+            vendors.forEach(v => {
+                vHtml += `<option value="${v.name}">${v.name}</option>`;
+            });
+            htVendorSelect.innerHTML = vHtml;
+        } catch (err) { console.error(err); }
+
+        // Fetch SPIDER parts
+        try {
+            const pRes = await fetch('/api/ht/spider_parts');
+            currentSpiderParts = await pRes.json();
+            let pHtml = '<option value="">-- Select Part --</option>';
+            currentSpiderParts.forEach(p => {
+                pHtml += `<option value="${p.partno}">${p.partno} (Avail: ${p.available_qty})</option>`;
+            });
+            htPartNoSelect.innerHTML = pHtml;
+        } catch (err) { console.error(err); }
+
+        htModal.classList.add('show');
+    }
+
+    if (htPartNoSelect) {
+        htPartNoSelect.addEventListener('change', (e) => {
+            const partno = e.target.value;
+            const found = currentSpiderParts.find(p => p.partno === partno);
+            htAvailableQtyInput.value = found ? found.available_qty : 0;
+        });
+    }
+
+    if (cancelHtBtn) {
+        cancelHtBtn.addEventListener('click', () => htModal.classList.remove('show'));
+    }
+    if (closeHtModalBtn) {
+        closeHtModalBtn.addEventListener('click', () => htModal.classList.remove('show'));
+    }
+
+    if (htForm) {
+        htForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const partno = htPartNoSelect.value;
+            const qty = parseInt(htQtyInput.value) || 0;
+            const avail = parseInt(htAvailableQtyInput.value) || 0;
+
+            if (qty > avail) {
+                if (!confirm(`Warning: Entered quantity (${qty}) is greater than available Opn 50 quantity (${avail}). Do you still want to proceed?`)) {
+                    return;
+                }
+            }
+
+            const payload = {
+                date: htDateInput.value,
+                dc_no: htDcNoInput.value,
+                vendor: htVendorSelect.value,
+                partno: partno,
+                qty: qty
+            };
+
+            try {
+                const res = await fetch('/api/ht_logs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    htModal.classList.remove('show');
+                    fetchHtLogs();
+                } else {
+                    alert('Error saving HT record');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error saving HT record');
             }
         });
     }

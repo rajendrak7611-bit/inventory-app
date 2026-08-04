@@ -143,3 +143,13 @@ class RawMaterialLog(Base):
     finish_part_no = Column(String, nullable=True)
     qty = Column(Integer, default=0)
 
+class HTLog(Base):
+    __tablename__ = "ht_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(String)
+    dc_no = Column(String, nullable=True)
+    vendor = Column(String, index=True)
+    partno = Column(String, index=True)
+    qty = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
