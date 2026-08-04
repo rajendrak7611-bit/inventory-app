@@ -1431,10 +1431,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     { title: "Part No", rowspan: 2 },
                     { title: "sch qty", rowspan: 2 },
                     { title: "F Avail", rowspan: 2 },
-                    { title: "Fac & cen", sub: "OPN 2" },
-                    { title: "Turning", sub: "OPN 3" },
+                    { title: "Fac & cen", rowspan: 2 },
+                    { title: "Turning", rowspan: 2 },
                     { title: "HT", colspan: 2, subList: ["Anusha", "JMS"] },
-                    { title: "Grinding", sub: "OPN 7" },
+                    { title: "Grinding", rowspan: 2 },
                     { title: "Inspec", rowspan: 2 },
                     { title: "RFD", rowspan: 2 },
                     { title: "Despatch", rowspan: 2 }
@@ -1442,50 +1442,50 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             {
                 name: "Group 2",
-                parts: ["QD", "AMW", "15 I", "15 i"],
+                parts: ["QD", "AMW", "15 I"],
                 headers: [
-                    { title: "Part No", rowspan: 2 },
-                    { title: "sch qty", rowspan: 2 },
-                    { title: "F Avail", rowspan: 2 },
-                    { title: "Boring", sub: "OPN 1" },
-                    { title: "Fac & cen", sub: "OPN 2" },
-                    { title: "turning", sub: "OPN 3" },
-                    { title: "drilling", sub: "OPN 4" },
-                    { title: "Inspec", rowspan: 2 },
-                    { title: "RFD", rowspan: 2 },
-                    { title: "Despatch", rowspan: 2 }
+                    { title: "Part No" },
+                    { title: "sch qty" },
+                    { title: "F Avail" },
+                    { title: "Boring" },
+                    { title: "Fac & cen" },
+                    { title: "turning" },
+                    { title: "drilling" },
+                    { title: "Inspec" },
+                    { title: "RFD" },
+                    { title: "Despatch" }
                 ]
             },
             {
                 name: "Group 3",
                 parts: ["HR Forward"],
                 headers: [
-                    { title: "Part No", rowspan: 2 },
-                    { title: "sch qty", rowspan: 2 },
-                    { title: "F Avail", rowspan: 2 },
-                    { title: "Boring", sub: "OPN 1" },
-                    { title: "Fac & cen", sub: "OPN 2" },
-                    { title: "Pre Turn", sub: "OPN 3" },
-                    { title: "Spherical", sub: "OPN 4" },
-                    { title: "Inspec", rowspan: 2 },
-                    { title: "RFD", rowspan: 2 },
-                    { title: "Despatch", rowspan: 2 }
+                    { title: "Part No" },
+                    { title: "sch qty" },
+                    { title: "F Avail" },
+                    { title: "Boring" },
+                    { title: "Fac & cen" },
+                    { title: "Pre Turn" },
+                    { title: "Spherical" },
+                    { title: "Inspec" },
+                    { title: "RFD" },
+                    { title: "Despatch" }
                 ]
             },
             {
                 name: "Group 4",
                 parts: ["HR Rear"],
                 headers: [
-                    { title: "Part No", rowspan: 2 },
-                    { title: "sch qty", rowspan: 2 },
-                    { title: "F Avail", rowspan: 2 },
-                    { title: "Boring", sub: "OPN 1" },
-                    { title: "Thickness", sub: "OPN 2" },
-                    { title: "Fac & cen", sub: "OPN 3" },
-                    { title: "Turning", sub: "OPN 4" },
-                    { title: "Inspec", rowspan: 2 },
-                    { title: "RFD", rowspan: 2 },
-                    { title: "Despatch", rowspan: 2 }
+                    { title: "Part No" },
+                    { title: "sch qty" },
+                    { title: "F Avail" },
+                    { title: "Boring" },
+                    { title: "Thickness" },
+                    { title: "Fac & cen" },
+                    { title: "Turning" },
+                    { title: "Inspec" },
+                    { title: "RFD" },
+                    { title: "Despatch" }
                 ]
             }
         ];
@@ -1513,7 +1513,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 } else {
                     trHeader1.innerHTML += `<th style="border:1px solid #cbd5e1; padding:6px; text-align:center; background:#dbeafe;">${h.title}</th>`;
-                    trHeader2.innerHTML += `<th style="border:1px solid #cbd5e1; padding:6px; text-align:center; background:#eff6ff;">${h.sub || ''}</th>`;
+                    if (h.sub) {
+                        trHeader2.innerHTML += `<th style="border:1px solid #cbd5e1; padding:6px; text-align:center; background:#eff6ff;">${h.sub}</th>`;
+                    }
                 }
             });
 
