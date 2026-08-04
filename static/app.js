@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loginOverlay.style.display = 'flex';
     } else {
         loginOverlay.style.display = 'none';
-        appContainer.style.display = 'block';
+        appContainer.style.display = '';
         
         // Access Control Logic
         const allTabs = document.querySelectorAll('.sidebar-menu [data-screen]');
