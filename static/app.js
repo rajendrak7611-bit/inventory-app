@@ -13,8 +13,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!userObj) {
         appContainer.style.display = 'none';
+        loginOverlay.style.display = 'flex';
     } else {
         loginOverlay.style.display = 'none';
+        appContainer.style.display = 'flex';
         
         // Access Control Logic
         const allTabs = document.querySelectorAll('.sidebar-menu [data-screen]');
@@ -45,22 +47,27 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Special case for Users tab
         const sidebarUsers = document.getElementById('sidebarUsers');
-        if (userObj.role === 'admin') {
-            sidebarUsers.style.display = 'inline-block';
-        } else {
-            sidebarUsers.style.display = 'none';
+        if (sidebarUsers) {
+            if (userObj.role === 'admin') {
+                sidebarUsers.style.display = 'inline-block';
+            } else {
+                sidebarUsers.style.display = 'none';
+            }
         }
 
         // Add logout button to header actions div
         const actionDiv = document.getElementById('headerActions');
-        const logoutBtn = document.createElement('button');
-        logoutBtn.className = 'btn btn-secondary';
-        logoutBtn.textContent = `Logout (${userObj.username})`;
-        logoutBtn.onclick = () => {
-            localStorage.removeItem('grs_user');
-            window.location.reload();
-        };
-        actionDiv.appendChild(logoutBtn);
+        if (actionDiv && !document.getElementById('logoutBtn')) {
+            const logoutBtn = document.createElement('button');
+            logoutBtn.id = 'logoutBtn';
+            logoutBtn.className = 'btn btn-secondary';
+            logoutBtn.textContent = `Logout (${userObj.username})`;
+            logoutBtn.onclick = () => {
+                localStorage.removeItem('grs_user');
+                window.location.reload();
+            };
+            actionDiv.appendChild(logoutBtn);
+        }
 
         // Auto-click the first available tab if they don't have access to the default (products)
         if (userObj.role !== 'admin' && firstAvailableTab && !accessibleScreens.includes('products')) {
@@ -70,30 +77,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        loginError.style.display = 'none';
-        const username = document.getElementById('loginUsername').value;
-        const password = document.getElementById('loginPassword').value;
-        
-        try {
-            const res = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
-            if (res.ok) {
-                const data = await res.json();
-                localStorage.setItem('grs_user', JSON.stringify(data));
-                window.location.reload();
-            } else {
-                loginError.style.display = 'block';
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (loginError) loginError.style.display = 'none';
+            const usernameInput = document.getElementById('loginUsername');
+            const passwordInput = document.getElementById('loginPassword');
+            const username = usernameInput ? usernameInput.value : '';
+            const password = passwordInput ? passwordInput.value : '';
+            
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    localStorage.setItem('grs_user', JSON.stringify(data));
+                    window.location.reload();
+                } else {
+                    if (loginError) loginError.style.display = 'block';
+                }
+            } catch (err) {
+                console.error(err);
+                if (loginError) loginError.style.display = 'block';
             }
-        } catch (err) {
-            console.error(err);
-            loginError.style.display = 'block';
-        }
-    });
+        });
+    }
 
     // Shared
     const addBtn = document.getElementById('addBtn');
