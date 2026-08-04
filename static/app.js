@@ -1549,27 +1549,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     } catch (e) { console.error(e); }
                 }
 
-                const getOpBalance = (opnNoStr) => {
-                    if (!opnNoStr) return 0;
-                    const opIndex = ops.findIndex(o => (o.opn_no || '').trim().toLowerCase() === opnNoStr.trim().toLowerCase());
-                    if (opIndex < 0) return 0;
-                    const currentOp = ops[opIndex];
-                    const nextOp = ops[opIndex + 1];
+                const getOpBalanceByIndex = (i) => {
+                    if (i < 0 || i >= ops.length) return 0;
+                    const currentOp = ops[i];
+                    const nextOp = ops[i + 1];
 
-                    let currentProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === opnNoStr.trim().toLowerCase()).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                    const opnClean = (currentOp.opn_no || '').trim().toLowerCase();
+
+                    let currentProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === opnClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                     
-                    if (opnNoStr === '50') {
+                    if (opnClean === '50' || opnClean === 'opn 50' || opnClean === 'opn50') {
                         const htSent = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                         currentProd -= htSent;
                     }
-                    if (opnNoStr === '60') {
+                    if (opnClean === '60' || opnClean === 'opn 60' || opnClean === 'opn60') {
                         const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                         currentProd += htRec;
                     }
 
                     let nextProd = 0;
                     if (nextOp) {
-                        nextProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === (nextOp.opn_no || '').trim().toLowerCase()).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                        const nextOpClean = (nextOp.opn_no || '').trim().toLowerCase();
+                        nextProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === nextOpClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                     } else {
                         nextProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                     }
@@ -1586,16 +1587,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${fAvail || 0}</td>`;
 
                 if (group.name === 'Group 1') {
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalance('20')}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalance('30')}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(1)}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(2)}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingAnusha}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingJMS}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalance('70')}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(6)}</td>`;
                 } else if (group.name === 'Group 2' || group.name === 'Group 3' || group.name === 'Group 4') {
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalance('10')}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalance('20')}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalance('30')}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalance('40')}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(0)}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(1)}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(2)}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(3)}</td>`;
                 }
 
                 rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${inspec}</td>`;
