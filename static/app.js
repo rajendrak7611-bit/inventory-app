@@ -117,6 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebarMachines = document.getElementById('sidebarMachines');
     const sidebarOperators = document.getElementById('sidebarOperators');
     const sidebarDept = document.getElementById('sidebarDept');
+    const sidebarShift = document.getElementById('sidebarShift');
     const tabSchedule = document.getElementById('tabSchedule');
     const sidebarScheduleCreate = document.getElementById('sidebarScheduleCreate');
     const sidebarScheduleRun = document.getElementById('sidebarScheduleRun');
@@ -133,6 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const machinesSection = document.getElementById('machinesSection');
     const operatorsSection = document.getElementById('operatorsSection');
     const departmentsSection = document.getElementById('departmentsSection');
+    const shiftsSection = document.getElementById('shiftsSection');
     const scheduleCreateSection = document.getElementById('scheduleCreateSection');
     const scheduleRunSection = document.getElementById('scheduleRunSection');
     const scheduleStatusSection = document.getElementById('scheduleStatusSection');
@@ -187,13 +189,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const deptNameInput = document.getElementById('deptName');
     const deptModalTitle = document.getElementById('deptModalTitle');
 
+    const shiftModal = document.getElementById('shiftModal');
+    const shiftForm = document.getElementById('shiftForm');
+    const cancelShiftBtn = document.getElementById('cancelShiftBtn');
+    const shiftIdInput = document.getElementById('shiftId');
+    const shiftNameInput = document.getElementById('shiftName');
+    const shiftHoursInput = document.getElementById('shiftHours');
+    const shiftModalTitle = document.getElementById('shiftModalTitle');
+
 
     function hideAllSections() {
         const sections = [
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
             'productsSection', 'partMasterSection', 'machinesSection',
-            'operatorsSection', 'departmentsSection', 'scheduleCreateSection', 'scheduleRunSection',
+            'operatorsSection', 'departmentsSection', 'shiftsSection', 'scheduleCreateSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
             'inspectionSection', 'maintenanceSection', 'hrSection'
         ];
@@ -299,6 +309,13 @@ document.addEventListener('DOMContentLoaded', () => {
             addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Dept';
             fetchDepartments();
         }},
+        'sidebarShift': { tab: 'shift', action: () => {
+            if (shiftsSection) shiftsSection.style.display = 'block';
+            importBtn.style.display = 'none';
+            addBtn.style.display = 'inline-flex';
+            addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Shift';
+            fetchShifts();
+        }},
         'sidebarRmReceipt': { tab: 'rm_receipt', action: () => { 
             if (rmReceiptSection) rmReceiptSection.style.display = 'block';
             addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Receipt';
@@ -382,6 +399,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (currentTab === 'machines') openMachineModal(false);
         else if (currentTab === 'operators') openOperatorModal(false);
         else if (currentTab === 'dept') openDeptModal();
+        else if (currentTab === 'shift') openShiftModal();
         else if (currentTab === 'rawmaterial') {
             document.getElementById('rmModalTitle').innerText = 'Add Raw Material';
             document.getElementById('rawMaterialForm').reset();
@@ -2442,8 +2460,130 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // ====== SHIFT CRUD ======
+    async function fetchShifts() {
+        try {
+            const res = await fetch('/api/shifts');
+            const data = await res.json();
+            renderShifts(data);
+            populateShiftDropdowns(data);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderShifts(shifts) {
+        const tbody = document.getElementById('shiftsBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        shifts.forEach(s => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${s.id}</td>
+                <td>${s.name}</td>
+                <td>${s.hours}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-outline edit-shift-btn" data-id="${s.id}" data-name="${s.name}" data-hours="${s.hours}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit</button>
+                    <button class="btn btn-outline delete-shift-btn" data-id="${s.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.querySelectorAll('.edit-shift-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.target.getAttribute('data-id');
+                const name = e.target.getAttribute('data-name');
+                const hours = e.target.getAttribute('data-hours');
+                openShiftModal({ id, name, hours });
+            });
+        });
+
+        document.querySelectorAll('.delete-shift-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (confirm('Delete this shift?')) {
+                    const id = e.target.getAttribute('data-id');
+                    try {
+                        const res = await fetch(`/api/shifts/${id}`, { method: 'DELETE' });
+                        if (res.ok) fetchShifts();
+                        else alert('Error deleting shift');
+                    } catch (err) { console.error(err); }
+                }
+            });
+        });
+    }
+
+    function openShiftModal(shift = null) {
+        if (!shiftModal) return;
+        if (shift) {
+            shiftModalTitle.textContent = 'Edit Shift';
+            shiftIdInput.value = shift.id;
+            shiftNameInput.value = shift.name;
+            shiftHoursInput.value = shift.hours;
+        } else {
+            shiftModalTitle.textContent = 'Add Shift';
+            shiftForm.reset();
+            shiftIdInput.value = '';
+        }
+        shiftModal.classList.add('show');
+    }
+
+    if (cancelShiftBtn) {
+        cancelShiftBtn.addEventListener('click', () => {
+            shiftModal.classList.remove('show');
+        });
+    }
+
+    if (shiftForm) {
+        shiftForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                name: shiftNameInput.value,
+                hours: parseFloat(shiftHoursInput.value) || 8.0
+            };
+            const id = shiftIdInput.value;
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/shifts/${id}` : '/api/shifts';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    shiftModal.classList.remove('show');
+                    fetchShifts();
+                } else {
+                    alert('Error saving shift');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error saving shift');
+            }
+        });
+    }
+
+    function populateShiftDropdowns(shifts) {
+        const selects = ['scheduleRunShift', 'prodLogShift'];
+        
+        selects.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                const currentVal = el.value;
+                let html = '<option value="">-- Select Shift --</option>';
+                shifts.forEach(s => {
+                    html += `<option value="${s.name}">${s.name} (${s.hours} Hrs)</option>`;
+                });
+                el.innerHTML = html;
+                if (currentVal && shifts.find(s => s.name === currentVal)) {
+                    el.value = currentVal;
+                }
+            }
+        });
+    }
+    
     // Initial fetch to populate dropdowns on page load
     fetchDepartments();
+    fetchShifts();
 
     // ====== M/C UTIL REPORT ======
     const generateMcUtilBtn = document.getElementById('generateMcUtilBtn');

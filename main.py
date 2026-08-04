@@ -8,7 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department
+from models import Product, PartMaster, Machine, Operator, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -243,6 +243,19 @@ class DepartmentCreate(DepartmentBase):
     pass
 
 class DepartmentResponse(DepartmentBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+class ShiftBase(BaseModel):
+    name: str
+    hours: float
+
+class ShiftCreate(ShiftBase):
+    pass
+
+class ShiftResponse(ShiftBase):
     id: int
 
     class Config:
@@ -498,6 +511,39 @@ def delete_department(dept_id: int, db: Session = Depends(get_db)):
     db.delete(db_dept)
     db.commit()
     return {"message": "Department deleted successfully"}
+
+# --- Shift Endpoints ---
+@app.get("/api/shifts", response_model=List[ShiftResponse])
+def read_shifts(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return db.query(Shift).offset(skip).limit(limit).all()
+
+@app.post("/api/shifts", response_model=ShiftResponse)
+def create_shift(shift: ShiftCreate, db: Session = Depends(get_db)):
+    db_shift = Shift(**shift.model_dump())
+    db.add(db_shift)
+    db.commit()
+    db.refresh(db_shift)
+    return db_shift
+
+@app.put("/api/shifts/{shift_id}", response_model=ShiftResponse)
+def update_shift(shift_id: int, shift: ShiftCreate, db: Session = Depends(get_db)):
+    db_shift = db.query(Shift).filter(Shift.id == shift_id).first()
+    if not db_shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    for key, value in shift.model_dump().items():
+        setattr(db_shift, key, value)
+    db.commit()
+    db.refresh(db_shift)
+    return db_shift
+
+@app.delete("/api/shifts/{shift_id}")
+def delete_shift(shift_id: int, db: Session = Depends(get_db)):
+    db_shift = db.query(Shift).filter(Shift.id == shift_id).first()
+    if not db_shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    db.delete(db_shift)
+    db.commit()
+    return {"message": "Shift deleted successfully"}
 
 @app.post("/api/operators/bulk_import")
 def bulk_import_operators(payload: BulkImportOperatorPayload, db: Session = Depends(get_db)):

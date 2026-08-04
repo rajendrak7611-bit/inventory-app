@@ -64,6 +64,7 @@
                 <button class="sub-tab" id="sidebarMachines" data-screen="machines">Machines</button>
                 <button class="sub-tab" id="sidebarOperators" data-screen="operators">Operators</button>
                 <button class="sub-tab" id="sidebarDept" data-screen="dept">Dept</button>
+                <button class="sub-tab" id="sidebarShift" data-screen="shift">Shift</button>
             </div>
             <div class="sub-group" id="submenuInventory" style="display: none;">
                 <button class="sub-tab" id="sidebarRmReceipt" data-screen="rawmaterial">Receipt</button>
@@ -149,6 +150,20 @@
                         </tr>
                     </thead>
                     <tbody id="departmentsBody"></tbody>
+                </table>
+            </div>
+
+            <div class="table-container" id="shiftsSection" style="display: none;">
+                <table id="shiftsTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Hours</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="shiftsBody"></tbody>
                 </table>
             </div>
 
@@ -997,6 +1012,30 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" id="cancelDeptBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Details</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for Shift Add/Edit -->
+    <div id="shiftModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="shiftModalTitle">Add Shift</h2>
+            </div>
+            <form id="shiftForm">
+                <input type="hidden" id="shiftId">
+                <div class="form-group">
+                    <label for="shiftName">Shift Name</label>
+                    <input type="text" id="shiftName" required placeholder="e.g. First Shift">
+                </div>
+                <div class="form-group">
+                    <label for="shiftHours">Hours</label>
+                    <input type="number" step="0.1" id="shiftHours" required placeholder="e.g. 8.0">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="cancelShiftBtn">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Details</button>
                 </div>
             </form>

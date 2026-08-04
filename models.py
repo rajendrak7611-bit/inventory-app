@@ -68,6 +68,14 @@ class Department(Base):
     name = Column(String, index=True, unique=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class Shift(Base):
+    __tablename__ = "shifts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True, unique=True)
+    hours = Column(Float, default=8.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class Schedule(Base):
     __tablename__ = "schedules"
 
