@@ -409,7 +409,10 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (currentTab === 'rm_receipt' || currentTab === 'rm_despatch') {
             const isReceipt = currentTab === 'rm_receipt';
             document.getElementById('rmLogModalTitle').innerText = isReceipt ? 'Add Receipt' : 'Add Despatch';
+            const savedDate = document.getElementById('rmLogDate').value;
             document.getElementById('rmLogForm').reset();
+            if (savedDate) document.getElementById('rmLogDate').value = savedDate;
+            else document.getElementById('rmLogDate').valueAsDate = new Date();
             document.getElementById('rmLogType').value = isReceipt ? 'receipt' : 'despatch';
             
             // Fetch if empty
@@ -1109,7 +1112,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 if (response.ok) {
                     alert(editingScheduleId ? 'Schedule updated successfully!' : 'Schedule created successfully!');
+                    const savedDate = document.getElementById('scheduleTargetDate').value;
                     scheduleCreateForm.reset();
+                    if (savedDate) document.getElementById('scheduleTargetDate').value = savedDate;
                     editingScheduleId = null;
                     document.querySelector('#scheduleCreateForm button').textContent = 'Create Schedule';
                     scheduleDept.value = ''; // Reset dept field
@@ -1363,7 +1368,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function initDebur() {
         try {
-            document.getElementById('deburDate').valueAsDate = new Date();
+            if (!document.getElementById('deburDate').value) {
+                document.getElementById('deburDate').valueAsDate = new Date();
+            }
             
             if (deburAllParts.length === 0) {
                 const partsRes = await fetch('/api/partmaster');
@@ -1541,7 +1548,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function initInspection() {
         try {
-            document.getElementById('inspDate').valueAsDate = new Date();
+            if (!document.getElementById('inspDate').value) {
+                document.getElementById('inspDate').valueAsDate = new Date();
+            }
             
             if (inspAllParts.length === 0) {
                 const partsRes = await fetch('/api/partmaster');
@@ -1727,7 +1736,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentPartOperations = [];
 
     async function initProdLog() {
-        document.getElementById('prodLogDate').valueAsDate = new Date();
+        if (!document.getElementById('prodLogDate').value) {
+            document.getElementById('prodLogDate').valueAsDate = new Date();
+        }
         
         // Fetch dependencies
         const machRes = await fetch('/api/machines');
@@ -1987,8 +1998,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         document.getElementById('prodLogOperator').value = savedOperator;
                         document.getElementById('prodLogContinueOperator').value = 'y';
                     } else {
+                        const savedDate = document.getElementById('prodLogDate').value;
                         prodLogForm.reset();
-                        document.getElementById('prodLogDate').valueAsDate = new Date(); // reset date
+                        if (savedDate) document.getElementById('prodLogDate').value = savedDate;
+                        else document.getElementById('prodLogDate').valueAsDate = new Date();
                         if (document.getElementById('prodLogContinueOperator')) {
                             document.getElementById('prodLogContinueOperator').value = 'n';
                         }
