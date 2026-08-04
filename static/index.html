@@ -560,6 +560,13 @@
                                 <label for="prodLogMultipleMc">Multiple M/C</label>
                                 <input type="number" id="prodLogMultipleMc" value="1" min="1" required style="width: 100%; padding: 0.4rem 0.6rem;">
                             </div>
+                            <div class="form-group" style="grid-column: 1 / -1;">
+                                <label for="prodLogContinueOperator">To continue with same operator (y/n)</label>
+                                <select id="prodLogContinueOperator" style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
+                                    <option value="y">y</option>
+                                    <option value="n" selected>n</option>
+                                </select>
+                            </div>
                             <div style="grid-column: 1 / -1; margin-top: 10px; border: 1px solid var(--border-color); padding: 15px; border-radius: 8px;">
                                 <h4 style="margin-bottom: 15px; font-weight: 500; font-size: 14px;">Idle Time & Reasons</h4>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 10px;">

@@ -1951,8 +1951,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 if (response.ok) {
                     alert('Production Log saved!');
-                    prodLogForm.reset();
-                    document.getElementById('prodLogDate').valueAsDate = new Date(); // reset date
+                    
+                    const continueOp = document.getElementById('prodLogContinueOperator') ? document.getElementById('prodLogContinueOperator').value : 'n';
+                    
+                    if (continueOp === 'y') {
+                        const savedDept = data.dept;
+                        const savedDate = data.date;
+                        const savedShift = data.shift;
+                        const savedSetter = data.setter;
+                        const savedOperator = data.operator;
+                        
+                        prodLogForm.reset();
+                        
+                        document.getElementById('prodLogDept').value = savedDept;
+                        document.getElementById('prodLogDate').value = savedDate;
+                        document.getElementById('prodLogShift').value = savedShift;
+                        document.getElementById('prodLogSetter').value = savedSetter;
+                        document.getElementById('prodLogOperator').value = savedOperator;
+                        document.getElementById('prodLogContinueOperator').value = 'y';
+                    } else {
+                        prodLogForm.reset();
+                        document.getElementById('prodLogDate').valueAsDate = new Date(); // reset date
+                        if (document.getElementById('prodLogContinueOperator')) {
+                            document.getElementById('prodLogContinueOperator').value = 'n';
+                        }
+                    }
+                    
                     fetchProdLogs();
                 } else {
                     alert('Error saving Prod Log');
