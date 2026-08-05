@@ -1380,15 +1380,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 // fixed columns: debur, for ins, rework, nc, rfd, desp
-                const deburProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const forInsProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const deburredTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const forInsLogTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const reworkProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const ncProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const rfdProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const despProd = allRmLogs.filter(l => l.finish_part_no === partno && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
 
-                const deburBal = deburProd - forInsProd;
-                const forInsBal = forInsProd - (rfdProd + reworkProd + ncProd);
+                const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
+                const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd);
+
+                const deburBal = 0; // Deburring is completed once deburredTotal is logged
+                const forInsBal = effectiveForIns - totalInspected;
                 const rfdBal = rfdProd - despProd;
 
                 rowHtml += `<td>${deburBal}</td>`;
@@ -1584,13 +1587,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     return currentProd - nextProd;
                 };
 
-                const forInsProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const deburredTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const forInsLogTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const reworkProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const ncProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const rfdProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const despProd = allRmLogs.filter(l => (l.finish_part_no || '').trim().toUpperCase() === pName.trim().toUpperCase() && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
 
-                const inspecBal = forInsProd - (rfdProd + reworkProd + ncProd);
+                const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
+                const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd);
+                const inspecBal = effectiveForIns - totalInspected;
                 const rfdBal = rfdProd - despProd;
 
                 const trRow = document.createElement('tr');
