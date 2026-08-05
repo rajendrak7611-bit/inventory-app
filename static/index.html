@@ -483,72 +483,34 @@
                                 <input type="number" id="inspRFD" placeholder="e.g. 0" style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
                             </div>
 
-                            <!-- Rejection Qty & Reason -->
-                            <div class="form-group">
-                                <label for="inspRejection" style="color: #ef4444; font-weight: 500;">Rejection Qty</label>
-                                <input type="number" id="inspRejection" placeholder="e.g. 0" style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
-                            </div>
-                            <div class="form-group">
-                                <label for="inspRejectionReason" style="color: #ef4444; font-weight: 500;">Rejection Reason</label>
-                                <select id="inspRejectionReason" style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
-                                    <option value="None">None</option>
-                                    <option value="Dimension OOT">Dimension OOT</option>
-                                    <option value="Bore Size Issue">Bore Size Issue</option>
-                                    <option value="Thread Issue">Thread Issue</option>
-                                    <option value="Surface Finish">Surface Finish</option>
-                                    <option value="Burr / Dent">Burr / Dent</option>
-                                    <option value="Material Defect">Material Defect</option>
-                                    <option value="Blow Hole">Blow Hole</option>
-                                    <option value="Visual Defect">Visual Defect</option>
-                                    <option value="Tooling Mark">Tooling Mark</option>
-                                    <option value="Setup Issue">Setup Issue</option>
-                                    <option value="Others">Others</option>
-                                </select>
+                            <!-- Rejection Multi-Row Section -->
+                            <div style="grid-column: 1 / -1; border: 1px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.02); padding: 12px; border-radius: 8px; margin-top: 5px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <label style="color: #ef4444; font-weight: 600; margin: 0;">Rejection (Qty & Reasons)</label>
+                                    <button type="button" id="addRejectionRowBtn" class="btn btn-outline" style="padding: 2px 10px; font-size: 0.8rem; color: #ef4444; border-color: #ef4444;">+ Add Rejection Row</button>
+                                </div>
+                                <div id="rejectionRowsContainer" style="display: flex; flex-direction: column; gap: 8px;"></div>
                             </div>
 
-                            <!-- Rework Qty & Reason -->
-                            <div class="form-group">
-                                <label for="inspRework" style="color: #f59e0b; font-weight: 500;">Rework Qty</label>
-                                <input type="number" id="inspRework" placeholder="e.g. 0" style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
-                            </div>
-                            <div class="form-group">
-                                <label for="inspReworkReason" style="color: #f59e0b; font-weight: 500;">Rework Reason</label>
-                                <select id="inspReworkReason" style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
-                                    <option value="None">None</option>
-                                    <option value="Dimension OOT">Dimension OOT</option>
-                                    <option value="Bore Size Issue">Bore Size Issue</option>
-                                    <option value="Thread Issue">Thread Issue</option>
-                                    <option value="Surface Finish">Surface Finish</option>
-                                    <option value="Burr / Dent">Burr / Dent</option>
-                                    <option value="Material Defect">Material Defect</option>
-                                    <option value="Visual Defect">Visual Defect</option>
-                                    <option value="Tooling Mark">Tooling Mark</option>
-                                    <option value="Setup Issue">Setup Issue</option>
-                                    <option value="Others">Others</option>
-                                </select>
+                            <!-- Rework Multi-Row Section -->
+                            <div style="grid-column: 1 / -1; border: 1px solid rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.02); padding: 12px; border-radius: 8px; margin-top: 5px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <label style="color: #f59e0b; font-weight: 600; margin: 0;">Rework (Qty & Reasons)</label>
+                                    <button type="button" id="addReworkRowBtn" class="btn btn-outline" style="padding: 2px 10px; font-size: 0.8rem; color: #f59e0b; border-color: #f59e0b;">+ Add Rework Row</button>
+                                </div>
+                                <div id="reworkRowsContainer" style="display: flex; flex-direction: column; gap: 8px;"></div>
                             </div>
 
-                            <!-- NC Qty & Reason -->
-                            <div class="form-group">
-                                <label for="inspNC" style="color: #6366f1; font-weight: 500;">NC Qty</label>
-                                <input type="number" id="inspNC" placeholder="e.g. 0" style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
+                            <!-- NC Multi-Row Section -->
+                            <div style="grid-column: 1 / -1; border: 1px solid rgba(99, 102, 241, 0.3); background: rgba(99, 102, 241, 0.02); padding: 12px; border-radius: 8px; margin-top: 5px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <label style="color: #6366f1; font-weight: 600; margin: 0;">NC (Qty & Reasons)</label>
+                                    <button type="button" id="addNCRowBtn" class="btn btn-outline" style="padding: 2px 10px; font-size: 0.8rem; color: #6366f1; border-color: #6366f1;">+ Add NC Row</button>
+                                </div>
+                                <div id="ncRowsContainer" style="display: flex; flex-direction: column; gap: 8px;"></div>
                             </div>
-                            <div class="form-group">
-                                <label for="inspNCReason" style="color: #6366f1; font-weight: 500;">NC Reason</label>
-                                <select id="inspNCReason" style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif;">
-                                    <option value="None">None</option>
-                                    <option value="Dimension OOT">Dimension OOT</option>
-                                    <option value="Bore Size Issue">Bore Size Issue</option>
-                                    <option value="Thread Issue">Thread Issue</option>
-                                    <option value="Surface Finish">Surface Finish</option>
-                                    <option value="Burr / Dent">Burr / Dent</option>
-                                    <option value="Material Defect">Material Defect</option>
-                                    <option value="Visual Defect">Visual Defect</option>
-                                    <option value="Tooling Mark">Tooling Mark</option>
-                                    <option value="Setup Issue">Setup Issue</option>
-                                    <option value="Others">Others</option>
-                                </select>
-                            </div>
+
+                            <datalist id="inspectionReasonsDatalist"></datalist>
 
                             <div style="grid-column: 1 / -1; margin-top: 1rem;">
                                 <button type="submit" class="btn btn-primary" style="width: 100%;">Save Inspection Log</button>
@@ -1451,6 +1413,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=108"></script>
+    <script src="/static/app.js?v=109"></script>
 </body>
 </html>

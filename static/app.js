@@ -1822,9 +1822,77 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- INSPECTION LOGIC ---
     let inspAllParts = [];
     let inspOperatorsLoaded = false;
-    
+    let savedInspectionReasons = new Set();
+
     document.getElementById('inspDeptSelect').addEventListener('change', fetchInspectionStatus);
-    
+
+    async function loadPastInspectionReasons() {
+        try {
+            const res = await fetch('/api/prodlog');
+            const logs = await res.json();
+            logs.forEach(l => {
+                const op = (l.opn_no || '').toLowerCase();
+                if (['rejection', 'rework', 'nc'].includes(op)) {
+                    const rsn = (l.idle_reason || l.description || '').trim();
+                    if (rsn && rsn !== 'None' && rsn !== 'Rejection' && rsn !== 'Rework' && rsn !== 'NC') {
+                        savedInspectionReasons.add(rsn);
+                    }
+                }
+            });
+            updateReasonsDatalist();
+        } catch (e) { console.error(e); }
+    }
+
+    function updateReasonsDatalist() {
+        const datalist = document.getElementById('inspectionReasonsDatalist');
+        if (!datalist) return;
+        datalist.innerHTML = '';
+        savedInspectionReasons.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r;
+            datalist.appendChild(opt);
+        });
+    }
+
+    function createInspectionRow(containerId) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 'insp-detail-row';
+        rowDiv.style.display = 'flex';
+        rowDiv.style.gap = '8px';
+        rowDiv.style.alignItems = 'center';
+
+        rowDiv.innerHTML = `
+            <input type="number" class="insp-row-qty" placeholder="Qty" min="1" style="width: 100px; padding: 0.4rem 0.6rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.05); color: var(--text-main); font-family: 'Inter', sans-serif;">
+            <input type="text" class="insp-row-reason" list="inspectionReasonsDatalist" placeholder="Type or select reason..." style="flex: 1; padding: 0.4rem 0.6rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.05); color: var(--text-main); font-family: 'Inter', sans-serif;">
+            <button type="button" class="btn-text remove-insp-row-btn" style="color: #ef4444; font-size: 1.2rem; font-weight: bold; cursor: pointer; padding: 0 6px;">&times;</button>
+        `;
+
+        rowDiv.querySelector('.remove-insp-row-btn').addEventListener('click', () => {
+            rowDiv.remove();
+            autoSumInspection();
+        });
+
+        rowDiv.querySelector('.insp-row-qty').addEventListener('input', autoSumInspection);
+
+        container.appendChild(rowDiv);
+    }
+
+    function initInspectionRows() {
+        ['rejectionRowsContainer', 'reworkRowsContainer', 'ncRowsContainer'].forEach(cId => {
+            const container = document.getElementById(cId);
+            if (container && container.children.length === 0) {
+                createInspectionRow(cId);
+            }
+        });
+    }
+
+    document.getElementById('addRejectionRowBtn')?.addEventListener('click', () => createInspectionRow('rejectionRowsContainer'));
+    document.getElementById('addReworkRowBtn')?.addEventListener('click', () => createInspectionRow('reworkRowsContainer'));
+    document.getElementById('addNCRowBtn')?.addEventListener('click', () => createInspectionRow('ncRowsContainer'));
+
     async function initInspection() {
         try {
             if (!document.getElementById('inspDate').value) {
@@ -1848,6 +1916,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 inspOperatorsLoaded = true;
             }
             
+            loadPastInspectionReasons();
+            initInspectionRows();
             fetchInspectionLogs();
             
             const deptSelect = document.getElementById('inspDeptSelect');
@@ -1915,18 +1985,28 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function autoSumInspection() {
         const rfd = parseInt(document.getElementById('inspRFD').value) || 0;
-        const rej = parseInt(document.getElementById('inspRejection').value) || 0;
-        const rew = parseInt(document.getElementById('inspRework').value) || 0;
-        const nc = parseInt(document.getElementById('inspNC').value) || 0;
-        const sum = rfd + rej + rew + nc;
+        
+        let totalRej = 0;
+        document.querySelectorAll('#rejectionRowsContainer .insp-row-qty').forEach(input => {
+            totalRej += parseInt(input.value) || 0;
+        });
+
+        let totalRew = 0;
+        document.querySelectorAll('#reworkRowsContainer .insp-row-qty').forEach(input => {
+            totalRew += parseInt(input.value) || 0;
+        });
+
+        let totalNC = 0;
+        document.querySelectorAll('#ncRowsContainer .insp-row-qty').forEach(input => {
+            totalNC += parseInt(input.value) || 0;
+        });
+
+        const sum = rfd + totalRej + totalRew + totalNC;
         if (sum > 0) {
             document.getElementById('inspQty').value = sum;
         }
     }
-    ['inspRFD', 'inspRejection', 'inspRework', 'inspNC'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.addEventListener('input', autoSumInspection);
-    });
+    document.getElementById('inspRFD')?.addEventListener('input', autoSumInspection);
 
     document.getElementById('inspForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -1939,12 +2019,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const inspQty = parseInt(document.getElementById('inspQty').value) || 0;
         const rfdQty = parseInt(document.getElementById('inspRFD').value) || 0;
-        const rejectionQty = parseInt(document.getElementById('inspRejection').value) || 0;
-        const rejectionReason = document.getElementById('inspRejectionReason').value;
-        const reworkQty = parseInt(document.getElementById('inspRework').value) || 0;
-        const reworkReason = document.getElementById('inspReworkReason').value;
-        const ncQty = parseInt(document.getElementById('inspNC').value) || 0;
-        const ncReason = document.getElementById('inspNCReason').value;
         
         if (inspQty === 0) {
             alert("Total Inspected quantity cannot be zero.");
@@ -1961,10 +2035,39 @@ document.addEventListener('DOMContentLoaded', () => {
         const payloads = [];
         payloads.push(createPayload('for ins', inspQty));
         if (rfdQty > 0) payloads.push(createPayload('rfd', rfdQty));
-        if (rejectionQty > 0) payloads.push(createPayload('rejection', rejectionQty, rejectionReason !== 'None' ? rejectionReason : 'Rejection'));
-        if (reworkQty > 0) payloads.push(createPayload('rework', reworkQty, reworkReason !== 'None' ? reworkReason : 'Rework'));
-        if (ncQty > 0) payloads.push(createPayload('nc', ncQty, ncReason !== 'None' ? ncReason : 'NC'));
+
+        // Rejection rows
+        document.querySelectorAll('#rejectionRowsContainer .insp-detail-row').forEach(row => {
+            const qty = parseInt(row.querySelector('.insp-row-qty').value) || 0;
+            const rsn = row.querySelector('.insp-row-reason').value.trim();
+            if (qty > 0) {
+                payloads.push(createPayload('rejection', qty, rsn || 'Rejection'));
+                if (rsn) savedInspectionReasons.add(rsn);
+            }
+        });
+
+        // Rework rows
+        document.querySelectorAll('#reworkRowsContainer .insp-detail-row').forEach(row => {
+            const qty = parseInt(row.querySelector('.insp-row-qty').value) || 0;
+            const rsn = row.querySelector('.insp-row-reason').value.trim();
+            if (qty > 0) {
+                payloads.push(createPayload('rework', qty, rsn || 'Rework'));
+                if (rsn) savedInspectionReasons.add(rsn);
+            }
+        });
+
+        // NC rows
+        document.querySelectorAll('#ncRowsContainer .insp-detail-row').forEach(row => {
+            const qty = parseInt(row.querySelector('.insp-row-qty').value) || 0;
+            const rsn = row.querySelector('.insp-row-reason').value.trim();
+            if (qty > 0) {
+                payloads.push(createPayload('nc', qty, rsn || 'NC'));
+                if (rsn) savedInspectionReasons.add(rsn);
+            }
+        });
         
+        updateReasonsDatalist();
+
         try {
             let successCount = 0;
             for (const payload of payloads) {
@@ -1980,12 +2083,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('inspHours').value = '';
                 document.getElementById('inspQty').value = '';
                 document.getElementById('inspRFD').value = '';
-                document.getElementById('inspRejection').value = '';
-                document.getElementById('inspRejectionReason').value = 'None';
-                document.getElementById('inspRework').value = '';
-                document.getElementById('inspReworkReason').value = 'None';
-                document.getElementById('inspNC').value = '';
-                document.getElementById('inspNCReason').value = 'None';
+                
+                ['rejectionRowsContainer', 'reworkRowsContainer', 'ncRowsContainer'].forEach(cId => {
+                    const c = document.getElementById(cId);
+                    if (c) c.innerHTML = '';
+                });
+                initInspectionRows();
                 
                 fetchInspectionStatus(); // Refresh left side
                 fetchInspectionLogs();   // Refresh right side logs
@@ -2018,13 +2121,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const date = log.date;
                 const op = log.operator || '';
                 const pno = log.partno;
-                const runtime = log.runtime || 0;
                 
-                // Find matching rfd, rejection, rework, nc logs logged at same session
-                const rfdLog = allLogs.find(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'rfd' && Math.abs((l.id || 0) - (log.id || 0)) <= 4);
-                const rejLog = allLogs.find(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'rejection' && Math.abs((l.id || 0) - (log.id || 0)) <= 4);
-                const rewLog = allLogs.find(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'rework' && Math.abs((l.id || 0) - (log.id || 0)) <= 4);
-                const ncLog = allLogs.find(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'nc' && Math.abs((l.id || 0) - (log.id || 0)) <= 4);
+                const rfdLogs = allLogs.filter(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'rfd' && Math.abs((l.id || 0) - (log.id || 0)) <= 15);
+                const rejLogs = allLogs.filter(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'rejection' && Math.abs((l.id || 0) - (log.id || 0)) <= 15);
+                const rewLogs = allLogs.filter(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'rework' && Math.abs((l.id || 0) - (log.id || 0)) <= 15);
+                const ncLogs = allLogs.filter(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'nc' && Math.abs((l.id || 0) - (log.id || 0)) <= 15);
+
+                const totalRfd = rfdLogs.reduce((s, l) => s + (l.prod_qty || 0), 0);
+
+                const rejStr = rejLogs.map(l => `<span style="color:#ef4444; font-weight:600;">${l.prod_qty}</span> <small style="color:var(--text-muted);">(${l.idle_reason || l.description || ''})</small>`).join('<br>') || '0';
+                const rewStr = rewLogs.map(l => `<span style="color:#f59e0b; font-weight:600;">${l.prod_qty}</span> <small style="color:var(--text-muted);">(${l.idle_reason || l.description || ''})</small>`).join('<br>') || '0';
+                const ncStr = ncLogs.map(l => `<span style="color:#6366f1; font-weight:600;">${l.prod_qty}</span> <small style="color:var(--text-muted);">(${l.idle_reason || l.description || ''})</small>`).join('<br>') || '0';
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -2033,10 +2140,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${log.partno}</td>
                     <td>${log.runtime || ''}</td>
                     <td><span style="font-weight: bold; color: var(--primary-color);">${log.prod_qty || 0}</span></td>
-                    <td>${rfdLog ? `<span style="color:#10b981; font-weight:600;">${rfdLog.prod_qty}</span>` : '0'}</td>
-                    <td>${rejLog ? `<span style="color:#ef4444; font-weight:600;">${rejLog.prod_qty}</span> <small style="color:var(--text-muted);">(${rejLog.idle_reason || rejLog.description || ''})</small>` : '0'}</td>
-                    <td>${rewLog ? `<span style="color:#f59e0b; font-weight:600;">${rewLog.prod_qty}</span> <small style="color:var(--text-muted);">(${rewLog.idle_reason || rewLog.description || ''})</small>` : '0'}</td>
-                    <td>${ncLog ? `<span style="color:#6366f1; font-weight:600;">${ncLog.prod_qty}</span> <small style="color:var(--text-muted);">(${ncLog.idle_reason || ncLog.description || ''})</small>` : '0'}</td>
+                    <td><span style="color:#10b981; font-weight:600;">${totalRfd}</span></td>
+                    <td>${rejStr}</td>
+                    <td>${rewStr}</td>
+                    <td>${ncStr}</td>
                 `;
                 tbody.appendChild(tr);
             });
