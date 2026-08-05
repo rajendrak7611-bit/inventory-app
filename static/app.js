@@ -2196,15 +2196,60 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    document.getElementById('exportInspLogsBtn')?.addEventListener('click', () => {
-        if (!currentInspExportData || currentInspExportData.length === 0) {
-            alert("No inspection logs available to export.");
-            return;
+    document.getElementById('exportInspLogsBtn')?.addEventListener('click', async () => {
+        try {
+            const res = await fetch('/api/prodlog');
+            const allLogs = await res.json();
+            const inspLogs = allLogs.filter(l => (l.opn_no || '').toLowerCase() === 'for ins');
+            
+            inspLogs.sort((a, b) => b.id - a.id);
+            
+            if (inspLogs.length === 0) {
+                alert("No inspection logs available to export.");
+                return;
+            }
+
+            const exportRows = [];
+
+            inspLogs.forEach(log => {
+                const date = log.date;
+                const op = log.operator || '';
+                const pno = log.partno;
+
+                const rfdLogs = allLogs.filter(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'rfd' && Math.abs((l.id || 0) - (log.id || 0)) <= 15);
+                const rejLogs = allLogs.filter(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'rejection' && Math.abs((l.id || 0) - (log.id || 0)) <= 15);
+                const rewLogs = allLogs.filter(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'rework' && Math.abs((l.id || 0) - (log.id || 0)) <= 15);
+                const ncLogs = allLogs.filter(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'nc' && Math.abs((l.id || 0) - (log.id || 0)) <= 15);
+
+                const totalRfd = rfdLogs.reduce((s, l) => s + (l.prod_qty || 0), 0);
+                const maxRows = Math.max(1, rejLogs.length, rewLogs.length, ncLogs.length);
+
+                for (let i = 0; i < maxRows; i++) {
+                    exportRows.push({
+                        "Date": i === 0 ? date : '',
+                        "Operator": i === 0 ? op : '',
+                        "Part No": i === 0 ? pno : '',
+                        "Hours": i === 0 ? (log.runtime || 0) : '',
+                        "Total Inspected": i === 0 ? (log.prod_qty || 0) : '',
+                        "RFD": i === 0 ? totalRfd : '',
+                        "Rejection Qty": rejLogs[i] ? rejLogs[i].prod_qty : '',
+                        "Rejection Reason": rejLogs[i] ? (rejLogs[i].idle_reason || rejLogs[i].description || '') : '',
+                        "Rework Qty": rewLogs[i] ? rewLogs[i].prod_qty : '',
+                        "Rework Reason": rewLogs[i] ? (rewLogs[i].idle_reason || rewLogs[i].description || '') : '',
+                        "NC Qty": ncLogs[i] ? ncLogs[i].prod_qty : '',
+                        "NC Reason": ncLogs[i] ? (ncLogs[i].idle_reason || ncLogs[i].description || '') : ''
+                    });
+                }
+            });
+
+            const ws = XLSX.utils.json_to_sheet(exportRows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Inspection Logs");
+            XLSX.writeFile(wb, `Inspection_Logs_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        } catch (err) {
+            console.error("Error exporting inspection logs:", err);
+            alert("Failed to export inspection logs.");
         }
-        const ws = XLSX.utils.json_to_sheet(currentInspExportData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Inspection Logs");
-        XLSX.writeFile(wb, `Inspection_Logs_${new Date().toISOString().slice(0, 10)}.xlsx`);
     });
 
     // --- PROD LOG LOGIC ---
