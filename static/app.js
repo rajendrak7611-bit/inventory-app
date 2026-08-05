@@ -2101,6 +2101,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    let currentInspExportData = [];
+
     async function fetchInspectionLogs() {
         try {
             const res = await fetch('/api/prodlog');
@@ -2113,10 +2115,13 @@ document.addEventListener('DOMContentLoaded', () => {
             tbody.innerHTML = '';
             
             if (inspLogs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">No inspection logs found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted)">No inspection logs found.</td></tr>';
+                currentInspExportData = [];
                 return;
             }
             
+            currentInspExportData = [];
+
             inspLogs.slice(0, 50).forEach(log => {
                 const date = log.date;
                 const op = log.operator || '';
@@ -2129,9 +2134,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const totalRfd = rfdLogs.reduce((s, l) => s + (l.prod_qty || 0), 0);
 
+                const rejText = rejLogs.map(l => `${l.prod_qty} (${l.idle_reason || l.description || ''})`).join(', ') || '0';
+                const rewText = rewLogs.map(l => `${l.prod_qty} (${l.idle_reason || l.description || ''})`).join(', ') || '0';
+                const ncText = ncLogs.map(l => `${l.prod_qty} (${l.idle_reason || l.description || ''})`).join(', ') || '0';
+
+                currentInspExportData.push({
+                    "Date": date,
+                    "Operator": op,
+                    "Part No": pno,
+                    "Hours": log.runtime || 0,
+                    "Total Inspected": log.prod_qty || 0,
+                    "RFD": totalRfd,
+                    "Rejection": rejText,
+                    "Rework": rewText,
+                    "NC": ncText
+                });
+
                 const rejStr = rejLogs.map(l => `<span style="color:#ef4444; font-weight:600;">${l.prod_qty}</span> <small style="color:var(--text-muted);">(${l.idle_reason || l.description || ''})</small>`).join('<br>') || '0';
                 const rewStr = rewLogs.map(l => `<span style="color:#f59e0b; font-weight:600;">${l.prod_qty}</span> <small style="color:var(--text-muted);">(${l.idle_reason || l.description || ''})</small>`).join('<br>') || '0';
                 const ncStr = ncLogs.map(l => `<span style="color:#6366f1; font-weight:600;">${l.prod_qty}</span> <small style="color:var(--text-muted);">(${l.idle_reason || l.description || ''})</small>`).join('<br>') || '0';
+
+                const allRelatedIds = [log.id, ...rfdLogs.map(l => l.id), ...rejLogs.map(l => l.id), ...rewLogs.map(l => l.id), ...ncLogs.map(l => l.id)];
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -2144,13 +2167,45 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${rejStr}</td>
                     <td>${rewStr}</td>
                     <td>${ncStr}</td>
+                    <td>
+                        <button class="delete-insp-log-btn btn-text" style="color: #ef4444; cursor: pointer; padding: 2px 6px; font-size: 0.85rem;" title="Delete Log">
+                            <i class="fas fa-trash-alt"></i> Delete
+                        </button>
+                    </td>
                 `;
+
+                tr.querySelector('.delete-insp-log-btn').addEventListener('click', async () => {
+                    if (confirm(`Are you sure you want to delete inspection log for Part No: ${pno} (Date: ${date})?`)) {
+                        try {
+                            for (const id of allRelatedIds) {
+                                await fetch(`/api/prodlog/${id}`, { method: 'DELETE' });
+                            }
+                            fetchInspectionStatus();
+                            fetchInspectionLogs();
+                        } catch (err) {
+                            console.error('Error deleting inspection log:', err);
+                            alert("Failed to delete log.");
+                        }
+                    }
+                });
+
                 tbody.appendChild(tr);
             });
         } catch (e) {
             console.error('Error fetching inspection logs:', e);
         }
     }
+
+    document.getElementById('exportInspLogsBtn')?.addEventListener('click', () => {
+        if (!currentInspExportData || currentInspExportData.length === 0) {
+            alert("No inspection logs available to export.");
+            return;
+        }
+        const ws = XLSX.utils.json_to_sheet(currentInspExportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Inspection Logs");
+        XLSX.writeFile(wb, `Inspection_Logs_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    });
 
     // --- PROD LOG LOGIC ---
     let prodLogAllMachines = [];

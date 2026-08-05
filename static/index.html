@@ -521,7 +521,12 @@
                 
                 <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 30px 0;">
                 
-                <h3 style="margin-bottom: 15px; color: var(--text-muted); font-size: 1.1rem;">Recent Inspection Logs</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0; color: var(--text-muted); font-size: 1.1rem;">Recent Inspection Logs</h3>
+                    <button type="button" id="exportInspLogsBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; color: #10b981; border-color: #10b981; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-file-excel"></i> Export to Excel
+                    </button>
+                </div>
                 <div style="max-height: 400px; overflow-y: auto;">
                     <table style="width: 100%;">
                         <thead>
@@ -535,6 +540,7 @@
                                 <th>Rejection</th>
                                 <th>Rework</th>
                                 <th>NC</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody id="inspLogsBody">
@@ -1413,6 +1419,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=109"></script>
+    <script src="/static/app.js?v=110"></script>
 </body>
 </html>
