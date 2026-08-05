@@ -1442,7 +1442,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     { title: "F Avail", rowspan: 2 },
                     { title: "Fac & cen", rowspan: 2 },
                     { title: "Turning", rowspan: 2 },
-                    { title: "HT", colspan: 2, subList: ["Anusha", "JMS"] },
+                    { title: "HT", colspan: 3, subList: ["For HT", "Anusha", "JMS"] },
                     { title: "Grinding", rowspan: 2 },
                     { title: "Inspec", rowspan: 2 },
                     { title: "RFD", rowspan: 2 },
@@ -1513,8 +1513,8 @@ document.addEventListener('DOMContentLoaded', () => {
             group.headers.forEach(h => {
                 if (h.rowspan === 2) {
                     trHeader1.innerHTML += `<th rowspan="2" style="border:1px solid #cbd5e1; padding:6px; text-align:center; background:#dbeafe;">${h.title}</th>`;
-                } else if (h.colspan === 2) {
-                    trHeader1.innerHTML += `<th colspan="2" style="border:1px solid #cbd5e1; padding:6px; text-align:center; background:#dbeafe;">${h.title}</th>`;
+                } else if (h.colspan) {
+                    trHeader1.innerHTML += `<th colspan="${h.colspan}" style="border:1px solid #cbd5e1; padding:6px; text-align:center; background:#dbeafe;">${h.title}</th>`;
                     if (h.subList) {
                         h.subList.forEach(sub => {
                             trHeader2.innerHTML += `<th style="border:1px solid #cbd5e1; padding:6px; text-align:center; background:#eff6ff;">${sub}</th>`;
@@ -1609,6 +1609,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (group.name === 'Group 1') {
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(1)}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(2)}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(3)}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingAnusha}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingJMS}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(6)}</td>`;
