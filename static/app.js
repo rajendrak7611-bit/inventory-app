@@ -2256,32 +2256,74 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { console.error(e); }
     }
 
+    const prodLogMachineIdle = document.getElementById('prodLogMachineIdle');
+    const prodLogProdFields = document.getElementById('prodLogProdFields');
+
+    function toggleMachineIdleMode() {
+        if (!prodLogMachineIdle || !prodLogProdFields) return;
+        const isIdle = prodLogMachineIdle.value === 'y';
+        if (isIdle) {
+            prodLogProdFields.style.display = 'none';
+            ['prodLogOperator', 'prodLogPartNo', 'prodLogOpnNo', 'prodLogRuntime', 'prodLogProdQty'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.removeAttribute('required');
+            });
+        } else {
+            prodLogProdFields.style.display = 'grid';
+            ['prodLogOperator', 'prodLogPartNo', 'prodLogOpnNo', 'prodLogRuntime', 'prodLogProdQty'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.setAttribute('required', 'required');
+            });
+        }
+        validateHours();
+    }
+
+    if (prodLogMachineIdle) {
+        prodLogMachineIdle.addEventListener('change', toggleMachineIdleMode);
+    }
+
     const prodLogForm = document.getElementById('prodLogForm');
     if (prodLogForm) {
         prodLogForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+
+            const isIdle = document.getElementById('prodLogMachineIdle') ? document.getElementById('prodLogMachineIdle').value === 'y' : false;
+
+            if (isIdle) {
+                const idleHrs = parseFloat(document.getElementById('prodLogIdleHours').value) || 0;
+                const idleRsn = document.getElementById('prodLogIdleReason').value;
+                if (idleHrs <= 0) {
+                    alert('Please enter Idle Hours for the idle machine.');
+                    return;
+                }
+                if (!idleRsn || idleRsn === 'None') {
+                    alert('Please select an Idle Reason.');
+                    return;
+                }
+            }
+
             const data = {
                 dept: document.getElementById('prodLogDept').value,
                 date: document.getElementById('prodLogDate').value,
                 shift: document.getElementById('prodLogShift').value,
                 setter: document.getElementById('prodLogSetter').value,
                 machine: document.getElementById('prodLogMachine').value,
-                operator: document.getElementById('prodLogOperator').value,
-                multiple_mc: parseInt(document.getElementById('prodLogMultipleMc').value) || 1,
-                partno: document.getElementById('prodLogPartNo').value,
-                opn_no: document.getElementById('prodLogOpnNo').value,
-                description: document.getElementById('prodLogDescription').value,
-                cycle_time: parseFloat(document.getElementById('prodLogCycleTime').value) || 0,
-                runtime: parseFloat(document.getElementById('prodLogRuntime').value) || 0,
-                target_qty: parseFloat(document.getElementById('prodLogTargetQty').value) || 0,
-                prod_qty: parseFloat(document.getElementById('prodLogProdQty').value) || 0,
-                efficiency: parseFloat(document.getElementById('prodLogEfficiency').value) || 0,
+                operator: isIdle ? "" : document.getElementById('prodLogOperator').value,
+                multiple_mc: isIdle ? 1 : (parseInt(document.getElementById('prodLogMultipleMc').value) || 1),
+                partno: isIdle ? "MACHINE IDLE" : document.getElementById('prodLogPartNo').value,
+                opn_no: isIdle ? "IDLE" : document.getElementById('prodLogOpnNo').value,
+                description: isIdle ? (document.getElementById('prodLogIdleReason').value || "Machine Idle") : document.getElementById('prodLogDescription').value,
+                cycle_time: 0,
+                runtime: isIdle ? 0 : (parseFloat(document.getElementById('prodLogRuntime').value) || 0),
+                target_qty: 0,
+                prod_qty: 0,
+                efficiency: 0,
                 idle_hours: parseFloat(document.getElementById('prodLogIdleHours').value) || 0,
                 idle_reason: document.getElementById('prodLogIdleReason').value,
-                idle_hours_2: parseFloat(document.getElementById('prodLogIdleHours2').value) || 0,
-                idle_reason_2: document.getElementById('prodLogIdleReason2').value,
-                idle_hours_3: parseFloat(document.getElementById('prodLogIdleHours3').value) || 0,
-                idle_reason_3: document.getElementById('prodLogIdleReason3').value
+                idle_hours_2: isIdle ? 0 : (parseFloat(document.getElementById('prodLogIdleHours2').value) || 0),
+                idle_reason_2: isIdle ? "None" : document.getElementById('prodLogIdleReason2').value,
+                idle_hours_3: isIdle ? 0 : (parseFloat(document.getElementById('prodLogIdleHours3').value) || 0),
+                idle_reason_3: isIdle ? "None" : document.getElementById('prodLogIdleReason3').value
             };
             
             try {
@@ -2291,11 +2333,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify(data)
                 });
                 if (response.ok) {
-                    alert('Production Log saved!');
+                    alert(isIdle ? 'Machine Idle Log saved successfully!' : 'Production Log saved!');
                     
                     const continueOp = document.getElementById('prodLogContinueOperator') ? document.getElementById('prodLogContinueOperator').value : 'n';
                     
-                    if (continueOp === 'y') {
+                    if (continueOp === 'y' && !isIdle) {
                         const savedDept = data.dept;
                         const savedDate = data.date;
                         const savedShift = data.shift;
@@ -2326,6 +2368,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             document.getElementById('prodLogContinueOperator').value = 'n';
                         }
                     }
+                    toggleMachineIdleMode();
                     validateHours();
                     
                     fetchProdLogs();
