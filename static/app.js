@@ -1384,11 +1384,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const forInsLogTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const reworkProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const ncProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const rejectionProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rejection').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const rfdProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const despProd = allRmLogs.filter(l => l.finish_part_no === partno && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
 
                 const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
-                const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd);
+                const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
 
                 const deburBal = 0; // Deburring is completed once deburredTotal is logged
                 const forInsBal = effectiveForIns - totalInspected;
@@ -1591,11 +1592,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const forInsLogTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const reworkProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const ncProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const rejectionProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rejection').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const rfdProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const despProd = allRmLogs.filter(l => (l.finish_part_no || '').trim().toUpperCase() === pName.trim().toUpperCase() && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
 
                 const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
-                const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd);
+                const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
                 const inspecBal = effectiveForIns - totalInspected;
                 const rfdBal = rfdProd - despProd;
 
@@ -1911,6 +1913,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    function autoSumInspection() {
+        const rfd = parseInt(document.getElementById('inspRFD').value) || 0;
+        const rej = parseInt(document.getElementById('inspRejection').value) || 0;
+        const rew = parseInt(document.getElementById('inspRework').value) || 0;
+        const nc = parseInt(document.getElementById('inspNC').value) || 0;
+        const sum = rfd + rej + rew + nc;
+        if (sum > 0) {
+            document.getElementById('inspQty').value = sum;
+        }
+    }
+    ['inspRFD', 'inspRejection', 'inspRework', 'inspNC'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', autoSumInspection);
+    });
+
     document.getElementById('inspForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
@@ -1921,27 +1938,32 @@ document.addEventListener('DOMContentLoaded', () => {
         const dept = document.getElementById('inspDeptSelect').value;
         
         const inspQty = parseInt(document.getElementById('inspQty').value) || 0;
-        const reworkQty = parseInt(document.getElementById('inspRework').value) || 0;
-        const ncQty = parseInt(document.getElementById('inspNC').value) || 0;
         const rfdQty = parseInt(document.getElementById('inspRFD').value) || 0;
+        const rejectionQty = parseInt(document.getElementById('inspRejection').value) || 0;
+        const rejectionReason = document.getElementById('inspRejectionReason').value;
+        const reworkQty = parseInt(document.getElementById('inspRework').value) || 0;
+        const reworkReason = document.getElementById('inspReworkReason').value;
+        const ncQty = parseInt(document.getElementById('inspNC').value) || 0;
+        const ncReason = document.getElementById('inspNCReason').value;
         
         if (inspQty === 0) {
             alert("Total Inspected quantity cannot be zero.");
             return;
         }
         
-        const createPayload = (opn_no, qty) => ({
+        const createPayload = (opn_no, qty, reason = '') => ({
             dept, date, shift: '', setter: '', machine: '',
-            operator, partno, opn_no, description: '', runtime,
+            operator, partno, opn_no, description: reason, runtime,
             cycle_time: 0, target_qty: 0, prod_qty: qty, efficiency: 0,
-            idle_hours: 0, idle_reason: ''
+            idle_hours: 0, idle_reason: reason
         });
         
         const payloads = [];
         payloads.push(createPayload('for ins', inspQty));
-        if (reworkQty > 0) payloads.push(createPayload('rework', reworkQty));
-        if (ncQty > 0) payloads.push(createPayload('nc', ncQty));
         if (rfdQty > 0) payloads.push(createPayload('rfd', rfdQty));
+        if (rejectionQty > 0) payloads.push(createPayload('rejection', rejectionQty, rejectionReason !== 'None' ? rejectionReason : 'Rejection'));
+        if (reworkQty > 0) payloads.push(createPayload('rework', reworkQty, reworkReason !== 'None' ? reworkReason : 'Rework'));
+        if (ncQty > 0) payloads.push(createPayload('nc', ncQty, ncReason !== 'None' ? ncReason : 'NC'));
         
         try {
             let successCount = 0;
@@ -1957,9 +1979,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (successCount === payloads.length) {
                 document.getElementById('inspHours').value = '';
                 document.getElementById('inspQty').value = '';
-                document.getElementById('inspRework').value = '';
-                document.getElementById('inspNC').value = '';
                 document.getElementById('inspRFD').value = '';
+                document.getElementById('inspRejection').value = '';
+                document.getElementById('inspRejectionReason').value = 'None';
+                document.getElementById('inspRework').value = '';
+                document.getElementById('inspReworkReason').value = 'None';
+                document.getElementById('inspNC').value = '';
+                document.getElementById('inspNCReason').value = 'None';
                 
                 fetchInspectionStatus(); // Refresh left side
                 fetchInspectionLogs();   // Refresh right side logs
@@ -1978,26 +2004,39 @@ document.addEventListener('DOMContentLoaded', () => {
             const allLogs = await res.json();
             const inspLogs = allLogs.filter(l => (l.opn_no || '').toLowerCase() === 'for ins');
             
-            // Sort descending by ID or Date to show newest first
             inspLogs.sort((a, b) => b.id - a.id);
             
             const tbody = document.getElementById('inspLogsBody');
             tbody.innerHTML = '';
             
             if (inspLogs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">No inspection logs found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">No inspection logs found.</td></tr>';
                 return;
             }
             
-            // Show only recent 50 logs to keep UI snappy
             inspLogs.slice(0, 50).forEach(log => {
+                const date = log.date;
+                const op = log.operator || '';
+                const pno = log.partno;
+                const runtime = log.runtime || 0;
+                
+                // Find matching rfd, rejection, rework, nc logs logged at same session
+                const rfdLog = allLogs.find(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'rfd' && Math.abs((l.id || 0) - (log.id || 0)) <= 4);
+                const rejLog = allLogs.find(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'rejection' && Math.abs((l.id || 0) - (log.id || 0)) <= 4);
+                const rewLog = allLogs.find(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'rework' && Math.abs((l.id || 0) - (log.id || 0)) <= 4);
+                const ncLog = allLogs.find(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'nc' && Math.abs((l.id || 0) - (log.id || 0)) <= 4);
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${log.date}</td>
                     <td>${log.operator || ''}</td>
                     <td>${log.partno}</td>
                     <td>${log.runtime || ''}</td>
-                    <td><span style="font-weight: 500;">${log.prod_qty || ''}</span></td>
+                    <td><span style="font-weight: bold; color: var(--primary-color);">${log.prod_qty || 0}</span></td>
+                    <td>${rfdLog ? `<span style="color:#10b981; font-weight:600;">${rfdLog.prod_qty}</span>` : '0'}</td>
+                    <td>${rejLog ? `<span style="color:#ef4444; font-weight:600;">${rejLog.prod_qty}</span> <small style="color:var(--text-muted);">(${rejLog.idle_reason || rejLog.description || ''})</small>` : '0'}</td>
+                    <td>${rewLog ? `<span style="color:#f59e0b; font-weight:600;">${rewLog.prod_qty}</span> <small style="color:var(--text-muted);">(${rewLog.idle_reason || rewLog.description || ''})</small>` : '0'}</td>
+                    <td>${ncLog ? `<span style="color:#6366f1; font-weight:600;">${ncLog.prod_qty}</span> <small style="color:var(--text-muted);">(${ncLog.idle_reason || ncLog.description || ''})</small>` : '0'}</td>
                 `;
                 tbody.appendChild(tr);
             });
