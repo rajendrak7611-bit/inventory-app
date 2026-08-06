@@ -169,3 +169,16 @@ class HTReceiptLog(Base):
     qty = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class Attendance(Base):
+    __tablename__ = "attendance"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_name = Column(String, index=True)
+    dept = Column(String, index=True)
+    designation = Column(String, nullable=True)
+    month_year = Column(String, index=True)
+    day = Column(Integer)
+    hours = Column(String, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+

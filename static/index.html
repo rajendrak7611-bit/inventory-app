@@ -56,7 +56,7 @@
             <div class="main-tab" id="sidebarInspection" data-screen="inspection">Inspection</div>
             <div class="main-tab" id="sidebarReports" data-group="reports">Reports</div>
             <div class="main-tab" id="sidebarMaintenance" data-screen="maintenance">Maintenance</div>
-            <div class="main-tab" id="sidebarHR" data-screen="hr">HR</div>
+            <div class="main-tab" id="sidebarHR" data-group="hr">HR</div>
         </nav>
         <nav class="sub-menu-horizontal">
             <div class="sub-group" id="submenuMaster" style="display: none;">
@@ -84,6 +84,9 @@
             <div class="sub-group" id="submenuReports" style="display: none;">
                 <button class="sub-tab" id="sidebarRmRequirement" data-screen="reports">RM Requirement</button>
                 <button class="sub-tab" id="sidebarMcUtil" data-screen="reports">M/c Util</button>
+            </div>
+            <div class="sub-group" id="submenuHr" style="display: none;">
+                <button class="sub-tab" id="sidebarAttendance" data-screen="attendance">Attendance</button>
             </div>
         </nav>
     </div>
@@ -212,6 +215,34 @@
                         <!-- Data will be populated here by JavaScript -->
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Attendance Section -->
+            <div class="table-container" id="attendanceSection" style="display: none; padding: 1.5rem; color: var(--text-main);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--text-main);">Attendance Sheet</h2>
+                        <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 0.9rem;">Log daily hours of presence for employees. Sundays are marked in light blue.</p>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                        <label for="attendanceMonthPicker" style="font-weight: 600;">Month:</label>
+                        <input type="month" id="attendanceMonthPicker" style="padding: 0.4rem 0.6rem; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; font-family: inherit;">
+                        <button id="addAttendanceEmpBtn" class="btn btn-outline">+ Add Employee Row</button>
+                        <button id="saveAttendanceBtn" class="btn btn-primary">Save Attendance</button>
+                        <button id="exportAttendanceExcelBtn" class="btn btn-secondary">Export Excel</button>
+                    </div>
+                </div>
+
+                <div style="max-width: 100%; overflow-x: auto; border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px;">
+                    <table id="attendanceTable" style="width: 100%; border-collapse: collapse; text-align: center; font-size: 0.85rem;">
+                        <thead id="attendanceHead">
+                            <!-- Headers dynamically rendered based on Month/Year -->
+                        </thead>
+                        <tbody id="attendanceBody">
+                            <!-- Rows dynamically populated -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- Schedule Sections -->
@@ -1459,6 +1490,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=115"></script>
+    <script src="/static/app.js?v=116"></script>
 </body>
 </html>

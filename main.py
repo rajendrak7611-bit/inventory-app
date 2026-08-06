@@ -8,7 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog
+from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog, Attendance
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -251,6 +251,29 @@ class SetterCreate(SetterBase):
 
 class SetterResponse(SetterBase):
     id: int
+
+    class Config:
+        from_attributes = True
+
+class AttendanceEntry(BaseModel):
+    employee_name: str
+    dept: Optional[str] = ""
+    designation: Optional[str] = ""
+    day: int
+    hours: str
+
+class AttendanceBulkPayload(BaseModel):
+    month_year: str
+    entries: List[AttendanceEntry]
+
+class AttendanceResponse(BaseModel):
+    id: int
+    employee_name: str
+    dept: Optional[str] = ""
+    designation: Optional[str] = ""
+    month_year: str
+    day: int
+    hours: str
 
     class Config:
         from_attributes = True
@@ -1142,6 +1165,34 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         "role": user.role,
         "accessible_screens": user.accessible_screens
     }
+
+# --- Attendance API Routes ---
+@app.get("/api/attendance", response_model=List[AttendanceResponse])
+def get_attendance(month_year: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(Attendance)
+    if month_year:
+        query = query.filter(Attendance.month_year == month_year)
+    return query.all()
+
+@app.post("/api/attendance")
+def save_attendance(payload: AttendanceBulkPayload, db: Session = Depends(get_db)):
+    m_year = payload.month_year
+    db.query(Attendance).filter(Attendance.month_year == m_year).delete()
+    db.commit()
+
+    new_records = []
+    for entry in payload.entries:
+        new_records.append(Attendance(
+            employee_name=entry.employee_name,
+            dept=entry.dept or "",
+            designation=entry.designation or "",
+            month_year=m_year,
+            day=entry.day,
+            hours=str(entry.hours)
+        ))
+    db.add_all(new_records)
+    db.commit()
+    return {"message": f"Attendance saved successfully for {m_year}"}
 
 # Serve static files (frontend)
 app.mount("/static", StaticFiles(directory="static"), name="static")

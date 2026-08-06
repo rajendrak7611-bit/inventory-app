@@ -223,7 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'productsSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'htSection', 'scheduleCreateSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
-            'inspectionSection', 'maintenanceSection', 'hrSection'
+            'inspectionSection', 'maintenanceSection', 'hrSection', 'attendanceSection'
         ];
         sections.forEach(id => {
             const el = document.getElementById(id);
@@ -419,6 +419,12 @@ document.addEventListener('DOMContentLoaded', () => {
             deburSection.style.display = 'block'; 
             addBtn.style.display = 'none'; 
             initDebur(); 
+        }},
+        'sidebarAttendance': { tab: 'attendance', action: () => {
+            const attSec = document.getElementById('attendanceSection');
+            if (attSec) attSec.style.display = 'block';
+            addBtn.style.display = 'none';
+            initAttendance();
         }}
     };
 
@@ -1142,6 +1148,210 @@ document.addEventListener('DOMContentLoaded', () => {
             openSetterModal(true);
         }
     };
+
+    // --- ATTENDANCE LOGIC ---
+    const attendanceSection = document.getElementById('attendanceSection');
+    const attendanceMonthPicker = document.getElementById('attendanceMonthPicker');
+    const attendanceHead = document.getElementById('attendanceHead');
+    const attendanceBody = document.getElementById('attendanceBody');
+
+    async function initAttendance() {
+        if (attendanceMonthPicker && !attendanceMonthPicker.value) {
+            const now = new Date();
+            const yyyy = now.getFullYear();
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            attendanceMonthPicker.value = `${yyyy}-${mm}`;
+        }
+        await renderAttendanceGrid();
+    }
+
+    if (attendanceMonthPicker) {
+        attendanceMonthPicker.addEventListener('change', () => {
+            renderAttendanceGrid();
+        });
+    }
+
+    async function renderAttendanceGrid() {
+        if (!attendanceMonthPicker || !attendanceHead || !attendanceBody) return;
+        const monthVal = attendanceMonthPicker.value;
+        if (!monthVal) return;
+
+        const parts = monthVal.split('-');
+        const year = parseInt(parts[0]);
+        const month = parseInt(parts[1]);
+        const daysInMonth = new Date(year, month, 0).getDate();
+
+        // Build Table Header
+        let trHead = '<tr style="background-color: #f1f5f9; font-weight: bold;">';
+        trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 140px; text-align: left;">Name</th>';
+        trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 80px; text-align: left;">Dept</th>';
+        trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 110px; text-align: left;">Designation</th>';
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateObj = new Date(year, month - 1, d);
+            const isSunday = dateObj.getDay() === 0;
+            if (isSunday) {
+                trHead += `<th style="border: 1px solid #93c5fd; padding: 6px; min-width: 36px; background-color: #dbeafe; color: #1e40af; font-weight: bold;">${d}</th>`;
+            } else {
+                trHead += `<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 36px; background-color: #f8fafc;">${d}</th>`;
+            }
+        }
+        trHead += '</tr>';
+        attendanceHead.innerHTML = trHead;
+
+        // Fetch existing attendance for this month
+        let existingRecords = [];
+        try {
+            const res = await fetch(`/api/attendance?month_year=${monthVal}`);
+            existingRecords = await res.json();
+        } catch (e) { console.error(e); }
+
+        // Fetch operators to auto-populate employees if attendance is new
+        let allOperators = [];
+        try {
+            const opRes = await fetch('/api/operators');
+            allOperators = await opRes.json();
+        } catch (e) { console.error(e); }
+
+        // Group existing records by employee_name
+        const empMap = {};
+        existingRecords.forEach(r => {
+            if (!empMap[r.employee_name]) {
+                empMap[r.employee_name] = {
+                    name: r.employee_name,
+                    dept: r.dept || '',
+                    designation: r.designation || '',
+                    days: {}
+                };
+            }
+            empMap[r.employee_name].days[r.day] = r.hours;
+        });
+
+        // Ensure all operators are in empMap
+        allOperators.forEach(op => {
+            if (!empMap[op.name]) {
+                empMap[op.name] = {
+                    name: op.name,
+                    dept: op.department || '',
+                    designation: 'Operator',
+                    days: {}
+                };
+            }
+        });
+
+        attendanceBody.innerHTML = '';
+        const empList = Object.values(empMap);
+
+        if (empList.length === 0) {
+            for (let i = 0; i < 5; i++) {
+                empList.push({ name: '', dept: '', designation: '', days: {} });
+            }
+        }
+
+        empList.forEach(emp => {
+            addAttendanceRow(emp, daysInMonth, year, month);
+        });
+    }
+
+    function addAttendanceRow(emp = { name: '', dept: '', designation: '', days: {} }, daysInMonth = 31, year = 2026, month = 8) {
+        if (!attendanceMonthPicker) return;
+        const monthVal = attendanceMonthPicker.value;
+        if (monthVal) {
+            const parts = monthVal.split('-');
+            year = parseInt(parts[0]);
+            month = parseInt(parts[1]);
+            daysInMonth = new Date(year, month, 0).getDate();
+        }
+
+        const tr = document.createElement('tr');
+        tr.style.height = '32px';
+
+        let rowHtml = `
+            <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-name" value="${emp.name || ''}" placeholder="Name" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px;"></td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-dept" value="${emp.dept || ''}" placeholder="Dept" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px;"></td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-desig" value="${emp.designation || ''}" placeholder="Designation" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px;"></td>
+        `;
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dateObj = new Date(year, month - 1, d);
+            const isSunday = dateObj.getDay() === 0;
+            const bgStyle = isSunday ? 'background-color: #eff6ff; border: 1px solid #bfdbfe;' : 'border: 1px solid #cbd5e1;';
+            const val = emp.days && emp.days[d] !== undefined ? emp.days[d] : '';
+            rowHtml += `
+                <td style="${bgStyle} padding: 1px;">
+                    <input type="text" class="att-day-val" data-day="${d}" value="${val}" style="width: 100%; text-align: center; border: none; background: transparent; font-size: 0.85rem; padding: 4px 1px;" placeholder="${isSunday ? 'Sun' : ''}">
+                </td>
+            `;
+        }
+
+        tr.innerHTML = rowHtml;
+        attendanceBody.appendChild(tr);
+    }
+
+    document.getElementById('addAttendanceEmpBtn')?.addEventListener('click', () => {
+        addAttendanceRow();
+    });
+
+    document.getElementById('saveAttendanceBtn')?.addEventListener('click', async () => {
+        if (!attendanceMonthPicker) return;
+        const monthVal = attendanceMonthPicker.value;
+        if (!monthVal) {
+            alert('Please select a Month/Year.');
+            return;
+        }
+
+        const rows = attendanceBody.querySelectorAll('tr');
+        const entries = [];
+
+        rows.forEach(tr => {
+            const name = tr.querySelector('.att-name')?.value.trim();
+            const dept = tr.querySelector('.att-dept')?.value.trim();
+            const desig = tr.querySelector('.att-desig')?.value.trim();
+
+            if (name) {
+                tr.querySelectorAll('.att-day-val').forEach(input => {
+                    const day = parseInt(input.getAttribute('data-day'));
+                    const hrs = input.value.trim();
+                    if (hrs !== '') {
+                        entries.push({
+                            employee_name: name,
+                            dept: dept || '',
+                            designation: desig || '',
+                            day: day,
+                            hours: hrs
+                        });
+                    }
+                });
+            }
+        });
+
+        try {
+            const res = await fetch('/api/attendance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    month_year: monthVal,
+                    entries: entries
+                })
+            });
+            if (res.ok) {
+                alert(`Attendance for ${monthVal} saved successfully!`);
+            } else {
+                alert('Failed to save attendance.');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error saving attendance.');
+        }
+    });
+
+    document.getElementById('exportAttendanceExcelBtn')?.addEventListener('click', () => {
+        const table = document.getElementById('attendanceTable');
+        if (!table) return;
+        const wb = XLSX.utils.table_to_book(table, { sheet: "Attendance" });
+        const monthVal = attendanceMonthPicker ? attendanceMonthPicker.value : "Sheet";
+        XLSX.writeFile(wb, `Attendance_${monthVal}.xlsx`);
+    });
 
     // Initial fetch
     fetchProducts();
