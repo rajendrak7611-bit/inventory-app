@@ -1651,6 +1651,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- SCHEDULE STATUS LOGIC ---
     let statusAllParts = [];
+    let spiderStatusDataMap = {};
     
     document.getElementById('statusDeptSelect').addEventListener('change', fetchScheduleStatus);
     document.getElementById('exportStatusBtn').addEventListener('click', () => {
@@ -1719,6 +1720,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 let rowHtml = `<td>${partno}</td><td>${schedQty}</td>`;
                 
+                let opnBalances = [];
                 // Opn 1 to 10
                 for (let i = 0; i < 10; i++) {
                     if (i < operations.length) {
@@ -1752,8 +1754,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         
                         let balance = currentProd - nextProd;
+                        opnBalances.push(balance);
                         rowHtml += `<td>${balance}</td>`;
                     } else {
+                        opnBalances.push(0);
                         rowHtml += `<td></td>`;
                     }
                 }
@@ -1781,6 +1785,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 rowHtml += `<td>${rfdBal}</td>`;
                 rowHtml += `<td>${despProd}</td>`;
                 
+                spiderStatusDataMap[(partno || '').trim().toUpperCase()] = {
+                    schedQty,
+                    opnBalances,
+                    rfdBal,
+                    despProd
+                };
+                
                 const tr = document.createElement('tr');
                 tr.innerHTML = rowHtml;
                 tbody.appendChild(tr);
@@ -1797,7 +1808,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function renderSpiderReport(allSchedules, allLogs, allRmLogs, allHtLogs, allHtReceiptLogs) {
+    function renderSpiderReport(allSchedules, allLogs, allRmLogs, allHtLogs, allHtReceiptLogs) {
         const spiderContainer = document.getElementById('spiderReportContainer');
         const tbody = document.getElementById('spiderReportBody');
         if (!spiderContainer || !tbody) return;
@@ -1806,10 +1817,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tbody.innerHTML = '';
 
         let allRms = [];
-        try {
-            const rmRes = await fetch('/api/rawmaterials');
-            allRms = await rmRes.json();
-        } catch (e) { console.error(e); }
+        fetch('/api/rawmaterials').then(r => r.json()).then(data => { allRms = data; }).catch(() => {});
 
         const groups = [
             {
@@ -1822,7 +1830,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     { title: "Fac & cen", rowspan: 2 },
                     { title: "HT", colspan: 3, subList: ["For HT", "Anusha", "JMS"] },
                     { title: "Grinding", colspan: 2, subList: ["For Grind", "For Ins"] },
-                    { title: "Inspec", rowspan: 2 },
                     { title: "RFD", rowspan: 2 },
                     { title: "Despatch", rowspan: 2 }
                 ]
@@ -1877,8 +1884,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         ];
 
-        const spiderScheds = allSchedules.filter(s => (s.department || '').trim().toUpperCase() === 'SPIDER' && (s.status === 'Pending' || !s.status));
-
         for (const group of groups) {
             const trHeader1 = document.createElement('tr');
             trHeader1.style.backgroundColor = '#dbeafe';
@@ -1912,112 +1917,49 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             for (const pName of group.parts) {
-                const partObj = statusAllParts.find(p => (p.partno || '').trim().toUpperCase() === pName.trim().toUpperCase());
-                
-                const pScheds = spiderScheds.filter(s => (s.partno || '').trim().toUpperCase() === pName.trim().toUpperCase());
-                const schQty = pScheds.reduce((sum, s) => sum + (s.qty || 0), 0);
+                const partKey = pName.trim().toUpperCase();
+                const partObj = statusAllParts.find(p => (p.partno || '').trim().toUpperCase() === partKey);
+                const sData = spiderStatusDataMap[partKey] || { schedQty: 0, opnBalances: [0,0,0,0,0,0,0,0,0,0], rfdBal: 0, despProd: 0 };
+                const opn = sData.opnBalances || [0,0,0,0,0,0,0,0,0,0];
 
                 const fpn = partObj ? (partObj.forge_pn || '') : '';
                 const rmObj = allRms.find(r => (r.forge_pn || '').trim().toUpperCase() === fpn.trim().toUpperCase());
                 const fAvail = rmObj ? (rmObj.stock || 0) : 0;
 
-                const sentAnusha = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.vendor || '').toLowerCase().includes('anusha')).reduce((sum, l) => sum + (l.qty || 0), 0);
-                const recAnusha = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.vendor || '').toLowerCase().includes('anusha')).reduce((sum, l) => sum + (l.qty || 0), 0);
+                const sentAnusha = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === partKey && (l.vendor || '').toLowerCase().includes('anusha')).reduce((sum, l) => sum + (l.qty || 0), 0);
+                const recAnusha = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === partKey && (l.vendor || '').toLowerCase().includes('anusha')).reduce((sum, l) => sum + (l.qty || 0), 0);
                 const pendingAnusha = Math.max(0, sentAnusha - recAnusha);
 
-                const sentJMS = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.vendor || '').toLowerCase().includes('jms')).reduce((sum, l) => sum + (l.qty || 0), 0);
-                const recJMS = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.vendor || '').toLowerCase().includes('jms')).reduce((sum, l) => sum + (l.qty || 0), 0);
+                const sentJMS = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === partKey && (l.vendor || '').toLowerCase().includes('jms')).reduce((sum, l) => sum + (l.qty || 0), 0);
+                const recJMS = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === partKey && (l.vendor || '').toLowerCase().includes('jms')).reduce((sum, l) => sum + (l.qty || 0), 0);
                 const pendingJMS = Math.max(0, sentJMS - recJMS);
-
-                let ops = [];
-                if (partObj) {
-                    try {
-                        const opsRes = await fetch(`/api/partmaster/${partObj.id}/operations`);
-                        ops = await opsRes.json();
-                        ops.sort((a, b) => (parseInt(a.opn_no) || 0) - (parseInt(b.opn_no) || 0));
-                    } catch (e) { console.error(e); }
-                }
-
-                const getOpBalanceByIndex = (i) => {
-                    if (i < 0 || i >= ops.length) return 0;
-                    const currentOp = ops[i];
-                    const nextOp = ops[i + 1];
-
-                    const opnClean = (currentOp.opn_no || '').trim().toLowerCase();
-
-                    let currentProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === opnClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                    
-                    if (opnClean === '50' || opnClean === 'opn 50' || opnClean === 'opn50') {
-                        const htSent = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
-                        currentProd -= htSent;
-                    }
-                    if (opnClean === '60' || opnClean === 'opn 60' || opnClean === 'opn60') {
-                        const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
-                        currentProd += htRec;
-                    }
-
-                    let nextProd = 0;
-                    if (nextOp) {
-                        const nextOpClean = (nextOp.opn_no || '').trim().toLowerCase();
-                        nextProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === nextOpClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                    } else {
-                        nextProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                    }
-                    return currentProd - nextProd;
-                };
-
-                const deburredTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const forInsLogTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const reworkProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const ncProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const rejectionProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rejection').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const rfdProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const despProd = allRmLogs.filter(l => (l.finish_part_no || '').trim().toUpperCase() === pName.trim().toUpperCase() && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
-
-                const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
-                const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
-                const inspecBal = Math.max(0, effectiveForIns - totalInspected);
-                const rfdBal = rfdProd - despProd;
-
-                const grindProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && ((l.opn_no || '').trim().toLowerCase() === '60' || (l.opn_no || '').trim().toLowerCase() === 'opn 60' || (l.opn_no || '').trim().toLowerCase() === 'opn60' || (l.opn_no || '').trim().toLowerCase().includes('grind'))).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-
-                let forGrindVal = 0;
-                if (pName.trim().toUpperCase() === 'R149') {
-                    forGrindVal = Math.max(0, 230 - grindProd);
-                } else {
-                    const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
-                    forGrindVal = Math.max(0, htRec - grindProd);
-                }
-
-                // For HT: Turning produced minus HT Sent (independent of grinding)
-                const turningProdForHt = (ops[1] ? allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === (ops[1].opn_no || '').trim().toLowerCase()).reduce((s, l) => s + (l.prod_qty || 0), 0) : 0) +
-                                         (ops[2] ? allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === (ops[2].opn_no || '').trim().toLowerCase()).reduce((s, l) => s + (l.prod_qty || 0), 0) : 0) +
-                                         (ops[3] ? allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === (ops[3].opn_no || '').trim().toLowerCase()).reduce((s, l) => s + (l.prod_qty || 0), 0) : 0);
-                const totalHtSentForHt = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase()).reduce((s, l) => s + (l.qty || 0), 0);
-                const forHtVal = Math.max(0, turningProdForHt - totalHtSentForHt);
 
                 const trRow = document.createElement('tr');
                 let rowContent = `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">${pName}</td>`;
-                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${schQty || 0}</td>`;
+                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${sData.schedQty || 0}</td>`;
                 rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${fAvail || 0}</td>`;
 
                 if (group.name === 'Group 1') {
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(1)}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${forHtVal}</td>`;
+                    // Mapping per user instructions:
+                    // Fac & Cen = OPN 2 (opn[1])
+                    // For HT = OPN 3 (opn[2])
+                    // For Grind = OPN 4 (opn[3])
+                    // For Ins = OPN 5 (opn[4])
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[1] || 0}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[2] || 0}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingAnusha}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingJMS}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${forGrindVal}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">0</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[3] || 0}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[4] || 0}</td>`;
                 } else if (group.name === 'Group 2' || group.name === 'Group 3' || group.name === 'Group 4') {
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(0)}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(1)}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(2)}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(3)}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[0] || 0}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[1] || 0}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[2] || 0}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[3] || 0}</td>`;
                 }
 
-                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${inspecBal}</td>`;
-                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${rfdBal}</td>`;
-                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${despProd}</td>`;
+                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${sData.rfdBal || 0}</td>`;
+                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${sData.despProd || 0}</td>`;
 
                 trRow.innerHTML = rowContent;
                 tbody.appendChild(trRow);
