@@ -3215,27 +3215,142 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- USER MANAGEMENT LOGIC ---
+    let allUsersList = [];
+
     async function fetchUsers() {
         try {
             const res = await fetch('/api/users');
-            const users = await res.json();
+            allUsersList = await res.json();
             const tbody = document.getElementById('usersBody');
             if (!tbody) return;
             tbody.innerHTML = '';
-            users.forEach(u => {
+            allUsersList.forEach(u => {
                 const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                tr.title = 'Click to view & edit rights';
                 tr.innerHTML = `
                     <td>${u.id}</td>
-                    <td>${u.username}</td>
+                    <td><strong>${u.username}</strong></td>
                     <td>${u.role}</td>
                     <td>
-                        <button class="btn btn-outline" style="margin-right: 5px; padding: 0.3rem 0.6rem; font-size: 0.85rem;" onclick="openChangePasswordModal(${u.id}, '${u.username}')">Change Password</button>
-                        ${u.username !== 'admin' ? `<button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;" onclick="deleteUser(${u.id})">Delete</button>` : ''}
+                        <button class="btn btn-outline edit-user-btn" style="margin-right: 5px; padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit Rights</button>
+                        <button class="btn btn-outline" style="margin-right: 5px; padding: 0.3rem 0.6rem; font-size: 0.85rem;" onclick="event.stopPropagation(); openChangePasswordModal(${u.id}, '${u.username}')">Change Password</button>
+                        ${u.username !== 'admin' ? `<button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;" onclick="event.stopPropagation(); deleteUser(${u.id})">Delete</button>` : ''}
                     </td>
                 `;
+
+                tr.addEventListener('click', () => populateUserRightsForm(u));
+                tr.querySelector('.edit-user-btn')?.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    populateUserRightsForm(u);
+                });
+
                 tbody.appendChild(tr);
             });
         } catch (e) { console.error(e); }
+    }
+
+    function populateUserRightsForm(user) {
+        document.getElementById('editingUserId').value = user.id;
+        document.getElementById('userFormTitle').innerText = `Edit Rights (${user.username})`;
+        document.getElementById('userName').value = user.username;
+        document.getElementById('userPass').value = '';
+        document.getElementById('userPass').removeAttribute('required');
+        document.getElementById('userPassLabel').innerText = 'Password (leave blank to keep current)';
+        document.getElementById('userSubmitBtn').innerText = 'Save User Rights';
+        document.getElementById('resetUserFormBtn').style.display = 'inline-block';
+
+        let screens = [];
+        try {
+            screens = JSON.parse(user.accessible_screens || '[]');
+        } catch(e) {}
+
+        document.querySelectorAll('#userScreensList input[type="checkbox"]').forEach(chk => {
+            chk.checked = screens.includes(chk.value);
+        });
+    }
+
+    function resetUserRightsForm() {
+        document.getElementById('editingUserId').value = '';
+        document.getElementById('userFormTitle').innerText = 'Create User';
+        document.getElementById('userName').value = '';
+        document.getElementById('userPass').value = '';
+        document.getElementById('userPass').setAttribute('required', 'true');
+        document.getElementById('userPassLabel').innerText = 'Password';
+        document.getElementById('userSubmitBtn').innerText = 'Create User';
+        document.getElementById('resetUserFormBtn').style.display = 'none';
+        document.querySelectorAll('#userScreensList input[type="checkbox"]').forEach(chk => chk.checked = false);
+    }
+
+    document.getElementById('resetUserFormBtn')?.addEventListener('click', resetUserRightsForm);
+
+    const userCreateForm = document.getElementById('userCreateForm');
+    if (userCreateForm) {
+        userCreateForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const editingId = document.getElementById('editingUserId').value;
+            const username = document.getElementById('userName').value.trim();
+            const password = document.getElementById('userPass').value.trim();
+
+            const selectedScreens = Array.from(document.querySelectorAll('#userScreensList input[type="checkbox"]:checked')).map(cb => cb.value);
+            const screensJson = JSON.stringify(selectedScreens);
+
+            if (editingId) {
+                const payload = {
+                    username: username,
+                    accessible_screens: screensJson
+                };
+                if (password) payload.password = password;
+
+                try {
+                    const res = await fetch(`/api/users/${editingId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (res.ok) {
+                        alert(`Rights updated for ${username}!`);
+                        resetUserRightsForm();
+                        fetchUsers();
+                    } else {
+                        const errData = await res.json();
+                        alert(errData.detail || 'Error updating user');
+                    }
+                } catch(err) {
+                    console.error(err);
+                    alert('Error updating user');
+                }
+            } else {
+                if (!password) {
+                    alert('Password is required for new users.');
+                    return;
+                }
+                const payload = {
+                    username: username,
+                    password: password,
+                    accessible_screens: screensJson
+                };
+
+                try {
+                    const res = await fetch('/api/users', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (res.ok) {
+                        alert('User created successfully!');
+                        resetUserRightsForm();
+                        fetchUsers();
+                    } else {
+                        const errData = await res.json();
+                        alert(errData.detail || 'Error creating user');
+                    }
+                } catch(err) {
+                    console.error(err);
+                    alert('Error creating user');
+                }
+            }
+        });
     }
 
     window.openChangePasswordModal = (userId, username) => {
@@ -3370,41 +3485,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const userCreateForm = document.getElementById('userCreateForm');
-    if (userCreateForm) {
-        userCreateForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const username = document.getElementById('userName').value;
-            const password = document.getElementById('userPass').value;
-            
-            // Collect checked screens
-            const checkboxes = document.querySelectorAll('#userScreensList input[type="checkbox"]:checked');
-            const screens = Array.from(checkboxes).map(cb => cb.value);
-            
-            try {
-                const res = await fetch('/api/users', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        username,
-                        password,
-                        accessible_screens: JSON.stringify(screens)
-                    })
-                });
-                if (res.ok) {
-                    alert('User created!');
-                    userCreateForm.reset();
-                    fetchUsers();
-                } else {
-                    const err = await res.json();
-                    alert(err.detail || 'Error creating user');
-                }
-            } catch (err) {
-                console.error(err);
-                alert('Error creating user');
-            }
-        });
-    }
+
 
 
     // ====== DEPARTMENTS CRUD ======

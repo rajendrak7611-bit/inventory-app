@@ -1138,6 +1138,27 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     db.refresh(db_user)
     return db_user
 
+class UserUpdatePayload(BaseModel):
+    username: Optional[str] = None
+    password: Optional[str] = None
+    accessible_screens: Optional[str] = None
+
+@app.put("/api/users/{user_id}")
+def update_user(user_id: int, payload: UserUpdatePayload, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if payload.username and payload.username.strip():
+        db_user.username = payload.username.strip()
+    if payload.password and payload.password.strip():
+        db_user.password_hash = hashlib.sha256(payload.password.strip().encode()).hexdigest()
+    if payload.accessible_screens is not None:
+        db_user.accessible_screens = payload.accessible_screens
+        
+    db.commit()
+    return {"message": f"User {db_user.username} updated successfully"}
+
 @app.put("/api/users/{user_id}/password")
 def change_user_password(user_id: int, payload: UserPasswordChange, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.id == user_id).first()
