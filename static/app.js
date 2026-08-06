@@ -1732,23 +1732,27 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Total produced for current op from logs
                         let currentProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === opnClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                         
-                        // Deduct HT sent for Opn 50
-                        if (opnClean === '50' || opnClean === 'opn 50' || opnClean === 'opn50') {
-                            const htSent = allHtLogs.filter(l => l.partno === partno).reduce((sum, l) => sum + (l.qty || 0), 0);
+                        // Deduct HT sent for Turning (Opn 40 / OPN 3)
+                        if (opnClean === '40' || opnClean === 'opn 40' || opnClean === 'opn40') {
+                            const htSent = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                             currentProd -= htSent;
                         }
 
-                        // Add HT received for Opn 60
-                        if (opnClean === '60' || opnClean === 'opn 60' || opnClean === 'opn60') {
-                            const htRec = allHtReceiptLogs.filter(l => l.partno === partno).reduce((sum, l) => sum + (l.qty || 0), 0);
-                            currentProd += htRec;
+                        // Set Opn 50 (HT Received / OPN 4 / For Grind) to HT Received total
+                        if (opnClean === '50' || opnClean === 'opn 50' || opnClean === 'opn50') {
+                            const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                            currentProd = htRec;
                         }
                         
                         // Total produced for next op
                         let nextProd = 0;
                         if (nextOp) {
                             const nextOpClean = (nextOp.opn_no || '').trim().toLowerCase();
-                            nextProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === nextOpClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                            if (nextOpClean === '50' || nextOpClean === 'opn 50' || nextOpClean === 'opn50') {
+                                nextProd = 0; // Opn 50 is HT Received, do not deduct from Opn 40
+                            } else {
+                                nextProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === nextOpClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                            }
                         } else {
                             nextProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                         }
