@@ -3867,7 +3867,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const availableParts = (parts || []).filter(p => (p.available_qty || 0) > 0);
 
         if (!availableParts || availableParts.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No SPIDER parts with available Opn 50 quantity found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No SPIDER parts with available Opn 40 quantity found</td></tr>';
             return;
         }
         availableParts.forEach(p => {

@@ -731,6 +731,9 @@ def get_spider_parts(db: Session = Depends(get_db)):
         prod_logs = db.query(ProductionLog).filter(
             ProductionLog.partno == partno,
             or_(
+                func.lower(func.trim(ProductionLog.opn_no)) == '40',
+                func.lower(func.trim(ProductionLog.opn_no)) == 'opn 40',
+                func.lower(func.trim(ProductionLog.opn_no)) == 'opn40',
                 func.lower(func.trim(ProductionLog.opn_no)) == '50',
                 func.lower(func.trim(ProductionLog.opn_no)) == 'opn 50',
                 func.lower(func.trim(ProductionLog.opn_no)) == 'opn50'
