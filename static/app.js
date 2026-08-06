@@ -1392,19 +1392,32 @@ document.addEventListener('DOMContentLoaded', () => {
             const desig = tr.querySelector('.att-desig')?.value.trim();
 
             if (name) {
+                let hasHours = false;
                 tr.querySelectorAll('.att-day-val').forEach(input => {
                     const day = parseInt(input.getAttribute('data-day'));
                     const hrs = input.value.trim();
                     if (hrs !== '') {
+                        hasHours = true;
                         entries.push({
                             employee_name: name,
                             dept: dept || '',
-                            designation: desig || '',
+                            designation: desig || 'Operator',
                             day: day,
                             hours: hrs
                         });
                     }
                 });
+
+                // Save employee details and designation even if no hours are entered yet
+                if (!hasHours) {
+                    entries.push({
+                        employee_name: name,
+                        dept: dept || '',
+                        designation: desig || 'Operator',
+                        day: 1,
+                        hours: "0"
+                    });
+                }
             }
         });
 
