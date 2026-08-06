@@ -3039,6 +3039,35 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const prodLogTableFilterDate = document.getElementById('prodLogTableFilterDate');
+    const clearProdLogFilterDateBtn = document.getElementById('clearProdLogFilterDateBtn');
+
+    if (prodLogTableFilterDate) {
+        prodLogTableFilterDate.addEventListener('change', (e) => {
+            const dateVal = e.target.value;
+            const dateHeaderInput = document.querySelector('.prod-log-col-filter[data-col="0"]');
+            if (dateHeaderInput) {
+                if (dateVal) {
+                    const parts = dateVal.split('-');
+                    const fmtDate = `${parts[2]}/${parts[1]}`;
+                    dateHeaderInput.value = fmtDate;
+                } else {
+                    dateHeaderInput.value = '';
+                }
+                applyProdLogHeaderFilters();
+            }
+        });
+    }
+
+    if (clearProdLogFilterDateBtn) {
+        clearProdLogFilterDateBtn.addEventListener('click', () => {
+            if (prodLogTableFilterDate) prodLogTableFilterDate.value = '';
+            const dateHeaderInput = document.querySelector('.prod-log-col-filter[data-col="0"]');
+            if (dateHeaderInput) dateHeaderInput.value = '';
+            applyProdLogHeaderFilters();
+        });
+    }
+
     const exportProdLogBtn = document.getElementById('exportProdLogBtn');
     if (exportProdLogBtn) {
         exportProdLogBtn.addEventListener('click', () => {
