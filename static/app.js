@@ -2879,6 +2879,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 tbody.appendChild(tr);
             });
+            applyProdLogHeaderFilters();
         } catch (e) { console.error(e); }
     }
 
@@ -3002,6 +3003,39 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert('Error saving Prod Log');
                 }
             } catch (err) { console.error(err); }
+        });
+    }
+
+    document.addEventListener('input', (e) => {
+        if (e.target && e.target.classList.contains('prod-log-col-filter')) {
+            applyProdLogHeaderFilters();
+        }
+    });
+
+    function applyProdLogHeaderFilters() {
+        const filters = {};
+        document.querySelectorAll('.prod-log-col-filter').forEach(input => {
+            const val = input.value.trim().toLowerCase();
+            if (val) {
+                filters[input.getAttribute('data-col')] = val;
+            }
+        });
+
+        const rows = document.querySelectorAll('#prodLogBody tr');
+        rows.forEach(tr => {
+            const cells = tr.children;
+            let show = true;
+            for (const colIdx in filters) {
+                const cell = cells[parseInt(colIdx)];
+                if (cell) {
+                    const cellText = (cell.textContent || '').trim().toLowerCase();
+                    if (!cellText.includes(filters[colIdx])) {
+                        show = false;
+                        break;
+                    }
+                }
+            }
+            tr.style.display = show ? '' : 'none';
         });
     }
 
