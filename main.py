@@ -74,6 +74,10 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         conn.execute(text("ALTER TABLE production_logs ADD COLUMN multiple_mc INTEGER DEFAULT 1;"))
     except Exception:
         pass
+    try:
+        conn.execute(text("DELETE FROM production_logs WHERE LOWER(dept) = 'spider' OR partno IN (SELECT partno FROM part_masters WHERE LOWER(department) = 'spider');"))
+    except Exception:
+        pass
 
 # Seed default admin user
 with Session(engine) as db:
@@ -1008,6 +1012,18 @@ def create_prodlog(log: ProdLogCreate, db: Session = Depends(get_db)):
 @app.get("/api/prodlog")
 def get_prodlogs(db: Session = Depends(get_db)):
     return db.query(ProductionLog).order_by(ProductionLog.id.desc()).all()
+
+@app.delete("/api/prodlog/spider")
+def delete_spider_prodlogs(db: Session = Depends(get_db)):
+    spider_parts = [p.partno for p in db.query(PartMaster).filter(func.lower(PartMaster.department) == "spider").all()]
+    deleted_count = db.query(ProductionLog).filter(
+        or_(
+            func.lower(ProductionLog.dept) == "spider",
+            ProductionLog.partno.in_(spider_parts)
+        )
+    ).delete(synchronize_session=False)
+    db.commit()
+    return {"message": f"Successfully deleted {deleted_count} SPIDER production logs"}
 
 @app.delete("/api/prodlog/{log_id}")
 def delete_prodlog(log_id: int, db: Session = Depends(get_db)):
