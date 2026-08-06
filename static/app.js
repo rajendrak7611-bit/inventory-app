@@ -1979,10 +1979,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 const inspecBal = Math.max(0, effectiveForIns - totalInspected);
                 const rfdBal = rfdProd - despProd;
 
+                const grindProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && ((l.opn_no || '').trim().toLowerCase() === '60' || (l.opn_no || '').trim().toLowerCase() === 'opn 60' || (l.opn_no || '').trim().toLowerCase() === 'opn60' || (l.opn_no || '').trim().toLowerCase().includes('grind'))).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+
                 let forGrindVal = 0;
                 if (pName.trim().toUpperCase() === 'R149') {
-                    forGrindVal = 230; // 230 nos received today (6/8/26) pending grinding
+                    forGrindVal = Math.max(0, 230 - grindProd);
+                } else {
+                    const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                    forGrindVal = Math.max(0, htRec - grindProd);
                 }
+
+                // For HT: Turning produced minus HT Sent (independent of grinding)
+                const turningProdForHt = (ops[1] ? allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === (ops[1].opn_no || '').trim().toLowerCase()).reduce((s, l) => s + (l.prod_qty || 0), 0) : 0) +
+                                         (ops[2] ? allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === (ops[2].opn_no || '').trim().toLowerCase()).reduce((s, l) => s + (l.prod_qty || 0), 0) : 0) +
+                                         (ops[3] ? allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === (ops[3].opn_no || '').trim().toLowerCase()).reduce((s, l) => s + (l.prod_qty || 0), 0) : 0);
+                const totalHtSentForHt = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase()).reduce((s, l) => s + (l.qty || 0), 0);
+                const forHtVal = Math.max(0, turningProdForHt - totalHtSentForHt);
 
                 const trRow = document.createElement('tr');
                 let rowContent = `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">${pName}</td>`;
@@ -1991,7 +2003,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (group.name === 'Group 1') {
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(1)}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(2) + getOpBalanceByIndex(3)}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${forHtVal}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingAnusha}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingJMS}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${forGrindVal}</td>`;
