@@ -1181,19 +1181,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const month = parseInt(parts[1]);
         const daysInMonth = new Date(year, month, 0).getDate();
 
-        // Build Table Header
+        // Build Table Header with Sticky Positioning
         let trHead = '<tr style="background-color: #f1f5f9; font-weight: bold;">';
-        trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 140px; text-align: left;">Name</th>';
-        trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 80px; text-align: left;">Dept</th>';
-        trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 110px; text-align: left;">Designation</th>';
+        trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 140px; text-align: left; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;">Name</th>';
+        trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 80px; text-align: left; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;">Dept</th>';
+        trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 110px; text-align: left; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;">Designation</th>';
 
         for (let d = 1; d <= daysInMonth; d++) {
             const dateObj = new Date(year, month - 1, d);
             const isSunday = dateObj.getDay() === 0;
             if (isSunday) {
-                trHead += `<th style="border: 1px solid #93c5fd; padding: 6px; min-width: 36px; background-color: #dbeafe; color: #1e40af; font-weight: bold;">${d}</th>`;
+                trHead += `<th style="border: 1px solid #93c5fd; padding: 4px 2px; min-width: 36px; background-color: #dbeafe; color: #1e40af; font-weight: bold; position: sticky; top: 0; z-index: 10;">${d}<br><span style="font-size: 0.7rem; font-weight: normal;">Sun</span></th>`;
             } else {
-                trHead += `<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 36px; background-color: #f8fafc;">${d}</th>`;
+                trHead += `<th style="border: 1px solid #cbd5e1; padding: 4px 2px; min-width: 36px; background-color: #f8fafc; position: sticky; top: 0; z-index: 10;">${d}</th>`;
             }
         }
         trHead += '</tr>';
@@ -1239,8 +1239,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        let empList = Object.values(empMap);
+
+        // Sort on Dept as primary key and Name as secondary key
+        empList.sort((a, b) => {
+            const deptA = (a.dept || '').trim().toUpperCase();
+            const deptB = (b.dept || '').trim().toUpperCase();
+            if (deptA < deptB) return -1;
+            if (deptA > deptB) return 1;
+            const nameA = (a.name || '').trim().toUpperCase();
+            const nameB = (b.name || '').trim().toUpperCase();
+            if (nameA < nameB) return -1;
+            if (nameA > nameB) return 1;
+            return 0;
+        });
+
         attendanceBody.innerHTML = '';
-        const empList = Object.values(empMap);
 
         if (empList.length === 0) {
             for (let i = 0; i < 5; i++) {
@@ -1267,9 +1281,9 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.style.height = '32px';
 
         let rowHtml = `
-            <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-name" value="${emp.name || ''}" placeholder="Name" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px;"></td>
-            <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-dept" value="${emp.dept || ''}" placeholder="Dept" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px;"></td>
-            <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-desig" value="${emp.designation || ''}" placeholder="Designation" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px;"></td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-name" value="${emp.name || ''}" placeholder="Name" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;"></td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-dept" value="${emp.dept || ''}" placeholder="Dept" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;"></td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-desig" value="${emp.designation || 'Operator'}" placeholder="Designation" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;"></td>
         `;
 
         for (let d = 1; d <= daysInMonth; d++) {
@@ -1279,7 +1293,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const val = emp.days && emp.days[d] !== undefined ? emp.days[d] : '';
             rowHtml += `
                 <td style="${bgStyle} padding: 1px;">
-                    <input type="text" class="att-day-val" data-day="${d}" value="${val}" style="width: 100%; text-align: center; border: none; background: transparent; font-size: 0.85rem; padding: 4px 1px;" placeholder="${isSunday ? 'Sun' : ''}">
+                    <input type="text" class="att-day-val" data-day="${d}" value="${val}" style="width: 100%; text-align: center; border: none; background: transparent; font-size: 0.85rem; padding: 4px 1px;">
                 </td>
             `;
         }
@@ -1287,6 +1301,55 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.innerHTML = rowHtml;
         attendanceBody.appendChild(tr);
     }
+
+    // Arrow Key Navigation for Attendance Grid
+    attendanceBody?.addEventListener('keydown', (e) => {
+        const input = e.target;
+        if (!input || !input.tagName || input.tagName !== 'INPUT') return;
+
+        const key = e.key;
+        if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(key)) return;
+
+        const currentTd = input.closest('td');
+        const currentTr = input.closest('tr');
+        if (!currentTd || !currentTr) return;
+
+        const cellIndex = currentTd.cellIndex;
+
+        if (key === 'ArrowUp') {
+            e.preventDefault();
+            const prevTr = currentTr.previousElementSibling;
+            if (prevTr) {
+                const targetInput = prevTr.cells[cellIndex]?.querySelector('input');
+                if (targetInput) { targetInput.focus(); targetInput.select(); }
+            }
+        } else if (key === 'ArrowDown' || key === 'Enter') {
+            e.preventDefault();
+            const nextTr = currentTr.nextElementSibling;
+            if (nextTr) {
+                const targetInput = nextTr.cells[cellIndex]?.querySelector('input');
+                if (targetInput) { targetInput.focus(); targetInput.select(); }
+            }
+        } else if (key === 'ArrowLeft') {
+            if (input.selectionStart === 0 && input.selectionEnd === 0) {
+                e.preventDefault();
+                const prevTd = currentTd.previousElementSibling;
+                if (prevTd) {
+                    const targetInput = prevTd.querySelector('input');
+                    if (targetInput) { targetInput.focus(); targetInput.select(); }
+                }
+            }
+        } else if (key === 'ArrowRight') {
+            if (input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
+                e.preventDefault();
+                const nextTd = currentTd.nextElementSibling;
+                if (nextTd) {
+                    const targetInput = nextTd.querySelector('input');
+                    if (targetInput) { targetInput.focus(); targetInput.select(); }
+                }
+            }
+        }
+    });
 
     document.getElementById('addAttendanceEmpBtn')?.addEventListener('click', () => {
         addAttendanceRow();
