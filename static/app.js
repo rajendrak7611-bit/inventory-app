@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
         appContainer.style.display = '';
         
         // Access Control Logic
-        const allTabs = document.querySelectorAll('.sidebar-menu [data-screen]');
+        const allTabs = document.querySelectorAll('[data-screen]');
         let firstAvailableTab = null;
         let accessibleScreens = [];
         try {
@@ -28,20 +28,30 @@ document.addEventListener('DOMContentLoaded', () => {
         
         allTabs.forEach(tab => {
             const screen = tab.getAttribute('data-screen');
-            if (userObj.role === 'admin' || accessibleScreens.includes(screen)) {
-                tab.style.display = (screen === 'schedule') ? 'inline-block' : 'inline-block';
+            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || (screen === 'attendance' && accessibleScreens.includes('hr'));
+            if (isAllowed) {
+                tab.style.display = 'inline-block';
                 if (!firstAvailableTab) firstAvailableTab = tab;
             } else {
                 tab.style.display = 'none';
             }
         });
-        
-        // Hide parent submenu if all children are hidden
-        document.querySelectorAll('.main-tab.has-submenu').forEach(parent => {
-            const submenu = parent.nextElementSibling;
-            if (submenu && submenu.classList.contains('sidebar-submenu')) {
-                const visibleChildren = Array.from(submenu.querySelectorAll('.main-tab')).some(child => child.style.display !== 'none');
-                parent.style.display = visibleChildren ? 'flex' : 'none';
+
+        // Main tabs access control
+        document.querySelectorAll('.main-tab[data-group]').forEach(tab => {
+            const group = tab.getAttribute('data-group');
+            if (userObj.role === 'admin') {
+                tab.style.display = 'inline-block';
+            } else {
+                const groupScreens = {
+                    'master': ['partmaster', 'machines', 'operators', 'dept', 'shift', 'vendors', 'setters'],
+                    'inventory': ['rawmaterial', 'ht'],
+                    'production': ['schedule', 'status', 'prodlog', 'debur'],
+                    'reports': ['reports'],
+                    'hr': ['hr', 'attendance']
+                };
+                const allowed = groupScreens[group] ? groupScreens[group].some(s => accessibleScreens.includes(s)) : false;
+                tab.style.display = allowed ? 'inline-block' : 'none';
             }
         });
         
