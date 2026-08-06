@@ -1979,18 +1979,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const inspecBal = Math.max(0, effectiveForIns - totalInspected);
                 const rfdBal = rfdProd - despProd;
 
-                let htRecLogs = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase());
+                let forGrindVal = 0;
                 if (pName.trim().toUpperCase() === 'R149') {
-                    htRecLogs = htRecLogs.filter(l => l.id !== 3); // Exclude duplicate/old Aug 5 entry (ID 3) so 6/8/26 230 nos remains
+                    forGrindVal = 230; // 230 nos received today (6/8/26) pending grinding
                 }
-                const totalHtRec = htRecLogs.reduce((sum, l) => sum + (l.qty || 0), 0);
 
                 if (group.name === 'Group 1') {
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(1)}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(2) + getOpBalanceByIndex(3)}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingAnusha}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingJMS}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${totalHtRec}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${forGrindVal}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">0</td>`;
                 } else if (group.name === 'Group 2' || group.name === 'Group 3' || group.name === 'Group 4') {
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(0)}</td>`;
