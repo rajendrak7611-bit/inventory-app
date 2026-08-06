@@ -1974,6 +1974,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const rfdProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const despProd = allRmLogs.filter(l => (l.finish_part_no || '').trim().toUpperCase() === pName.trim().toUpperCase() && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
 
+                const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
+                const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
+                const inspecBal = Math.max(0, effectiveForIns - totalInspected);
+                const rfdBal = rfdProd - despProd;
+
                 let htRecLogs = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase());
                 if (pName.trim().toUpperCase() === 'R149') {
                     htRecLogs = htRecLogs.filter(l => l.id !== 3); // Exclude duplicate/old Aug 5 entry (ID 3) so 6/8/26 230 nos remains
@@ -1986,7 +1991,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingAnusha}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingJMS}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${totalHtRec}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(5)}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">0</td>`;
                 } else if (group.name === 'Group 2' || group.name === 'Group 3' || group.name === 'Group 4') {
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(0)}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(1)}</td>`;
