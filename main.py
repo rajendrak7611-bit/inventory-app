@@ -1113,6 +1113,24 @@ def create_raw_material_log(log: RawMaterialLogCreate, db: Session = Depends(get
     db.refresh(db_log)
     return db_log
 
+@app.delete("/api/rawmateriallogs/{log_id}")
+def delete_raw_material_log(log_id: int, db: Session = Depends(get_db)):
+    db_log = db.query(RawMaterialLog).filter(RawMaterialLog.id == log_id).first()
+    if not db_log:
+        raise HTTPException(status_code=404, detail="Log record not found")
+    
+    master = db.query(RawMaterial).filter(RawMaterial.forge_pn == db_log.forge_pn).first()
+    if master:
+        if db_log.type == 'receipt':
+            master.receipt = max(0, master.receipt - db_log.qty)
+        elif db_log.type == 'despatch':
+            master.despatch = max(0, master.despatch - db_log.qty)
+        master.stock = master.receipt - master.despatch
+        
+    db.delete(db_log)
+    db.commit()
+    return {"message": "Log record deleted"}
+
 @app.post("/api/rawmateriallogs/bulk")
 def bulk_import_raw_material_logs(payload: BulkImportRmLogPayload, db: Session = Depends(get_db)):
     for log in payload.logs:

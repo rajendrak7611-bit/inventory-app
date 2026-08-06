@@ -3031,6 +3031,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td>${log.forge_pn}</td>
                         ${extraCols}
                         <td>${log.qty}</td>
+                        <td>
+                            <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.8rem; color: #ef4444; border-color: #ef4444;" onclick="deleteRmLog(${log.id}, '${type}')">Delete</button>
+                        </td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -3039,6 +3042,22 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error(e);
         }
     }
+
+    window.deleteRmLog = async (id, type) => {
+        if (confirm('Are you sure you want to delete this record?')) {
+            try {
+                const res = await fetch(`/api/rawmateriallogs/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    fetchRmLogs(type);
+                    if (typeof fetchRawMaterials === 'function') fetchRawMaterials();
+                } else {
+                    alert('Failed to delete log record');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+    };
 
     // --- RAW MATERIAL LOGIC ---
     async function fetchRawMaterials() {
