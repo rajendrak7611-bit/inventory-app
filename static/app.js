@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         allTabs.forEach(tab => {
             const screen = tab.getAttribute('data-screen');
-            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || (screen === 'attendance' && accessibleScreens.includes('hr'));
+            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || ((screen === 'rawmaterial' || screen === 'ht') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) || (screen === 'attendance' && accessibleScreens.includes('hr'));
             if (isAllowed) {
                 tab.style.display = 'inline-block';
                 if (!firstAvailableTab) firstAvailableTab = tab;
@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 const groupScreens = {
                     'master': ['partmaster', 'machines', 'operators', 'dept', 'shift', 'vendors', 'setters'],
-                    'inventory': ['rawmaterial', 'ht'],
+                    'inventory': ['inventory', 'rawmaterial', 'ht'],
                     'production': ['schedule', 'status', 'prodlog', 'debur'],
                     'reports': ['reports'],
                     'hr': ['hr', 'attendance']
@@ -3266,7 +3266,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch(e) {}
 
         document.querySelectorAll('#userScreensList input[type="checkbox"]').forEach(chk => {
-            chk.checked = screens.includes(chk.value);
+            if (chk.value === 'inventory') {
+                chk.checked = screens.includes('inventory') || screens.includes('rawmaterial');
+            } else {
+                chk.checked = screens.includes(chk.value);
+            }
         });
     }
 
