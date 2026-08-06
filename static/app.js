@@ -409,12 +409,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const operEffSec = document.getElementById('operEffSection');
             if (operEffSec) operEffSec.style.display = 'block';
             addBtn.style.display = 'none';
-            if (!document.getElementById('operEffToDate').value) {
+            if (!document.getElementById('operEffDate').value) {
                 const today = new Date().toISOString().split('T')[0];
-                document.getElementById('operEffToDate').value = today;
-                const firstDay = new Date();
-                firstDay.setDate(1);
-                document.getElementById('operEffFromDate').value = firstDay.toISOString().split('T')[0];
+                document.getElementById('operEffDate').value = today;
             }
             fetchOperEffReport();
         }},
@@ -4398,13 +4395,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- OPERATOR EFFICIENCY REPORT LOGIC ---
     async function fetchOperEffReport() {
-        const fromDateStr = document.getElementById('operEffFromDate')?.value;
-        const toDateStr = document.getElementById('operEffToDate')?.value;
+        const selectedDate = document.getElementById('operEffDate')?.value;
         const deptFilter = (document.getElementById('operEffDept')?.value || '').trim().toUpperCase();
 
         const tbody = document.getElementById('operEffBody');
         if (!tbody) return;
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">Generating report...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">Generating report...</td></tr>';
 
         try {
             const [opRes, prodRes, attRes] = await Promise.all([
@@ -4424,43 +4420,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
             tbody.innerHTML = '';
             if (filteredOperators.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No operators found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">No operators found.</td></tr>';
                 return;
             }
-
-            const fromDate = fromDateStr ? new Date(fromDateStr) : new Date(0);
-            const toDate = toDateStr ? new Date(toDateStr + 'T23:59:59') : new Date('9999-12-31');
 
             filteredOperators.forEach(op => {
                 const opName = (op.name || '').trim();
 
-                // Attendance Hours from Attendance records for period
+                // Attendance Hours from Attendance records for selected date
                 const opAttRecords = allAttendance.filter(r => (r.employee_name || '').trim().toUpperCase() === opName.toUpperCase());
                 let totalAttHours = 0;
 
                 opAttRecords.forEach(r => {
-                    if (r.month_year && r.day) {
+                    if (r.month_year && r.day && selectedDate) {
                         const recDateStr = `${r.month_year}-${String(r.day).padStart(2, '0')}`;
-                        const recDate = new Date(recDateStr);
-                        if (recDate >= fromDate && recDate <= toDate) {
+                        if (recDateStr === selectedDate) {
                             totalAttHours += parseFloat(r.hours || 0);
                         }
                     }
                 });
 
-                // Filter Prod Logs for this operator in date range
+                // Filter Prod Logs for this operator for selected date
                 const opProdLogs = allProdLogs.filter(l => {
                     const lOp = (l.operator || '').trim().toUpperCase();
                     if (lOp !== opName.toUpperCase()) return false;
-                    if (!l.date) return false;
-                    const logDate = new Date(l.date);
-                    return logDate >= fromDate && logDate <= toDate;
+                    return l.date === selectedDate;
                 });
 
                 const sumRuntime = opProdLogs.reduce((sum, l) => sum + (parseFloat(l.runtime) || 0), 0);
                 const sumIdleTime = opProdLogs.reduce((sum, l) => sum + (parseFloat(l.idle_hours) || 0) + (parseFloat(l.idle_hours_2) || 0) + (parseFloat(l.idle_hours_3) || 0), 0);
                 const sumTargetQty = opProdLogs.reduce((sum, l) => sum + (parseFloat(l.target_qty) || 0), 0);
                 const sumProdQty = opProdLogs.reduce((sum, l) => sum + (parseFloat(l.prod_qty) || 0), 0);
+
+                // Multiple M/C value
+                let multMcVal = '-';
+                if (opProdLogs.length > 0) {
+                    const multVals = opProdLogs.map(l => parseInt(l.multiple_mc) || 1);
+                    const maxMult = Math.max(...multVals);
+                    multMcVal = maxMult > 0 ? maxMult : 1;
+                }
 
                 let effPct = 0;
                 if (sumTargetQty > 0) {
@@ -4482,17 +4480,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${sumIdleTime.toFixed(2)}</td>
                     <td>${Math.round(sumTargetQty)}</td>
                     <td><strong>${Math.round(sumProdQty)}</strong></td>
+                    <td>${multMcVal}</td>
                     <td><span style="font-weight:bold; color: ${effPct >= 80 ? '#16a34a' : (effPct >= 50 ? '#d97706' : '#ef4444')};">${effPct.toFixed(2)}%</span></td>
                 `;
                 tbody.appendChild(tr);
             });
 
             if (tbody.children.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No data for selected period.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-muted);">No data for selected date.</td></tr>';
             }
         } catch (err) {
             console.error('Error generating Operator Efficiency Report:', err);
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#ef4444;">Error generating report.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:#ef4444;">Error generating report.</td></tr>';
         }
     }
 
