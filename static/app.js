@@ -1820,7 +1820,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     { title: "sch qty", rowspan: 2 },
                     { title: "F Avail", rowspan: 2 },
                     { title: "Fac & cen", rowspan: 2 },
-                    { title: "Turning", rowspan: 2 },
                     { title: "HT", colspan: 3, subList: ["For HT", "Anusha", "JMS"] },
                     { title: "Grinding", colspan: 2, subList: ["For Grind", "For Ins"] },
                     { title: "Inspec", rowspan: 2 },
@@ -1987,8 +1986,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (group.name === 'Group 1') {
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(1)}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(2)}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(3)}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(2) + getOpBalanceByIndex(3)}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingAnusha}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingJMS}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(5)}</td>`;
