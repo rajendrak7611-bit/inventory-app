@@ -1736,22 +1736,15 @@ document.addEventListener('DOMContentLoaded', () => {
                             currentProd -= htSent;
                         }
 
-                        // Add HT received for Opn 60
-                        if (opnClean === '60' || opnClean === 'opn 60' || opnClean === 'opn60') {
+                        // Handle Opn 60 (Grinding) deduction and move to For Ins
+                        if (opnClean === '60' || opnClean === 'opn 60' || opnClean === 'opn60' || opnClean.includes('grind')) {
                             const htRec = allHtReceiptLogs.filter(l => l.partno === partno).reduce((sum, l) => sum + (l.qty || 0), 0);
-                            currentProd += htRec;
+                            const grindProd = allLogs.filter(l => l.partno === partno && ((l.opn_no || '').trim().toLowerCase() === opnClean || (l.opn_no || '').trim().toLowerCase().includes('grind'))).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                            currentProd = htRec;
+                            nextProd = grindProd;
                         }
                         
-                        // Total produced for next op
-                        let nextProd = 0;
-                        if (nextOp) {
-                            const nextOpClean = (nextOp.opn_no || '').trim().toLowerCase();
-                            nextProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === nextOpClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                        } else {
-                            nextProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                        }
-                        
-                        let balance = currentProd - nextProd;
+                        let balance = Math.max(0, currentProd - nextProd);
                         rowHtml += `<td>${balance}</td>`;
                     } else {
                         rowHtml += `<td></td>`;
@@ -1767,11 +1760,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const rfdProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const despProd = allRmLogs.filter(l => l.finish_part_no === partno && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
 
-                const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
+                const grindingProdStatus = allLogs.filter(l => l.partno === partno && ((l.opn_no || '').trim().toLowerCase() === '60' || (l.opn_no || '').trim().toLowerCase() === 'opn 60' || (l.opn_no || '').trim().toLowerCase() === 'opn60' || (l.opn_no || '').trim().toLowerCase().includes('grind'))).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const effectiveForIns = grindingProdStatus > 0 ? grindingProdStatus : (deburredTotal > 0 ? deburredTotal : forInsLogTotal);
                 const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
 
                 const deburBal = 0; // Deburring is completed once deburredTotal is logged
-                const forInsBal = effectiveForIns - totalInspected;
+                const forInsBal = Math.max(0, effectiveForIns - totalInspected);
                 const rfdBal = rfdProd - despProd;
 
                 rowHtml += `<td>${deburBal}</td>`;
@@ -1951,9 +1945,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         const htSent = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                         currentProd -= htSent;
                     }
-                    if (opnClean === '60' || opnClean === 'opn 60' || opnClean === 'opn60') {
+                    if (opnClean === '60' || opnClean === 'opn 60' || opnClean === 'opn60' || opnClean.includes('grind') || i === 4) {
                         const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
-                        currentProd += htRec;
+                        const grindProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && ((l.opn_no || '').trim().toLowerCase() === opnClean || (l.opn_no || '').trim().toLowerCase().includes('grind'))).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                        return Math.max(0, htRec - grindProd);
                     }
 
                     let nextProd = 0;
@@ -1974,9 +1969,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const rfdProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const despProd = allRmLogs.filter(l => (l.finish_part_no || '').trim().toUpperCase() === pName.trim().toUpperCase() && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
 
-                const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
+                const grindingProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && ((l.opn_no || '').trim().toLowerCase() === '60' || (l.opn_no || '').trim().toLowerCase() === 'opn 60' || (l.opn_no || '').trim().toLowerCase() === 'opn60' || (l.opn_no || '').trim().toLowerCase().includes('grind'))).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+
+                const effectiveForIns = grindingProd > 0 ? grindingProd : (deburredTotal > 0 ? deburredTotal : forInsLogTotal);
                 const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
-                const inspecBal = effectiveForIns - totalInspected;
+                const inspecBal = Math.max(0, effectiveForIns - totalInspected);
                 const rfdBal = rfdProd - despProd;
 
                 const trRow = document.createElement('tr');
