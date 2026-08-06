@@ -228,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function hideAllSections() {
         const sections = [
-            'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 
+            'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection',
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
             'productsSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'htSection', 'scheduleCreateSection', 'scheduleRunSection',
@@ -404,6 +404,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('mcUtilToDate').value = today;
                 document.getElementById('mcUtilFromDate').value = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
             }
+        }},
+        'sidebarOperEff': { tab: 'oper_eff', action: () => {
+            const operEffSec = document.getElementById('operEffSection');
+            if (operEffSec) operEffSec.style.display = 'block';
+            addBtn.style.display = 'none';
+            if (!document.getElementById('operEffToDate').value) {
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('operEffToDate').value = today;
+                const firstDay = new Date();
+                firstDay.setDate(1);
+                document.getElementById('operEffFromDate').value = firstDay.toISOString().split('T')[0];
+            }
+            fetchOperEffReport();
         }},
         'sidebarScheduleCreate': { tab: 'schedule_create', action: () => { 
             scheduleCreateSection.style.display = 'block'; 
@@ -3573,7 +3586,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function populateDeptDropdowns(depts) {
         const selects = [
             'scheduleDept', 'statusDeptSelect', 'deburDeptSelect', 
-            'inspDeptSelect', 'prodLogDept', 'partDept', 'machineDept'
+            'inspDeptSelect', 'prodLogDept', 'partDept', 'machineDept', 'operEffDept'
         ];
         
         selects.forEach(id => {
@@ -4382,4 +4395,112 @@ document.addEventListener('DOMContentLoaded', () => {
             exportTableToExcel('mcUtilTable', 'Machine_Utilization_Report');
         });
     }
+
+    // --- OPERATOR EFFICIENCY REPORT LOGIC ---
+    async function fetchOperEffReport() {
+        const fromDateStr = document.getElementById('operEffFromDate')?.value;
+        const toDateStr = document.getElementById('operEffToDate')?.value;
+        const deptFilter = (document.getElementById('operEffDept')?.value || '').trim().toUpperCase();
+
+        const tbody = document.getElementById('operEffBody');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">Generating report...</td></tr>';
+
+        try {
+            const [opRes, prodRes, attRes] = await Promise.all([
+                fetch('/api/operators'),
+                fetch('/api/prodlog'),
+                fetch('/api/attendance')
+            ]);
+
+            const allOperators = await opRes.json();
+            const allProdLogs = await prodRes.json();
+            const allAttendance = await attRes.json();
+
+            let filteredOperators = allOperators;
+            if (deptFilter) {
+                filteredOperators = allOperators.filter(o => (o.department || '').trim().toUpperCase() === deptFilter);
+            }
+
+            tbody.innerHTML = '';
+            if (filteredOperators.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No operators found.</td></tr>';
+                return;
+            }
+
+            const fromDate = fromDateStr ? new Date(fromDateStr) : new Date(0);
+            const toDate = toDateStr ? new Date(toDateStr + 'T23:59:59') : new Date('9999-12-31');
+
+            filteredOperators.forEach(op => {
+                const opName = (op.name || '').trim();
+
+                // Attendance Hours from Attendance records for period
+                const opAttRecords = allAttendance.filter(r => (r.employee_name || '').trim().toUpperCase() === opName.toUpperCase());
+                let totalAttHours = 0;
+
+                opAttRecords.forEach(r => {
+                    if (r.month_year && r.day) {
+                        const recDateStr = `${r.month_year}-${String(r.day).padStart(2, '0')}`;
+                        const recDate = new Date(recDateStr);
+                        if (recDate >= fromDate && recDate <= toDate) {
+                            totalAttHours += parseFloat(r.hours || 0);
+                        }
+                    }
+                });
+
+                // Filter Prod Logs for this operator in date range
+                const opProdLogs = allProdLogs.filter(l => {
+                    const lOp = (l.operator || '').trim().toUpperCase();
+                    if (lOp !== opName.toUpperCase()) return false;
+                    if (!l.date) return false;
+                    const logDate = new Date(l.date);
+                    return logDate >= fromDate && logDate <= toDate;
+                });
+
+                const sumRuntime = opProdLogs.reduce((sum, l) => sum + (parseFloat(l.runtime) || 0), 0);
+                const sumIdleTime = opProdLogs.reduce((sum, l) => sum + (parseFloat(l.idle_hours) || 0) + (parseFloat(l.idle_hours_2) || 0) + (parseFloat(l.idle_hours_3) || 0), 0);
+                const sumTargetQty = opProdLogs.reduce((sum, l) => sum + (parseFloat(l.target_qty) || 0), 0);
+                const sumProdQty = opProdLogs.reduce((sum, l) => sum + (parseFloat(l.prod_qty) || 0), 0);
+
+                let effPct = 0;
+                if (sumTargetQty > 0) {
+                    effPct = (sumProdQty / sumTargetQty) * 100;
+                } else if (opProdLogs.length > 0) {
+                    const validEffs = opProdLogs.map(l => parseFloat(l.efficiency) || 0).filter(e => e > 0);
+                    if (validEffs.length > 0) {
+                        effPct = validEffs.reduce((s, e) => s + e, 0) / validEffs.length;
+                    }
+                }
+
+                const displayAttHours = totalAttHours > 0 ? totalAttHours.toFixed(2) : (sumRuntime + sumIdleTime > 0 ? (sumRuntime + sumIdleTime).toFixed(2) : '0.00');
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${opName}</strong></td>
+                    <td>${displayAttHours}</td>
+                    <td>${sumRuntime.toFixed(2)}</td>
+                    <td>${sumIdleTime.toFixed(2)}</td>
+                    <td>${Math.round(sumTargetQty)}</td>
+                    <td><strong>${Math.round(sumProdQty)}</strong></td>
+                    <td><span style="font-weight:bold; color: ${effPct >= 80 ? '#16a34a' : (effPct >= 50 ? '#d97706' : '#ef4444')};">${effPct.toFixed(2)}%</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (tbody.children.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">No data for selected period.</td></tr>';
+            }
+        } catch (err) {
+            console.error('Error generating Operator Efficiency Report:', err);
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#ef4444;">Error generating report.</td></tr>';
+        }
+    }
+
+    document.getElementById('generateOperEffBtn')?.addEventListener('click', fetchOperEffReport);
+    document.getElementById('exportOperEffBtn')?.addEventListener('click', () => {
+        const table = document.getElementById('operEffTable');
+        if (!table) return;
+        const wb = XLSX.utils.table_to_book(table, { sheet: "Operator Efficiency" });
+        XLSX.writeFile(wb, `Operator_Efficiency_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    });
 });

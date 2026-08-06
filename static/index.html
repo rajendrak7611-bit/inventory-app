@@ -84,6 +84,7 @@
             <div class="sub-group" id="submenuReports" style="display: none;">
                 <button class="sub-tab" id="sidebarRmRequirement" data-screen="reports">RM Requirement</button>
                 <button class="sub-tab" id="sidebarMcUtil" data-screen="reports">M/c Util</button>
+                <button class="sub-tab" id="sidebarOperEff" data-screen="reports">Oper Eff</button>
             </div>
             <div class="sub-group" id="submenuHr" style="display: none;">
                 <button class="sub-tab" id="sidebarAttendance" data-screen="attendance">Attendance</button>
@@ -895,6 +896,52 @@
                 </div>
             </div>
 
+            <!-- Operator Efficiency Report Section -->
+            <div id="operEffSection" style="display: none; padding: 2rem; color: var(--text-main);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 style="margin: 0;">Operator Efficiency Report</h2>
+                    <button id="exportOperEffBtn" class="btn btn-outline">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Export Excel
+                    </button>
+                </div>
+                <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; align-items: flex-end;">
+                    <div style="flex: 1; min-width: 150px;">
+                        <label for="operEffFromDate" style="display: block; margin-bottom: 5px; font-weight: 500;">From Date</label>
+                        <input type="date" id="operEffFromDate" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <label for="operEffToDate" style="display: block; margin-bottom: 5px; font-weight: 500;">To Date</label>
+                        <input type="date" id="operEffToDate" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <label for="operEffDept" style="display: block; margin-bottom: 5px; font-weight: 500;">Department</label>
+                        <select id="operEffDept" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+                            <option value="">-- All Departments --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button id="generateOperEffBtn" class="btn btn-primary" style="padding: 0.5rem 1rem;">Generate</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="styled-table" id="operEffTable">
+                        <thead>
+                            <tr>
+                                <th>Op Name</th>
+                                <th>Att Hours</th>
+                                <th>Run Time</th>
+                                <th>Idle Time</th>
+                                <th>Target Qty</th>
+                                <th>Prod Qty</th>
+                                <th>Efficiency %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="operEffBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- Users Section -->
             <div class="table-container" id="usersSection" style="display: none; padding: 2rem; color: var(--text-main);">
                 <div style="display: flex; gap: 3rem; flex-wrap: wrap;">
@@ -1518,6 +1565,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=135"></script>
+    <script src="/static/app.js?v=136"></script>
 </body>
 </html>
