@@ -74,10 +74,6 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         conn.execute(text("ALTER TABLE production_logs ADD COLUMN multiple_mc INTEGER DEFAULT 1;"))
     except Exception:
         pass
-    try:
-        conn.execute(text("DELETE FROM production_logs WHERE LOWER(dept) = 'spider' OR partno IN (SELECT partno FROM part_masters WHERE LOWER(department) = 'spider');"))
-    except Exception:
-        pass
 
 # Seed default admin user
 with Session(engine) as db:
