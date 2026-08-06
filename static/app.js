@@ -1736,12 +1736,18 @@ document.addEventListener('DOMContentLoaded', () => {
                             currentProd -= htSent;
                         }
 
-                        // Handle Opn 60 (Grinding) deduction and move to For Ins
+                        // Total produced for next op
+                        let nextProd = 0;
                         if (opnClean === '60' || opnClean === 'opn 60' || opnClean === 'opn60' || opnClean.includes('grind')) {
                             const htRec = allHtReceiptLogs.filter(l => l.partno === partno).reduce((sum, l) => sum + (l.qty || 0), 0);
                             const grindProd = allLogs.filter(l => l.partno === partno && ((l.opn_no || '').trim().toLowerCase() === opnClean || (l.opn_no || '').trim().toLowerCase().includes('grind'))).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                             currentProd = htRec;
                             nextProd = grindProd;
+                        } else if (nextOp) {
+                            const nextOpClean = (nextOp.opn_no || '').trim().toLowerCase();
+                            nextProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === nextOpClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                        } else {
+                            nextProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                         }
                         
                         let balance = Math.max(0, currentProd - nextProd);
