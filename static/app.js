@@ -2855,6 +2855,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
                 
                 const actionTd = document.createElement('td');
+                actionTd.style.whiteSpace = 'nowrap';
+
+                const editBtn = document.createElement('button');
+                editBtn.className = 'btn-text';
+                editBtn.style.color = 'var(--primary-color, #2563eb)';
+                editBtn.style.marginRight = '8px';
+                editBtn.textContent = 'Edit Date';
+                editBtn.onclick = () => openEditProdLogDateModal(log.id, log.date);
+                actionTd.appendChild(editBtn);
+
                 const delBtn = document.createElement('button');
                 delBtn.className = 'btn-text';
                 delBtn.style.color = 'var(--danger-color)';
@@ -3075,6 +3085,52 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!table) return;
             const wb = XLSX.utils.table_to_book(table, {sheet: "Prod Logs"});
             XLSX.writeFile(wb, `Production_Logs_${new Date().toISOString().slice(0,10)}.xlsx`);
+        });
+    }
+
+    // --- Edit Prod Log Date Modal Logic ---
+    const editProdLogDateModal = document.getElementById('editProdLogDateModal');
+    const editProdLogDateForm = document.getElementById('editProdLogDateForm');
+    const closeEditProdLogDateModalBtn = document.getElementById('closeEditProdLogDateModalBtn');
+    const cancelEditProdLogDateBtn = document.getElementById('cancelEditProdLogDateBtn');
+
+    function openEditProdLogDateModal(logId, currentDate) {
+        if (!editProdLogDateModal) return;
+        document.getElementById('editProdLogId').value = logId;
+        document.getElementById('editProdLogDateInput').value = currentDate || new Date().toISOString().split('T')[0];
+        editProdLogDateModal.classList.add('show');
+    }
+
+    function closeEditProdLogDateModal() {
+        if (editProdLogDateModal) editProdLogDateModal.classList.remove('show');
+    }
+
+    if (closeEditProdLogDateModalBtn) closeEditProdLogDateModalBtn.addEventListener('click', closeEditProdLogDateModal);
+    if (cancelEditProdLogDateBtn) cancelEditProdLogDateBtn.addEventListener('click', closeEditProdLogDateModal);
+
+    if (editProdLogDateForm) {
+        editProdLogDateForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const logId = document.getElementById('editProdLogId').value;
+            const newDate = document.getElementById('editProdLogDateInput').value;
+            if (!logId || !newDate) return;
+
+            try {
+                const res = await fetch(`/api/prodlog/${logId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: newDate })
+                });
+                if (res.ok) {
+                    closeEditProdLogDateModal();
+                    fetchProdLogs();
+                } else {
+                    alert('Failed to update log date.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error updating log date.');
+            }
         });
     }
 

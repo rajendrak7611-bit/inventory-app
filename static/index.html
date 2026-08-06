@@ -1600,6 +1600,27 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=139"></script>
+    <!-- Edit Prod Log Date Modal -->
+    <div id="editProdLogDateModal" class="modal">
+        <div class="modal-content" style="max-width: 400px; border-radius: 12px; padding: 1.5rem;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 0.75rem;">
+                <h3 style="margin: 0; font-size: 1.25rem;">Modify Log Date</h3>
+                <button class="close-btn" id="closeEditProdLogDateModalBtn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+            </div>
+            <form id="editProdLogDateForm">
+                <input type="hidden" id="editProdLogId">
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label for="editProdLogDateInput" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">New Production Date</label>
+                    <input type="date" id="editProdLogDateInput" required style="width: 100%; padding: 0.5rem 0.75rem; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; font-size: 0.95rem; font-family: inherit;">
+                </div>
+                <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.5rem;">
+                    <button type="button" class="btn btn-outline" id="cancelEditProdLogDateBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Date</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/app.js?v=140"></script>
 </body>
 </html>

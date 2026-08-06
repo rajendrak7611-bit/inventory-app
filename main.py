@@ -1021,6 +1021,19 @@ def delete_spider_prodlogs(db: Session = Depends(get_db)):
     db.commit()
     return {"message": f"Successfully deleted {deleted_count} SPIDER production logs"}
 
+class ProdLogDateUpdatePayload(BaseModel):
+    date: str
+
+@app.put("/api/prodlog/{log_id}")
+def update_prodlog_date(log_id: int, payload: ProdLogDateUpdatePayload, db: Session = Depends(get_db)):
+    db_log = db.query(ProductionLog).filter(ProductionLog.id == log_id).first()
+    if not db_log:
+        raise HTTPException(status_code=404, detail="Log not found")
+    db_log.date = payload.date
+    db.commit()
+    db.refresh(db_log)
+    return {"message": "Date updated successfully", "date": db_log.date}
+
 @app.delete("/api/prodlog/{log_id}")
 def delete_prodlog(log_id: int, db: Session = Depends(get_db)):
     db_log = db.query(ProductionLog).filter(ProductionLog.id == log_id).first()
