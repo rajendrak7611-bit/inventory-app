@@ -1114,6 +1114,9 @@ def bulk_import_raw_material_logs(payload: BulkImportRmLogPayload, db: Session =
     db.commit()
     return {"message": f"{len(payload.logs)} logs imported successfully"}
 
+class UserPasswordChange(BaseModel):
+    new_password: str
+
 @app.get("/api/users", response_model=List[UserResponse])
 def get_users(db: Session = Depends(get_db)):
     return db.query(User).all()
@@ -1134,6 +1137,18 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
     return db_user
+
+@app.put("/api/users/{user_id}/password")
+def change_user_password(user_id: int, payload: UserPasswordChange, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not payload.new_password or not payload.new_password.strip():
+        raise HTTPException(status_code=400, detail="Password cannot be empty")
+    hashed = hashlib.sha256(payload.new_password.strip().encode()).hexdigest()
+    db_user.password_hash = hashed
+    db.commit()
+    return {"message": f"Password updated for {db_user.username}"}
 
 @app.delete("/api/users/{user_id}")
 def delete_user(user_id: int, db: Session = Depends(get_db)):

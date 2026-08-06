@@ -3229,13 +3229,63 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${u.username}</td>
                     <td>${u.role}</td>
                     <td>
-                        <button class="btn btn-danger" onclick="deleteUser(${u.id})">Delete</button>
+                        <button class="btn btn-outline" style="margin-right: 5px; padding: 0.3rem 0.6rem; font-size: 0.85rem;" onclick="openChangePasswordModal(${u.id}, '${u.username}')">Change Password</button>
+                        ${u.username !== 'admin' ? `<button class="btn btn-danger" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;" onclick="deleteUser(${u.id})">Delete</button>` : ''}
                     </td>
                 `;
                 tbody.appendChild(tr);
             });
         } catch (e) { console.error(e); }
     }
+
+    window.openChangePasswordModal = (userId, username) => {
+        const modal = document.getElementById('changePasswordModal');
+        if (!modal) return;
+        document.getElementById('changePasswordUserId').value = userId;
+        document.getElementById('changePasswordModalTitle').innerText = `Change Password for ${username}`;
+        document.getElementById('newPasswordInput').value = '';
+        modal.classList.add('show');
+    };
+
+    const changePasswordForm = document.getElementById('changePasswordForm');
+    if (changePasswordForm) {
+        changePasswordForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('changePasswordUserId').value;
+            const newPassword = document.getElementById('newPasswordInput').value.trim();
+
+            if (!newPassword) {
+                alert('Please enter a new password');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/users/${userId}/password`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ new_password: newPassword })
+                });
+
+                if (res.ok) {
+                    alert('Password updated successfully!');
+                    document.getElementById('changePasswordModal').classList.remove('show');
+                } else {
+                    const data = await res.json();
+                    alert(data.detail || 'Error updating password');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error updating password');
+            }
+        });
+    }
+
+    document.getElementById('closeChangePasswordModalBtn')?.addEventListener('click', () => {
+        document.getElementById('changePasswordModal').classList.remove('show');
+    });
+    document.getElementById('cancelChangePasswordBtn')?.addEventListener('click', () => {
+        document.getElementById('changePasswordModal').classList.remove('show');
+    });
     
     // --- RM REQUIREMENT REPORT ---
     async function fetchRmRequirement() {
