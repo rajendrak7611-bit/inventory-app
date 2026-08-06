@@ -1984,16 +1984,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${schQty || 0}</td>`;
                 rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${fAvail || 0}</td>`;
 
-                const totalHtRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
-                const forGrindBal = Math.max(0, totalHtRec - getOpBalanceByIndex(6));
-
                 if (group.name === 'Group 1') {
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(1)}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(2) + getOpBalanceByIndex(3)}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingAnusha}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingJMS}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${forGrindBal}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(6)}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${Math.max(0, getOpBalanceByIndex(4))}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${Math.max(0, getOpBalanceByIndex(5))}</td>`;
                 } else if (group.name === 'Group 2' || group.name === 'Group 3' || group.name === 'Group 4') {
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(0)}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(1)}</td>`;
