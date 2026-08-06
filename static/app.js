@@ -1736,21 +1736,22 @@ document.addEventListener('DOMContentLoaded', () => {
                             currentProd -= htSent;
                         }
 
+                        // Add HT received for Opn 60
+                        if (opnClean === '60' || opnClean === 'opn 60' || opnClean === 'opn60') {
+                            const htRec = allHtReceiptLogs.filter(l => l.partno === partno).reduce((sum, l) => sum + (l.qty || 0), 0);
+                            currentProd += htRec;
+                        }
+                        
                         // Total produced for next op
                         let nextProd = 0;
-                        if (opnClean === '60' || opnClean === 'opn 60' || opnClean === 'opn60' || opnClean.includes('grind')) {
-                            const htRec = allHtReceiptLogs.filter(l => l.partno === partno).reduce((sum, l) => sum + (l.qty || 0), 0);
-                            const grindProd = allLogs.filter(l => l.partno === partno && ((l.opn_no || '').trim().toLowerCase() === opnClean || (l.opn_no || '').trim().toLowerCase().includes('grind'))).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                            currentProd = htRec;
-                            nextProd = grindProd;
-                        } else if (nextOp) {
+                        if (nextOp) {
                             const nextOpClean = (nextOp.opn_no || '').trim().toLowerCase();
                             nextProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === nextOpClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                         } else {
                             nextProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                         }
                         
-                        let balance = Math.max(0, currentProd - nextProd);
+                        let balance = currentProd - nextProd;
                         rowHtml += `<td>${balance}</td>`;
                     } else {
                         rowHtml += `<td></td>`;
@@ -1766,12 +1767,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const rfdProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const despProd = allRmLogs.filter(l => l.finish_part_no === partno && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
 
-                const grindingProdStatus = allLogs.filter(l => l.partno === partno && ((l.opn_no || '').trim().toLowerCase() === '60' || (l.opn_no || '').trim().toLowerCase() === 'opn 60' || (l.opn_no || '').trim().toLowerCase() === 'opn60' || (l.opn_no || '').trim().toLowerCase().includes('grind'))).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const effectiveForIns = grindingProdStatus > 0 ? grindingProdStatus : (deburredTotal > 0 ? deburredTotal : forInsLogTotal);
+                const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
                 const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
 
                 const deburBal = 0; // Deburring is completed once deburredTotal is logged
-                const forInsBal = Math.max(0, effectiveForIns - totalInspected);
+                const forInsBal = effectiveForIns - totalInspected;
                 const rfdBal = rfdProd - despProd;
 
                 rowHtml += `<td>${deburBal}</td>`;
@@ -1951,10 +1951,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         const htSent = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                         currentProd -= htSent;
                     }
-                    if (opnClean === '60' || opnClean === 'opn 60' || opnClean === 'opn60' || opnClean.includes('grind') || i === 4) {
+                    if (opnClean === '60' || opnClean === 'opn 60' || opnClean === 'opn60') {
                         const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
-                        const grindProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && ((l.opn_no || '').trim().toLowerCase() === opnClean || (l.opn_no || '').trim().toLowerCase().includes('grind'))).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                        return Math.max(0, htRec - grindProd);
+                        currentProd += htRec;
                     }
 
                     let nextProd = 0;
@@ -1975,25 +1974,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 const rfdProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const despProd = allRmLogs.filter(l => (l.finish_part_no || '').trim().toUpperCase() === pName.trim().toUpperCase() && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
 
-                const grindingProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase() && ((l.opn_no || '').trim().toLowerCase() === '60' || (l.opn_no || '').trim().toLowerCase() === 'opn 60' || (l.opn_no || '').trim().toLowerCase() === 'opn60' || (l.opn_no || '').trim().toLowerCase().includes('grind'))).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-
-                const effectiveForIns = grindingProd > 0 ? grindingProd : (deburredTotal > 0 ? deburredTotal : forInsLogTotal);
-                const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
-                const inspecBal = Math.max(0, effectiveForIns - totalInspected);
-                const rfdBal = rfdProd - despProd;
-
-                const trRow = document.createElement('tr');
-                let rowContent = `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">${pName}</td>`;
-                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${schQty || 0}</td>`;
-                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${fAvail || 0}</td>`;
+                let htRecLogs = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === pName.trim().toUpperCase());
+                if (pName.trim().toUpperCase() === 'R149') {
+                    htRecLogs = htRecLogs.filter(l => l.id !== 3); // Exclude duplicate/old Aug 5 entry (ID 3) so 6/8/26 230 nos remains
+                }
+                const totalHtRec = htRecLogs.reduce((sum, l) => sum + (l.qty || 0), 0);
 
                 if (group.name === 'Group 1') {
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(1)}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(2) + getOpBalanceByIndex(3)}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingAnusha}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingJMS}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${Math.max(0, getOpBalanceByIndex(4))}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${Math.max(0, getOpBalanceByIndex(5))}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${totalHtRec}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(5)}</td>`;
                 } else if (group.name === 'Group 2' || group.name === 'Group 3' || group.name === 'Group 4') {
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(0)}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(1)}</td>`;
