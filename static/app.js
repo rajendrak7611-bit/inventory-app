@@ -1984,6 +1984,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     forGrindVal = 230; // 230 nos received today (6/8/26) pending grinding
                 }
 
+                const trRow = document.createElement('tr');
+                let rowContent = `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">${pName}</td>`;
+                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${schQty || 0}</td>`;
+                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${fAvail || 0}</td>`;
+
                 if (group.name === 'Group 1') {
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(1)}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${getOpBalanceByIndex(2) + getOpBalanceByIndex(3)}</td>`;
