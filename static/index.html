@@ -66,6 +66,7 @@
                 <button class="sub-tab" id="sidebarDept" data-screen="dept">Dept</button>
                 <button class="sub-tab" id="sidebarShift" data-screen="shift">Shift</button>
                 <button class="sub-tab" id="sidebarVendors" data-screen="vendors">Vendors</button>
+                <button class="sub-tab" id="sidebarSetters" data-screen="setters">Setters</button>
             </div>
             <div class="sub-group" id="submenuInventory" style="display: none;">
                 <button class="sub-tab" id="sidebarRmReceipt" data-screen="rawmaterial">Receipt</button>
@@ -180,6 +181,20 @@
                         </tr>
                     </thead>
                     <tbody id="vendorsBody"></tbody>
+                </table>
+            </div>
+
+            <div class="table-container" id="settersSection" style="display: none;">
+                <table id="settersTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Dept</th>
+                            <th>Setter Name</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="settersBody"></tbody>
                 </table>
             </div>
 
@@ -1322,6 +1337,31 @@
         </div>
     </div>
 
+    <!-- Modal for Setter Add/Edit -->
+    <div id="setterModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="setterModalTitle">Add Setter</h2>
+                <button class="close-btn" id="closeSetterModalBtn">&times;</button>
+            </div>
+            <form id="setterForm">
+                <input type="hidden" id="setterId">
+                <div class="form-group">
+                    <label for="setterName">Setter Name</label>
+                    <input type="text" id="setterName" required placeholder="e.g. John Setter">
+                </div>
+                <div class="form-group">
+                    <label for="setterDepartment">Dept</label>
+                    <input type="text" id="setterDepartment" required placeholder="e.g. CNC">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="cancelSetterBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Details</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Raw Material Modal -->
     <div id="rawMaterialModal" class="modal">
         <div class="modal-content" style="max-width: 500px;">
@@ -1419,6 +1459,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=114"></script>
+    <script src="/static/app.js?v=115"></script>
 </body>
 </html>

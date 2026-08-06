@@ -131,6 +131,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebarOperators = document.getElementById('sidebarOperators');
     const sidebarDept = document.getElementById('sidebarDept');
     const sidebarShift = document.getElementById('sidebarShift');
+    const sidebarVendors = document.getElementById('sidebarVendors');
+    const sidebarSetters = document.getElementById('sidebarSetters');
     const tabSchedule = document.getElementById('tabSchedule');
     const sidebarScheduleCreate = document.getElementById('sidebarScheduleCreate');
     const sidebarScheduleRun = document.getElementById('sidebarScheduleRun');
@@ -149,6 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const departmentsSection = document.getElementById('departmentsSection');
     const shiftsSection = document.getElementById('shiftsSection');
     const vendorsSection = document.getElementById('vendorsSection');
+    const settersSection = document.getElementById('settersSection');
     const htSection = document.getElementById('htSection');
     const scheduleCreateSection = document.getElementById('scheduleCreateSection');
     const scheduleRunSection = document.getElementById('scheduleRunSection');
@@ -218,7 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
             'productsSection', 'partMasterSection', 'machinesSection',
-            'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'htSection', 'scheduleCreateSection', 'scheduleRunSection',
+            'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'htSection', 'scheduleCreateSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
             'inspectionSection', 'maintenanceSection', 'hrSection'
         ];
@@ -338,6 +341,13 @@ document.addEventListener('DOMContentLoaded', () => {
             addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Vendor';
             fetchVendors();
         }},
+        'sidebarSetters': { tab: 'setters', action: () => {
+            if (settersSection) settersSection.style.display = 'block';
+            importBtn.style.display = 'none';
+            addBtn.style.display = 'inline-flex';
+            addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Setter';
+            fetchSetters();
+        }},
         'sidebarHt': { tab: 'ht', action: () => {
             if (htSection) htSection.style.display = 'block';
             importBtn.style.display = 'none';
@@ -435,6 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (currentTab === 'dept') openDeptModal();
         else if (currentTab === 'shift') openShiftModal();
         else if (currentTab === 'vendors') openVendorModal();
+        else if (currentTab === 'setters') openSetterModal(false);
         else if (currentTab === 'ht') openHtModal();
         else if (currentTab === 'rawmaterial') {
             document.getElementById('rmModalTitle').innerText = 'Add Raw Material';
@@ -1044,6 +1055,91 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('operatorName').value = o.name;
             document.getElementById('operatorDepartment').value = o.department;
             openOperatorModal(true);
+        }
+    };
+
+    // --- SETTERS LOGIC ---
+    const settersBody = document.getElementById('settersBody');
+    const setterModal = document.getElementById('setterModal');
+    const setterForm = document.getElementById('setterForm');
+    const closeSetterBtn = document.getElementById('closeSetterModalBtn');
+    const cancelSetterBtn = document.getElementById('cancelSetterBtn');
+    const setterModalTitle = document.getElementById('setterModalTitle');
+
+    async function fetchSetters() {
+        try {
+            const response = await fetch('/api/setters');
+            const setters = await response.json();
+            if (settersBody) {
+                settersBody.innerHTML = '';
+                if (setters.length === 0) {
+                    settersBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No setters found.</td></tr>';
+                    return;
+                }
+                setters.forEach(s => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${s.id}</td><td>${s.department || ''}</td><td>${s.name}</td>
+                        <td class="actions">
+                            <button class="btn btn-edit" onclick="editSetter(${s.id})">Edit</button>
+                            <button class="btn btn-danger" onclick="deleteSetter(${s.id})">Delete</button>
+                        </td>`;
+                    settersBody.appendChild(tr);
+                });
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    function openSetterModal(isEdit) {
+        if (setterModal) {
+            setterModal.classList.add('show');
+            if (setterModalTitle) setterModalTitle.textContent = isEdit ? 'Edit Setter' : 'Add Setter';
+        }
+    }
+    function closeSetterModal() {
+        if (setterModal) setterModal.classList.remove('show');
+        if (setterForm) setterForm.reset();
+        const sId = document.getElementById('setterId');
+        if (sId) sId.value = '';
+    }
+    if (closeSetterBtn) closeSetterBtn.addEventListener('click', closeSetterModal);
+    if (cancelSetterBtn) cancelSetterBtn.addEventListener('click', closeSetterModal);
+
+    if (setterForm) {
+        setterForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('setterId').value;
+            const data = {
+                name: document.getElementById('setterName').value,
+                department: document.getElementById('setterDepartment').value
+            };
+            const url = id ? `/api/setters/${id}` : '/api/setters';
+            await fetch(url, {
+                method: id ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            closeSetterModal();
+            fetchSetters();
+        });
+    }
+
+    window.deleteSetter = async (id) => {
+        if (confirm('Delete this setter?')) {
+            await fetch(`/api/setters/${id}`, { method: 'DELETE' });
+            fetchSetters();
+        }
+    };
+
+    window.editSetter = async (id) => {
+        const res = await fetch('/api/setters');
+        const data = await res.json();
+        const s = data.find(x => x.id === id);
+        if (s) {
+            document.getElementById('setterId').value = s.id;
+            document.getElementById('setterName').value = s.name;
+            document.getElementById('setterDepartment').value = s.department || '';
+            openSetterModal(true);
         }
     };
 
@@ -2257,6 +2353,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- PROD LOG LOGIC ---
     let prodLogAllMachines = [];
     let prodLogAllOperators = [];
+    let prodLogAllSetters = [];
     let prodLogSchedules = [];
     let currentPartOperations = [];
 
@@ -2271,6 +2368,18 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const opRes = await fetch('/api/operators');
         prodLogAllOperators = await opRes.json();
+
+        const setterRes = await fetch('/api/setters');
+        prodLogAllSetters = await setterRes.json();
+
+        // Populate Setter dropdown
+        const setterSelect = document.getElementById('prodLogSetter');
+        if (setterSelect) {
+            setterSelect.innerHTML = '<option value="">-- Select Setter --</option>';
+            prodLogAllSetters.forEach(s => {
+                setterSelect.innerHTML += `<option value="${s.name}">${s.name}</option>`;
+            });
+        }
         
         const schedRes = await fetch('/api/schedule');
         const schedData = await schedRes.json();
@@ -2291,10 +2400,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const dept = e.target.value.trim().toUpperCase();
         const machSelect = document.getElementById('prodLogMachine');
         const opSelect = document.getElementById('prodLogOperator');
+        const setterSelect = document.getElementById('prodLogSetter');
         const partList = document.getElementById('prodLogPartNoList');
         
         machSelect.innerHTML = '<option value="">-- Select Machine --</option>';
         opSelect.innerHTML = '<option value="">-- Select Operator --</option>';
+        if (setterSelect) setterSelect.innerHTML = '<option value="">-- Select Setter --</option>';
         document.getElementById('prodLogPartNo').value = '';
         partList.innerHTML = '';
         
@@ -2305,6 +2416,14 @@ document.addEventListener('DOMContentLoaded', () => {
         prodLogAllOperators.filter(o => (o.department || '').trim().toUpperCase() === dept).forEach(o => {
             opSelect.innerHTML += `<option value="${o.name}">${o.name}</option>`;
         });
+
+        if (setterSelect) {
+            const filteredSetters = prodLogAllSetters.filter(s => !dept || !s.department || s.department.trim().toUpperCase() === dept);
+            const settersToDisplay = filteredSetters.length > 0 ? filteredSetters : prodLogAllSetters;
+            settersToDisplay.forEach(s => {
+                setterSelect.innerHTML += `<option value="${s.name}">${s.name}</option>`;
+            });
+        }
         
         // Filter pending schedules by this department
         const deptSchedules = prodLogSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept);

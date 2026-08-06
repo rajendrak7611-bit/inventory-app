@@ -61,6 +61,13 @@ class Operator(Base):
     name = Column(String, index=True)
     department = Column(String, index=True)
 
+class Setter(Base):
+    __tablename__ = "setters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    department = Column(String, index=True)
+
 class Department(Base):
     __tablename__ = "departments"
 

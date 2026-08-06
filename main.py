@@ -8,7 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog
+from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -234,6 +234,22 @@ class OperatorCreate(OperatorBase):
     pass
 
 class OperatorResponse(OperatorBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+class SetterBase(BaseModel):
+    name: str
+    department: Optional[str] = ""
+
+class BulkImportSetterPayload(BaseModel):
+    setters: List[SetterBase]
+
+class SetterCreate(SetterBase):
+    pass
+
+class SetterResponse(SetterBase):
     id: int
 
     class Config:
@@ -525,6 +541,39 @@ def delete_operator(operator_id: int, db: Session = Depends(get_db)):
     db.delete(db_operator)
     db.commit()
     return {"message": "Operator deleted successfully"}
+
+# --- Setter API Routes ---
+@app.get("/api/setters", response_model=List[SetterResponse])
+def read_setters(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db)):
+    return db.query(Setter).offset(skip).limit(limit).all()
+
+@app.post("/api/setters", response_model=SetterResponse)
+def create_setter(setter: SetterCreate, db: Session = Depends(get_db)):
+    db_setter = Setter(**setter.model_dump())
+    db.add(db_setter)
+    db.commit()
+    db.refresh(db_setter)
+    return db_setter
+
+@app.put("/api/setters/{setter_id}", response_model=SetterResponse)
+def update_setter(setter_id: int, setter: SetterCreate, db: Session = Depends(get_db)):
+    db_setter = db.query(Setter).filter(Setter.id == setter_id).first()
+    if not db_setter:
+        raise HTTPException(status_code=404, detail="Setter not found")
+    for key, value in setter.model_dump().items():
+        setattr(db_setter, key, value)
+    db.commit()
+    db.refresh(db_setter)
+    return db_setter
+
+@app.delete("/api/setters/{setter_id}")
+def delete_setter(setter_id: int, db: Session = Depends(get_db)):
+    db_setter = db.query(Setter).filter(Setter.id == setter_id).first()
+    if not db_setter:
+        raise HTTPException(status_code=404, detail="Setter not found")
+    db.delete(db_setter)
+    db.commit()
+    return {"message": "Setter deleted successfully"}
 
 # --- Department Endpoints ---
 @app.get("/api/departments", response_model=List[DepartmentResponse])
