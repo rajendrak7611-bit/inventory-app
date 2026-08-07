@@ -60,6 +60,7 @@ class Operator(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     department = Column(String, index=True)
+    designation = Column(String, default="Operator", nullable=True)
 
 class Setter(Base):
     __tablename__ = "setters"

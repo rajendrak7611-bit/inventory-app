@@ -82,6 +82,10 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         conn.execute(text("ALTER TABLE insert_masters ADD COLUMN no_of_edges INTEGER DEFAULT 1;"))
     except Exception:
         pass
+    try:
+        conn.execute(text("ALTER TABLE operators ADD COLUMN designation VARCHAR DEFAULT 'Operator';"))
+    except Exception:
+        pass
 
 # Seed default admin user
 with Session(engine) as db:
@@ -231,6 +235,7 @@ class MachineResponse(MachineBase):
 class OperatorBase(BaseModel):
     name: str
     department: Optional[str] = ""
+    designation: Optional[str] = "Operator"
 
 class BulkImportMachinePayload(BaseModel):
     machines: List[MachineBase]
@@ -572,6 +577,18 @@ def delete_operator(operator_id: int, db: Session = Depends(get_db)):
     db.delete(db_operator)
     db.commit()
     return {"message": "Operator deleted successfully"}
+
+@app.post("/api/operators/bulk_import")
+def bulk_import_operators(payload: BulkImportOperatorPayload, db: Session = Depends(get_db)):
+    for op_data in payload.operators:
+        existing = db.query(Operator).filter(func.lower(Operator.name) == op_data.name.lower().strip()).first()
+        if existing:
+            existing.department = op_data.department
+            existing.designation = op_data.designation or "Operator"
+        else:
+            db.add(Operator(**op_data.model_dump()))
+    db.commit()
+    return {"message": "Import successful"}
 
 # --- Setter API Routes ---
 @app.get("/api/setters", response_model=List[SetterResponse])

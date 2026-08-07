@@ -243,6 +243,7 @@
                             <th>ID</th>
                             <th>Dept</th>
                             <th>Operator Name</th>
+                            <th>Designation</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -1485,6 +1486,10 @@
                     <label for="operatorDepartment">Dept</label>
                     <input type="text" id="operatorDepartment" required placeholder="e.g. Welding">
                 </div>
+                <div class="form-group">
+                    <label for="operatorDesignation">Designation</label>
+                    <input type="text" id="operatorDesignation" required placeholder="e.g. Operator" value="Operator">
+                </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" id="cancelOperatorBtn">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Details</button>
@@ -1725,6 +1730,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=150"></script>
+    <script src="/static/app.js?v=151"></script>
 </body>
 </html>

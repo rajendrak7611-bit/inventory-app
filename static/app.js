@@ -652,15 +652,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     json.forEach(row => {
                         let name = '';
                         let dept = '';
+                        let desig = 'Operator';
                         for (let k in row) {
                             let key = k.toLowerCase().replace(/[^a-z0-9]/g, '');
                             if (key === 'name' || key === 'operatorname' || key === 'operator') name = String(row[k]).trim();
                             if (key === 'dept' || key === 'department') dept = String(row[k]).trim();
+                            if (key === 'designation' || key === 'desig' || key === 'role') desig = String(row[k]).trim();
                         }
                         if (!name) return;
                         operators.push({
                             name: name,
-                            department: dept
+                            department: dept,
+                            designation: desig || 'Operator'
                         });
                     });
                     endpoint = '/api/operators/bulk_import';
@@ -1053,13 +1056,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const operators = await response.json();
             operatorsBody.innerHTML = '';
             if (operators.length === 0) {
-                operatorsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No operators found.</td></tr>';
+                operatorsBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">No operators found.</td></tr>';
                 return;
             }
             operators.forEach(o => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${o.id}</td><td>${o.department}</td><td>${o.name}</td>
+                    <td>${o.id}</td><td>${o.department}</td><td>${o.name}</td><td>${o.designation || 'Operator'}</td>
                     <td class="actions">
                         <button class="btn btn-edit" onclick="editOperator(${o.id})">Edit</button>
                         <button class="btn btn-danger" onclick="deleteOperator(${o.id})">Delete</button>
@@ -1079,7 +1082,11 @@ document.addEventListener('DOMContentLoaded', () => {
     operatorForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('operatorId').value;
-        const data = { name: document.getElementById('operatorName').value, department: document.getElementById('operatorDepartment').value };
+        const data = {
+            name: document.getElementById('operatorName').value,
+            department: document.getElementById('operatorDepartment').value,
+            designation: document.getElementById('operatorDesignation').value || 'Operator'
+        };
         const url = id ? `/api/operators/${id}` : '/api/operators';
         await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
         closeOperatorModal(); fetchOperators();
@@ -1098,6 +1105,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('operatorId').value = o.id; 
             document.getElementById('operatorName').value = o.name;
             document.getElementById('operatorDepartment').value = o.department;
+            document.getElementById('operatorDesignation').value = o.designation || 'Operator';
             openOperatorModal(true);
         }
     };
