@@ -1278,46 +1278,36 @@ document.addEventListener('DOMContentLoaded', () => {
             allOperators = await opRes.json();
         } catch (e) { console.error(e); }
 
-        // Group existing records by employee_name
+        // Group existing records and operators preserving exact Operator Master sequence
         const empMap = {};
+        allOperators.forEach(op => {
+            empMap[op.name] = {
+                name: op.name,
+                dept: op.department || '',
+                designation: op.designation || 'Operator',
+                days: {}
+            };
+        });
+
         existingRecords.forEach(r => {
             if (!empMap[r.employee_name]) {
                 empMap[r.employee_name] = {
                     name: r.employee_name,
                     dept: r.dept || '',
-                    designation: r.designation || '',
+                    designation: r.designation || 'Operator',
                     days: {}
                 };
+            } else {
+                const liveOp = allOperators.find(o => o.name === r.employee_name);
+                if (liveOp) {
+                    if (liveOp.department) empMap[r.employee_name].dept = liveOp.department;
+                    if (liveOp.designation) empMap[r.employee_name].designation = liveOp.designation;
+                }
             }
             empMap[r.employee_name].days[r.day] = r.hours;
         });
 
-        // Ensure all operators are in empMap
-        allOperators.forEach(op => {
-            if (!empMap[op.name]) {
-                empMap[op.name] = {
-                    name: op.name,
-                    dept: op.department || '',
-                    designation: 'Operator',
-                    days: {}
-                };
-            }
-        });
-
         let empList = Object.values(empMap);
-
-        // Sort on Dept as primary key and Name as secondary key
-        empList.sort((a, b) => {
-            const deptA = (a.dept || '').trim().toUpperCase();
-            const deptB = (b.dept || '').trim().toUpperCase();
-            if (deptA < deptB) return -1;
-            if (deptA > deptB) return 1;
-            const nameA = (a.name || '').trim().toUpperCase();
-            const nameB = (b.name || '').trim().toUpperCase();
-            if (nameA < nameB) return -1;
-            if (nameA > nameB) return 1;
-            return 0;
-        });
 
         attendanceBody.innerHTML = '';
 
