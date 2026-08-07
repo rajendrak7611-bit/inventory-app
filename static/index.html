@@ -199,6 +199,7 @@
                     <tr>
                         <th>ID</th>
                         <th>Date</th>
+                        <th>Dept</th>
                         <th>Insert Spec</th>
                         <th>Batch No</th>
                         <th>Qty Issued</th>
@@ -1848,11 +1849,18 @@
                         <input type="date" id="issueDateInput" required style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
                     </div>
                     <div class="form-group" style="flex: 1;">
-                        <label for="issueInsertSpecSelect" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Insert Spec</label>
-                        <select id="issueInsertSpecSelect" required style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
-                            <option value="">-- Select Insert Spec --</option>
+                        <label for="issueDeptSelect" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Dept</label>
+                        <select id="issueDeptSelect" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                            <option value="">-- Select Dept --</option>
                         </select>
                     </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 0.8rem;">
+                    <label for="issueInsertSpecSelect" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Insert Spec</label>
+                    <select id="issueInsertSpecSelect" required style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                        <option value="">-- Select Insert Spec --</option>
+                    </select>
                 </div>
 
                 <div class="form-row" style="display: flex; gap: 1rem; margin-top: 0.8rem;">
@@ -1911,6 +1919,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=158"></script>
+    <script src="/static/app.js?v=159"></script>
 </body>
 </html>

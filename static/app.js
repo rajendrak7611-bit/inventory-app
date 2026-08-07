@@ -5423,6 +5423,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tr.innerHTML = `
                 <td>${item.id}</td>
                 <td><span style="font-weight: 500;">${item.date || ''}</span></td>
+                <td>${item.department || ''}</td>
                 <td><strong>${item.insert_spec || ''}</strong></td>
                 <td>${item.batch_no || ''}</td>
                 <td><span style="font-weight: 600; color: var(--primary-color);">${item.qty_issued || 0}</span></td>
@@ -5462,13 +5463,42 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    async function populateIssueModalDropdowns(selectedSpec = '', selectedBatch = '', selectedPart = '', selectedOpn = '') {
-        const specSel = document.getElementById('issueInsertSpecSelect');
-        const machSel = document.getElementById('issueMachineSelect');
-        const opSel = document.getElementById('issueOperatorSelect');
-        const partSel = document.getElementById('issuePartNoSelect');
+    let allMachinesCache = [];
+    let allOperatorsCache = [];
 
-        // 1. Insert Specs
+    async function populateIssueModalDropdowns(selectedDept = '', selectedSpec = '', selectedBatch = '', selectedPart = '', selectedOpn = '') {
+        const deptSel = document.getElementById('issueDeptSelect');
+        const specSel = document.getElementById('issueInsertSpecSelect');
+
+        // 1. Departments
+        deptSel.innerHTML = '<option value="">-- Select Dept --</option>';
+        try {
+            const dRes = await fetch('/api/departments');
+            const depts = await dRes.json();
+            depts.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d.name;
+                opt.textContent = d.name;
+                if (selectedDept && selectedDept.trim().toUpperCase() === d.name.trim().toUpperCase()) {
+                    opt.selected = true;
+                }
+                deptSel.appendChild(opt);
+            });
+        } catch (e) { console.error(e); }
+
+        // Fetch dependency caches
+        try {
+            const [mRes, oRes, pRes] = await Promise.all([
+                fetch('/api/machines'),
+                fetch('/api/operators'),
+                fetch('/api/partmaster')
+            ]);
+            allMachinesCache = await mRes.json();
+            allOperatorsCache = await oRes.json();
+            allPartMastersCache = await pRes.json();
+        } catch (e) { console.error(e); }
+
+        // 2. Insert Specs
         specSel.innerHTML = '<option value="">-- Select Insert Spec --</option>';
         try {
             const specRes = await fetch('/api/insert_masters');
@@ -5487,50 +5517,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } catch (e) { console.error(e); }
 
-        // 2. Machines
-        machSel.innerHTML = '<option value="">-- Select Machine --</option>';
-        try {
-            const mRes = await fetch('/api/machines');
-            const machines = await mRes.json();
-            machines.forEach(m => {
-                const opt = document.createElement('option');
-                opt.value = m.name;
-                opt.textContent = m.name;
-                machSel.appendChild(opt);
-            });
-        } catch (e) { console.error(e); }
-
-        // 3. Operators
-        opSel.innerHTML = '<option value="">-- Select Operator --</option>';
-        try {
-            const oRes = await fetch('/api/operators');
-            const operators = await oRes.json();
-            operators.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-            operators.forEach(o => {
-                const opt = document.createElement('option');
-                opt.value = o.name;
-                opt.textContent = o.name;
-                opSel.appendChild(opt);
-            });
-        } catch (e) { console.error(e); }
-
-        // 4. Part Nos
-        partSel.innerHTML = '<option value="">-- Select Part No --</option>';
-        try {
-            const pRes = await fetch('/api/partmaster');
-            allPartMastersCache = await pRes.json();
-            allPartMastersCache.forEach(p => {
-                if (p.partno) {
-                    const opt = document.createElement('option');
-                    opt.value = p.partno;
-                    opt.textContent = p.partno;
-                    if (selectedPart && selectedPart.trim().toUpperCase() === p.partno.trim().toUpperCase()) {
-                        opt.selected = true;
-                    }
-                    partSel.appendChild(opt);
-                }
-            });
-        } catch (e) { console.error(e); }
+        filterIssueDropdownsByDept(selectedDept, selectedPart);
 
         if (selectedSpec) {
             await updateBatchDropdownForSpec(selectedSpec, selectedBatch);
@@ -5539,6 +5526,57 @@ document.addEventListener('DOMContentLoaded', () => {
             await updateOpnDropdownForPart(selectedPart, selectedOpn);
         }
     }
+
+    function filterIssueDropdownsByDept(dept = '', selectedPart = '') {
+        const machSel = document.getElementById('issueMachineSelect');
+        const opSel = document.getElementById('issueOperatorSelect');
+        const partSel = document.getElementById('issuePartNoSelect');
+
+        const cleanDept = (dept || '').trim().toUpperCase();
+
+        // 1. Filter Machines
+        machSel.innerHTML = '<option value="">-- Select Machine --</option>';
+        const filteredMachines = cleanDept ? allMachinesCache.filter(m => (m.department || '').trim().toUpperCase() === cleanDept) : allMachinesCache;
+        const machinesToDisplay = filteredMachines.length > 0 ? filteredMachines : allMachinesCache;
+        machinesToDisplay.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.name;
+            opt.textContent = m.name;
+            machSel.appendChild(opt);
+        });
+
+        // 2. Filter Operators
+        opSel.innerHTML = '<option value="">-- Select Operator --</option>';
+        const filteredOperators = cleanDept ? allOperatorsCache.filter(o => (o.department || '').trim().toUpperCase() === cleanDept) : allOperatorsCache;
+        const operatorsToDisplay = filteredOperators.length > 0 ? filteredOperators : allOperatorsCache;
+        operatorsToDisplay.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        operatorsToDisplay.forEach(o => {
+            const opt = document.createElement('option');
+            opt.value = o.name;
+            opt.textContent = o.name;
+            opSel.appendChild(opt);
+        });
+
+        // 3. Filter Parts
+        partSel.innerHTML = '<option value="">-- Select Part No --</option>';
+        const filteredParts = cleanDept ? allPartMastersCache.filter(p => (p.department || '').trim().toUpperCase() === cleanDept) : allPartMastersCache;
+        const partsToDisplay = filteredParts.length > 0 ? filteredParts : allPartMastersCache;
+        partsToDisplay.forEach(p => {
+            if (p.partno) {
+                const opt = document.createElement('option');
+                opt.value = p.partno;
+                opt.textContent = p.partno;
+                if (selectedPart && selectedPart.trim().toUpperCase() === p.partno.trim().toUpperCase()) {
+                    opt.selected = true;
+                }
+                partSel.appendChild(opt);
+            }
+        });
+    }
+
+    document.getElementById('issueDeptSelect')?.addEventListener('change', (e) => {
+        filterIssueDropdownsByDept(e.target.value);
+    });
 
     async function updateBatchDropdownForSpec(spec, selectedBatch = '') {
         const batchSel = document.getElementById('issueBatchNoSelect');
@@ -5625,7 +5663,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('insertIssueId').value = item.id;
             document.getElementById('issueDateInput').value = item.date || '';
             document.getElementById('issueQtyInput').value = item.qty_issued || 1;
-            await populateIssueModalDropdowns(item.insert_spec, item.batch_no, item.partno, item.opn_no);
+            await populateIssueModalDropdowns(item.department, item.insert_spec, item.batch_no, item.partno, item.opn_no);
             document.getElementById('issueMachineSelect').value = item.machine || '';
             document.getElementById('issueOperatorSelect').value = item.operator || '';
         } else {
@@ -5742,6 +5780,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const payload = {
                 date: document.getElementById('issueDateInput').value,
+                department: document.getElementById('issueDeptSelect').value,
                 insert_spec: document.getElementById('issueInsertSpecSelect').value,
                 batch_no: batchSel.value,
                 qty_issued: parseInt(document.getElementById('issueQtyInput').value) || 1,

@@ -226,6 +226,7 @@ class InsertIssue(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     date = Column(String, index=True)
+    department = Column(String, index=True, nullable=True)
     insert_spec = Column(String, index=True)
     batch_no = Column(String, nullable=True)
     qty_issued = Column(Integer, default=0)
