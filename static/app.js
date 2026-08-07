@@ -1459,11 +1459,51 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('exportAttendanceExcelBtn')?.addEventListener('click', () => {
-        const table = document.getElementById('attendanceTable');
-        if (!table) return;
-        const wb = XLSX.utils.table_to_book(table, { sheet: "Attendance" });
         const monthVal = attendanceMonthPicker ? attendanceMonthPicker.value : "Sheet";
-        XLSX.writeFile(wb, `Attendance_${monthVal}.xlsx`);
+        let daysInMonth = 31;
+        if (monthVal) {
+            const parts = monthVal.split('-');
+            const year = parseInt(parts[0]);
+            const month = parseInt(parts[1]);
+            daysInMonth = new Date(year, month, 0).getDate();
+        }
+
+        // Build headers row
+        const headers = ['NAME', 'DEPT', 'DESIGNATION'];
+        for (let d = 1; d <= daysInMonth; d++) {
+            headers.push(d.toString());
+        }
+
+        const data = [headers];
+
+        // Build data rows from table inputs
+        const rows = document.querySelectorAll('#attendanceBody tr');
+        rows.forEach(tr => {
+            const name = tr.querySelector('.att-name')?.value.trim() || '';
+            const dept = tr.querySelector('.att-dept')?.value.trim() || '';
+            const desig = tr.querySelector('.att-desig')?.value.trim() || '';
+
+            if (name || dept) {
+                const rowData = [name, dept, desig];
+                const dayInputs = tr.querySelectorAll('.att-day-val');
+                dayInputs.forEach(input => {
+                    const val = input.value.trim();
+                    const numVal = Number(val);
+                    rowData.push(val !== '' && !isNaN(numVal) ? numVal : val);
+                });
+                data.push(rowData);
+            }
+        });
+
+        if (data.length <= 1) {
+            alert('No attendance data available to export.');
+            return;
+        }
+
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Attendance");
+        XLSX.writeFile(wb, `Attendance_${monthVal || 'Report'}.xlsx`);
     });
 
     // Initial fetch
