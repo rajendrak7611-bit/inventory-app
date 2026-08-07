@@ -8,7 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog, Attendance, InsertMaster, DrillMaster, InsertReceipt
+from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog, Attendance, InsertMaster, DrillMaster, InsertReceipt, InsertIssue
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -1506,6 +1506,132 @@ def delete_insert_receipt(item_id: int, db: Session = Depends(get_db)):
     db.delete(db_item)
     db.commit()
     return {"message": "Insert Receipt item deleted"}
+
+# --- Insert Issue Schemas & Endpoints ---
+class InsertIssueBase(BaseModel):
+    date: str
+    insert_spec: str
+    batch_no: Optional[str] = ""
+    qty_issued: int
+    machine: Optional[str] = ""
+    operator: Optional[str] = ""
+    partno: Optional[str] = ""
+    opn_no: Optional[str] = ""
+    receipt_id: Optional[int] = None
+
+class InsertIssueCreate(InsertIssueBase):
+    pass
+
+class InsertIssueResponse(InsertIssueBase):
+    id: int
+    class Config:
+        from_attributes = True
+
+@app.get("/api/insert_issues", response_model=List[InsertIssueResponse])
+def get_insert_issues(db: Session = Depends(get_db)):
+    return db.query(InsertIssue).order_by(InsertIssue.id.desc()).all()
+
+@app.post("/api/insert_issues", response_model=InsertIssueResponse)
+def create_insert_issue(item: InsertIssueCreate, db: Session = Depends(get_db)):
+    # 1. Deduct qty_issued from matching InsertReceipt batch
+    receipt = None
+    if item.receipt_id:
+        receipt = db.query(InsertReceipt).filter(InsertReceipt.id == item.receipt_id).first()
+    if not receipt and item.insert_spec and item.batch_no:
+        receipt = db.query(InsertReceipt).filter(
+            InsertReceipt.insert_spec == item.insert_spec,
+            InsertReceipt.batch_no == item.batch_no
+        ).first()
+
+    if receipt:
+        receipt.qty = max(0, receipt.qty - item.qty_issued)
+
+    # 2. Save InsertIssue record
+    db_item = InsertIssue(**item.model_dump())
+    if receipt:
+        db_item.receipt_id = receipt.id
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+@app.put("/api/insert_issues/{item_id}", response_model=InsertIssueResponse)
+def update_insert_issue(item_id: int, item: InsertIssueCreate, db: Session = Depends(get_db)):
+    db_item = db.query(InsertIssue).filter(InsertIssue.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Insert Issue item not found")
+
+    old_qty = db_item.qty_issued
+    qty_diff = item.qty_issued - old_qty
+
+    # Adjust stock on matching InsertReceipt
+    receipt = None
+    if db_item.receipt_id:
+        receipt = db.query(InsertReceipt).filter(InsertReceipt.id == db_item.receipt_id).first()
+    if not receipt and item.insert_spec and item.batch_no:
+        receipt = db.query(InsertReceipt).filter(
+            InsertReceipt.insert_spec == item.insert_spec,
+            InsertReceipt.batch_no == item.batch_no
+        ).first()
+
+    if receipt:
+        receipt.qty = max(0, receipt.qty - qty_diff)
+
+    for key, value in item.model_dump().items():
+        setattr(db_item, key, value)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+class BulkImportInsertIssuePayload(BaseModel):
+    issues: List[InsertIssueCreate]
+
+@app.post("/api/insert_issues/bulk")
+def bulk_import_insert_issues(payload: BulkImportInsertIssuePayload, db: Session = Depends(get_db)):
+    new_items = []
+    for item in payload.issues:
+        receipt = None
+        if item.receipt_id:
+            receipt = db.query(InsertReceipt).filter(InsertReceipt.id == item.receipt_id).first()
+        if not receipt and item.insert_spec and item.batch_no:
+            receipt = db.query(InsertReceipt).filter(
+                InsertReceipt.insert_spec == item.insert_spec,
+                InsertReceipt.batch_no == item.batch_no
+            ).first()
+
+        if receipt:
+            receipt.qty = max(0, receipt.qty - item.qty_issued)
+
+        issue_obj = InsertIssue(**item.model_dump())
+        if receipt:
+            issue_obj.receipt_id = receipt.id
+        new_items.append(issue_obj)
+
+    db.add_all(new_items)
+    db.commit()
+    return {"message": f"Successfully imported {len(new_items)} insert issue records"}
+
+@app.delete("/api/insert_issues/{item_id}")
+def delete_insert_issue(item_id: int, db: Session = Depends(get_db)):
+    db_item = db.query(InsertIssue).filter(InsertIssue.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Insert Issue item not found")
+
+    receipt = None
+    if db_item.receipt_id:
+        receipt = db.query(InsertReceipt).filter(InsertReceipt.id == db_item.receipt_id).first()
+    if not receipt and db_item.insert_spec and db_item.batch_no:
+        receipt = db.query(InsertReceipt).filter(
+            InsertReceipt.insert_spec == db_item.insert_spec,
+            InsertReceipt.batch_no == db_item.batch_no
+        ).first()
+
+    if receipt:
+        receipt.qty += db_item.qty_issued
+
+    db.delete(db_item)
+    db.commit()
+    return {"message": "Insert Issue item deleted and stock restored"}
 
 # Serve static files (frontend)
 app.mount("/static", StaticFiles(directory="static"), name="static")

@@ -232,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const sections = [
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection',
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
-            'productsSection', 'insertMasterSection', 'drillMasterSection', 'insertReceiptSection', 'partMasterSection', 'machinesSection',
+            'productsSection', 'insertMasterSection', 'drillMasterSection', 'insertReceiptSection', 'insertIssueSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'htSection', 'scheduleCreateSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
             'inspectionSection', 'maintenanceSection', 'hrSection', 'attendanceSection'
@@ -430,6 +430,13 @@ document.addEventListener('DOMContentLoaded', () => {
             importBtn.style.display = 'inline-block';
             addBtn.style.display = 'none';
             fetchInsertReceipts();
+        }},
+        'sidebarInsertIssue': { tab: 'insertissue', action: () => {
+            const sec = document.getElementById('insertIssueSection');
+            if (sec) sec.style.display = 'block';
+            importBtn.style.display = 'inline-block';
+            addBtn.style.display = 'none';
+            fetchInsertIssues();
         }},
         'sidebarOperEff': { tab: 'oper_eff', action: () => {
             const operEffSec = document.getElementById('operEffSection');
@@ -5382,6 +5389,384 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert('Error saving receipt record');
                 }
             } catch (err) { console.error(err); alert('Error saving receipt record'); }
+        });
+    }
+
+    // ====== INSERT ISSUE CRUD ======
+    const insertIssueModal = document.getElementById('insertIssueModal');
+    const insertIssueForm = document.getElementById('insertIssueForm');
+    const addInsertIssueBtn = document.getElementById('addInsertIssueBtn');
+    const cancelInsertIssueBtn = document.getElementById('cancelInsertIssueBtn');
+    const closeInsertIssueModalBtn = document.getElementById('closeInsertIssueModalBtn');
+
+    let allReceiptsCache = [];
+    let allPartMastersCache = [];
+
+    async function fetchInsertIssues() {
+        try {
+            const res = await fetch('/api/insert_issues');
+            const data = await res.json();
+            renderInsertIssues(data);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderInsertIssues(issues) {
+        const tbody = document.getElementById('insertIssueBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!issues || issues.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No insert issue records found. Click "+ Issue Insert" or "Import Excel" to add records.</td></tr>';
+            return;
+        }
+        issues.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.id}</td>
+                <td><span style="font-weight: 500;">${item.date || ''}</span></td>
+                <td><strong>${item.insert_spec || ''}</strong></td>
+                <td>${item.batch_no || ''}</td>
+                <td><span style="font-weight: 600; color: var(--primary-color);">${item.qty_issued || 0}</span></td>
+                <td>${item.machine || ''}</td>
+                <td>${item.operator || ''}</td>
+                <td>${item.partno || ''}</td>
+                <td>${item.opn_no || ''}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-outline edit-issue-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit</button>
+                    <button class="btn btn-outline delete-issue-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.edit-issue-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.target.getAttribute('data-id');
+                const res = await fetch('/api/insert_issues');
+                const data = await res.json();
+                const item = data.find(x => x.id == id);
+                if (item) openInsertIssueModal(item);
+            });
+        });
+
+        tbody.querySelectorAll('.delete-issue-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (confirm('Delete this insert issue record? This will restore the stock back to the receipt batch.')) {
+                    const id = e.target.getAttribute('data-id');
+                    try {
+                        const res = await fetch(`/api/insert_issues/${id}`, { method: 'DELETE' });
+                        if (res.ok) fetchInsertIssues();
+                        else alert('Error deleting issue record');
+                    } catch (err) { console.error(err); }
+                }
+            });
+        });
+    }
+
+    async function populateIssueModalDropdowns(selectedSpec = '', selectedBatch = '', selectedPart = '', selectedOpn = '') {
+        const specSel = document.getElementById('issueInsertSpecSelect');
+        const machSel = document.getElementById('issueMachineSelect');
+        const opSel = document.getElementById('issueOperatorSelect');
+        const partSel = document.getElementById('issuePartNoSelect');
+
+        // 1. Insert Specs
+        specSel.innerHTML = '<option value="">-- Select Insert Spec --</option>';
+        try {
+            const specRes = await fetch('/api/insert_masters');
+            const specs = await specRes.json();
+            specs.forEach(s => {
+                const sp = s.insert_spec || s.name || '';
+                if (sp) {
+                    const opt = document.createElement('option');
+                    opt.value = sp;
+                    opt.textContent = sp;
+                    if (selectedSpec && selectedSpec.trim().toLowerCase() === sp.trim().toLowerCase()) {
+                        opt.selected = true;
+                    }
+                    specSel.appendChild(opt);
+                }
+            });
+        } catch (e) { console.error(e); }
+
+        // 2. Machines
+        machSel.innerHTML = '<option value="">-- Select Machine --</option>';
+        try {
+            const mRes = await fetch('/api/machines');
+            const machines = await mRes.json();
+            machines.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.name;
+                opt.textContent = m.name;
+                machSel.appendChild(opt);
+            });
+        } catch (e) { console.error(e); }
+
+        // 3. Operators
+        opSel.innerHTML = '<option value="">-- Select Operator --</option>';
+        try {
+            const oRes = await fetch('/api/operators');
+            const operators = await oRes.json();
+            operators.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            operators.forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.name;
+                opt.textContent = o.name;
+                opSel.appendChild(opt);
+            });
+        } catch (e) { console.error(e); }
+
+        // 4. Part Nos
+        partSel.innerHTML = '<option value="">-- Select Part No --</option>';
+        try {
+            const pRes = await fetch('/api/partmaster');
+            allPartMastersCache = await pRes.json();
+            allPartMastersCache.forEach(p => {
+                if (p.partno) {
+                    const opt = document.createElement('option');
+                    opt.value = p.partno;
+                    opt.textContent = p.partno;
+                    if (selectedPart && selectedPart.trim().toUpperCase() === p.partno.trim().toUpperCase()) {
+                        opt.selected = true;
+                    }
+                    partSel.appendChild(opt);
+                }
+            });
+        } catch (e) { console.error(e); }
+
+        if (selectedSpec) {
+            await updateBatchDropdownForSpec(selectedSpec, selectedBatch);
+        }
+        if (selectedPart) {
+            await updateOpnDropdownForPart(selectedPart, selectedOpn);
+        }
+    }
+
+    async function updateBatchDropdownForSpec(spec, selectedBatch = '') {
+        const batchSel = document.getElementById('issueBatchNoSelect');
+        const availInput = document.getElementById('issueAvailableQtyInput');
+        batchSel.innerHTML = '<option value="">-- Select Batch --</option>';
+        availInput.value = '0';
+
+        if (!spec) return;
+
+        try {
+            const res = await fetch('/api/insert_receipts');
+            allReceiptsCache = await res.json();
+
+            const matchingReceipts = allReceiptsCache.filter(r => (r.insert_spec || '').trim().toLowerCase() === spec.trim().toLowerCase() && r.qty >= 0);
+            
+            if (matchingReceipts.length === 0) {
+                batchSel.innerHTML = '<option value="">-- No Batches Available --</option>';
+                return;
+            }
+
+            matchingReceipts.forEach(r => {
+                const bNo = r.batch_no || `ID-${r.id}`;
+                const opt = document.createElement('option');
+                opt.value = bNo;
+                opt.setAttribute('data-qty', r.qty);
+                opt.setAttribute('data-receipt-id', r.id);
+                opt.textContent = `${bNo} (Avail Qty: ${r.qty})`;
+                if (selectedBatch && selectedBatch.trim().toLowerCase() === bNo.trim().toLowerCase()) {
+                    opt.selected = true;
+                    availInput.value = r.qty;
+                }
+                batchSel.appendChild(opt);
+            });
+
+            if (!selectedBatch && matchingReceipts.length > 0) {
+                batchSel.selectedIndex = 1;
+                availInput.value = matchingReceipts[0].qty;
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    async function updateOpnDropdownForPart(partno, selectedOpn = '') {
+        const opnSel = document.getElementById('issueOpnNoSelect');
+        opnSel.innerHTML = '<option value="">-- Select Operation --</option>';
+        if (!partno) return;
+
+        const partObj = allPartMastersCache.find(p => (p.partno || '').trim().toUpperCase() === partno.trim().toUpperCase());
+        if (!partObj) return;
+
+        try {
+            const res = await fetch(`/api/partmaster/${partObj.id}/operations`);
+            const ops = await res.json();
+            ops.sort((a, b) => (parseInt(a.opn_no) || 0) - (parseInt(b.opn_no) || 0));
+            ops.forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.opn_no;
+                opt.textContent = `${o.opn_no} - ${o.description || ''}`;
+                if (selectedOpn && selectedOpn.trim().toLowerCase() === (o.opn_no || '').trim().toLowerCase()) {
+                    opt.selected = true;
+                }
+                opnSel.appendChild(opt);
+            });
+        } catch (e) { console.error(e); }
+    }
+
+    document.getElementById('issueInsertSpecSelect')?.addEventListener('change', (e) => {
+        updateBatchDropdownForSpec(e.target.value);
+    });
+
+    document.getElementById('issueBatchNoSelect')?.addEventListener('change', (e) => {
+        const selOpt = e.target.options[e.target.selectedIndex];
+        const qty = selOpt ? selOpt.getAttribute('data-qty') : 0;
+        document.getElementById('issueAvailableQtyInput').value = qty || 0;
+    });
+
+    document.getElementById('issuePartNoSelect')?.addEventListener('change', (e) => {
+        updateOpnDropdownForPart(e.target.value);
+    });
+
+    async function openInsertIssueModal(item = null) {
+        if (!insertIssueModal) return;
+        if (item) {
+            document.getElementById('insertIssueModalTitle').textContent = 'Edit Insert Issue';
+            document.getElementById('insertIssueId').value = item.id;
+            document.getElementById('issueDateInput').value = item.date || '';
+            document.getElementById('issueQtyInput').value = item.qty_issued || 1;
+            await populateIssueModalDropdowns(item.insert_spec, item.batch_no, item.partno, item.opn_no);
+            document.getElementById('issueMachineSelect').value = item.machine || '';
+            document.getElementById('issueOperatorSelect').value = item.operator || '';
+        } else {
+            document.getElementById('insertIssueModalTitle').textContent = 'Issue Insert';
+            insertIssueForm.reset();
+            document.getElementById('insertIssueId').value = '';
+            document.getElementById('issueDateInput').valueAsDate = new Date();
+            await populateIssueModalDropdowns();
+        }
+        insertIssueModal.classList.add('show');
+    }
+
+    if (addInsertIssueBtn) addInsertIssueBtn.addEventListener('click', () => openInsertIssueModal());
+    if (cancelInsertIssueBtn) cancelInsertIssueBtn.addEventListener('click', () => insertIssueModal.classList.remove('show'));
+    if (closeInsertIssueModalBtn) closeInsertIssueModalBtn.addEventListener('click', () => insertIssueModal.classList.remove('show'));
+
+    document.getElementById('importInsertIssueBtn')?.addEventListener('click', () => {
+        document.getElementById('importInsertIssueInput')?.click();
+    });
+
+    const importInsertIssueInput = document.getElementById('importInsertIssueInput');
+    if (importInsertIssueInput) {
+        importInsertIssueInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    const data = evt.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (!json || json.length === 0) {
+                        alert('No valid data found in Excel sheet.');
+                        return;
+                    }
+
+                    const issues = [];
+                    const todayStr = new Date().toISOString().slice(0, 10);
+                    json.forEach(row => {
+                        let dateVal = todayStr;
+                        let specVal = '';
+                        let batchVal = '';
+                        let qtyVal = 1;
+                        let machineVal = '';
+                        let opVal = '';
+                        let partVal = '';
+                        let opnVal = '';
+
+                        for (const key of Object.keys(row)) {
+                            const k = key.trim().toLowerCase();
+                            if (['date', 'issue date', 'issue_date'].includes(k)) dateVal = String(row[key] || '').trim();
+                            if (['insert spec', 'insert_spec', 'spec'].includes(k)) specVal = String(row[key] || '').trim();
+                            if (['batch no', 'batch_no', 'batch'].includes(k)) batchVal = String(row[key] || '').trim();
+                            if (['qty issued', 'qty_issued', 'qty', 'issued qty'].includes(k)) qtyVal = parseInt(row[key]) || 1;
+                            if (['machine', 'machine name', 'm/c'].includes(k)) machineVal = String(row[key] || '').trim();
+                            if (['operator', 'operator name'].includes(k)) opVal = String(row[key] || '').trim();
+                            if (['part no', 'partno', 'part_no'].includes(k)) partVal = String(row[key] || '').trim();
+                            if (['opn no', 'opn_no', 'opn', 'operation'].includes(k)) opnVal = String(row[key] || '').trim();
+                        }
+
+                        if (specVal) {
+                            issues.push({
+                                date: dateVal || todayStr,
+                                insert_spec: specVal,
+                                batch_no: batchVal,
+                                qty_issued: qtyVal,
+                                machine: machineVal,
+                                operator: opVal,
+                                partno: partVal,
+                                opn_no: opnVal
+                            });
+                        }
+                    });
+
+                    if (issues.length === 0) {
+                        alert('No valid issue records found in Excel sheet. Make sure headers are "Date", "Insert Spec", "Batch No", "Qty Issued", "Machine", "Operator", "Part No", and "Opn No".');
+                        return;
+                    }
+
+                    const res = await fetch('/api/insert_issues/bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ issues })
+                    });
+
+                    if (res.ok) {
+                        alert(`Successfully imported ${issues.length} Insert Issue records and updated batch stocks!`);
+                        fetchInsertIssues();
+                    } else {
+                        alert('Error importing Excel data.');
+                    }
+                } catch (err) {
+                    console.error('Error importing Insert Issue Excel:', err);
+                    alert('Error reading Excel file.');
+                } finally {
+                    importInsertIssueInput.value = '';
+                }
+            };
+            reader.readAsBinaryString(file);
+        });
+    }
+
+    if (insertIssueForm) {
+        insertIssueForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('insertIssueId').value;
+            const batchSel = document.getElementById('issueBatchNoSelect');
+            const selectedOpt = batchSel.options[batchSel.selectedIndex];
+            const receiptId = selectedOpt ? selectedOpt.getAttribute('data-receipt-id') : null;
+
+            const payload = {
+                date: document.getElementById('issueDateInput').value,
+                insert_spec: document.getElementById('issueInsertSpecSelect').value,
+                batch_no: batchSel.value,
+                qty_issued: parseInt(document.getElementById('issueQtyInput').value) || 1,
+                machine: document.getElementById('issueMachineSelect').value,
+                operator: document.getElementById('issueOperatorSelect').value,
+                partno: document.getElementById('issuePartNoSelect').value,
+                opn_no: document.getElementById('issueOpnNoSelect').value,
+                receipt_id: receiptId ? parseInt(receiptId) : null
+            };
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/insert_issues/${id}` : '/api/insert_issues';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    insertIssueModal.classList.remove('show');
+                    fetchInsertIssues();
+                } else {
+                    alert('Error saving issue record');
+                }
+            } catch (err) { console.error(err); alert('Error saving issue record'); }
         });
     }
 });
