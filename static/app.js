@@ -1095,6 +1095,8 @@ document.addEventListener('DOMContentLoaded', () => {
     window.deleteOperator = async (id) => {
         if (confirm('Delete this operator?')) {
             await fetch(`/api/operators/${id}`, { method: 'DELETE' });
+            deburOperatorsLoaded = false;
+            inspOperatorsLoaded = false;
             fetchOperators();
         }
     };
@@ -2121,13 +2123,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!deburOperatorsLoaded) {
                 const opRes = await fetch('/api/operators');
                 const operators = await opRes.json();
+                operators.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                 const sel = document.getElementById('deburOperator');
-                operators.forEach(o => {
-                    const opt = document.createElement('option');
-                    opt.value = o.name;
-                    opt.textContent = o.name;
-                    sel.appendChild(opt);
-                });
+                if (sel) {
+                    sel.innerHTML = '<option value="">-- Select Operator --</option>';
+                    operators.forEach(o => {
+                        const opt = document.createElement('option');
+                        opt.value = o.name;
+                        opt.textContent = o.name;
+                        sel.appendChild(opt);
+                    });
+                }
                 deburOperatorsLoaded = true;
             }
             
@@ -2369,13 +2375,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!inspOperatorsLoaded) {
                 const opRes = await fetch('/api/operators');
                 const operators = await opRes.json();
+                operators.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
                 const sel = document.getElementById('inspOperator');
-                operators.forEach(o => {
-                    const opt = document.createElement('option');
-                    opt.value = o.name;
-                    opt.textContent = o.name;
-                    sel.appendChild(opt);
-                });
+                if (sel) {
+                    sel.innerHTML = '<option value="">-- Select Operator --</option>';
+                    operators.forEach(o => {
+                        const opt = document.createElement('option');
+                        opt.value = o.name;
+                        opt.textContent = o.name;
+                        sel.appendChild(opt);
+                    });
+                }
                 inspOperatorsLoaded = true;
             }
             
@@ -2801,7 +2811,10 @@ document.addEventListener('DOMContentLoaded', () => {
             machSelect.innerHTML += `<option value="${m.name}">${m.name}</option>`;
         });
         
-        prodLogAllOperators.filter(o => (o.department || '').trim().toUpperCase() === dept).forEach(o => {
+        const filteredOperators = prodLogAllOperators.filter(o => !dept || !o.department || (o.department || '').trim().toUpperCase() === dept);
+        const opsToDisplay = filteredOperators.length > 0 ? filteredOperators : prodLogAllOperators;
+        opsToDisplay.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        opsToDisplay.forEach(o => {
             opSelect.innerHTML += `<option value="${o.name}">${o.name}</option>`;
         });
 
