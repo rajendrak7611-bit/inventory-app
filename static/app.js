@@ -1744,6 +1744,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 let rowHtml = `<td>${partno}</td><td>${schedQty}</td>`;
                 
                 let opnBalances = [];
+                const group1Parts = ["C100", "RS120", "RVI", "Q109", "R149", "RS160"];
+                const isGroup1HT = group1Parts.includes((partno || '').trim().toUpperCase());
+
                 // Opn 1 to 10
                 for (let i = 0; i < 10; i++) {
                     if (i < operations.length) {
@@ -1755,14 +1758,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Total produced for current op from logs
                         let currentProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === opnClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                         
-                        // Deduct HT sent for Turning (Opn 40 / OPN 3)
-                        if (opnClean === '40' || opnClean === 'opn 40' || opnClean === 'opn40') {
+                        // Deduct HT sent for Turning (Opn 40 / OPN 3) for Group 1 HT parts
+                        if (isGroup1HT && (opnClean === '40' || opnClean === 'opn 40' || opnClean === 'opn40')) {
                             const htSent = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                             currentProd -= htSent;
                         }
 
-                        // Set Opn 50 (HT Received / OPN 4 / For Grind) to HT Received total
-                        if (opnClean === '50' || opnClean === 'opn 50' || opnClean === 'opn50') {
+                        // Set Opn 50 (HT Received / OPN 4 / For Grind) to HT Received total for Group 1 HT parts
+                        if (isGroup1HT && (opnClean === '50' || opnClean === 'opn 50' || opnClean === 'opn50')) {
                             const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                             currentProd = htRec;
                         }
@@ -1771,8 +1774,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         let nextProd = 0;
                         if (nextOp) {
                             const nextOpClean = (nextOp.opn_no || '').trim().toLowerCase();
-                            if (nextOpClean === '50' || nextOpClean === 'opn 50' || nextOpClean === 'opn50') {
-                                nextProd = 0; // Opn 50 is HT Received, do not deduct from Opn 40
+                            if (isGroup1HT && (nextOpClean === '50' || nextOpClean === 'opn 50' || nextOpClean === 'opn50')) {
+                                nextProd = 0; // Opn 50 is HT Received, do not deduct from Opn 40 for Group 1
                             } else {
                                 nextProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === nextOpClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                             }
