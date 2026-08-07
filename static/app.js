@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'master': ['partmaster', 'machines', 'operators', 'dept', 'shift', 'vendors', 'setters'],
                     'inventory': ['inventory', 'rawmaterial', 'ht'],
                     'production': ['schedule', 'status', 'prodlog', 'debur'],
+                    'toolcrib': ['insertmaster', 'drillmaster', 'products'],
                     'reports': ['reports'],
                     'maintenance': ['maintenance'],
                     'hr': ['hr', 'attendance']
@@ -231,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const sections = [
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection',
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
-            'productsSection', 'partMasterSection', 'machinesSection',
+            'productsSection', 'insertMasterSection', 'drillMasterSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'htSection', 'scheduleCreateSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
             'inspectionSection', 'maintenanceSection', 'hrSection', 'attendanceSection'
@@ -405,6 +406,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('mcUtilToDate').value = today;
                 document.getElementById('mcUtilFromDate').value = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
             }
+        }},
+        'sidebarInsertMaster': { tab: 'insertmaster', action: () => {
+            const sec = document.getElementById('insertMasterSection');
+            if (sec) sec.style.display = 'block';
+            addBtn.style.display = 'none';
+            fetchInsertMasters();
+        }},
+        'sidebarDrillMaster': { tab: 'drillmaster', action: () => {
+            const sec = document.getElementById('drillMasterSection');
+            if (sec) sec.style.display = 'block';
+            addBtn.style.display = 'none';
+            fetchDrillMasters();
         }},
         'sidebarOperEff': { tab: 'oper_eff', action: () => {
             const operEffSec = document.getElementById('operEffSection');
@@ -4650,4 +4663,242 @@ document.addEventListener('DOMContentLoaded', () => {
         const wb = XLSX.utils.table_to_book(table, { sheet: "Operator Efficiency" });
         XLSX.writeFile(wb, `Operator_Efficiency_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
     });
+
+    // ====== INSERT MASTER CRUD ======
+    const insertMasterModal = document.getElementById('insertMasterModal');
+    const insertMasterForm = document.getElementById('insertMasterForm');
+    const addInsertMasterBtn = document.getElementById('addInsertMasterBtn');
+    const cancelInsertMasterBtn = document.getElementById('cancelInsertMasterBtn');
+    const closeInsertMasterModalBtn = document.getElementById('closeInsertMasterModalBtn');
+
+    async function fetchInsertMasters() {
+        try {
+            const res = await fetch('/api/insert_masters');
+            const data = await res.json();
+            renderInsertMasters(data);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderInsertMasters(inserts) {
+        const tbody = document.getElementById('insertMasterBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!inserts || inserts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No insert records found. Click "+ Add Insert" to add one.</td></tr>';
+            return;
+        }
+        inserts.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.id}</td>
+                <td><strong>${item.name}</strong></td>
+                <td>${item.specification || ''}</td>
+                <td>${item.grade || ''}</td>
+                <td>${item.make || ''}</td>
+                <td>${item.stock || 0}</td>
+                <td>Rs. ${(item.price || 0).toFixed(2)}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-outline edit-insert-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit</button>
+                    <button class="btn btn-outline delete-insert-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.edit-insert-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.target.getAttribute('data-id');
+                const res = await fetch('/api/insert_masters');
+                const data = await res.json();
+                const item = data.find(x => x.id == id);
+                if (item) openInsertMasterModal(item);
+            });
+        });
+
+        tbody.querySelectorAll('.delete-insert-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (confirm('Delete this insert master record?')) {
+                    const id = e.target.getAttribute('data-id');
+                    try {
+                        const res = await fetch(`/api/insert_masters/${id}`, { method: 'DELETE' });
+                        if (res.ok) fetchInsertMasters();
+                        else alert('Error deleting insert record');
+                    } catch (err) { console.error(err); }
+                }
+            });
+        });
+    }
+
+    function openInsertMasterModal(item = null) {
+        if (!insertMasterModal) return;
+        if (item) {
+            document.getElementById('insertMasterModalTitle').textContent = 'Edit Insert Master';
+            document.getElementById('insertMasterId').value = item.id;
+            document.getElementById('insertName').value = item.name;
+            document.getElementById('insertSpec').value = item.specification || '';
+            document.getElementById('insertGrade').value = item.grade || '';
+            document.getElementById('insertMake').value = item.make || '';
+            document.getElementById('insertStock').value = item.stock || 0;
+            document.getElementById('insertPrice').value = item.price || 0;
+        } else {
+            document.getElementById('insertMasterModalTitle').textContent = 'Add Insert Master';
+            insertMasterForm.reset();
+            document.getElementById('insertMasterId').value = '';
+        }
+        insertMasterModal.classList.add('show');
+    }
+
+    if (addInsertMasterBtn) addInsertMasterBtn.addEventListener('click', () => openInsertMasterModal());
+    if (cancelInsertMasterBtn) cancelInsertMasterBtn.addEventListener('click', () => insertMasterModal.classList.remove('show'));
+    if (closeInsertMasterModalBtn) closeInsertMasterModalBtn.addEventListener('click', () => insertMasterModal.classList.remove('show'));
+
+    if (insertMasterForm) {
+        insertMasterForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('insertMasterId').value;
+            const payload = {
+                name: document.getElementById('insertName').value.trim(),
+                specification: document.getElementById('insertSpec').value.trim(),
+                grade: document.getElementById('insertGrade').value.trim(),
+                make: document.getElementById('insertMake').value.trim(),
+                stock: parseInt(document.getElementById('insertStock').value) || 0,
+                price: parseFloat(document.getElementById('insertPrice').value) || 0.00
+            };
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/insert_masters/${id}` : '/api/insert_masters';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    insertMasterModal.classList.remove('show');
+                    fetchInsertMasters();
+                } else {
+                    alert('Error saving insert record');
+                }
+            } catch (err) { console.error(err); alert('Error saving insert record'); }
+        });
+    }
+
+    // ====== DRILL MASTER CRUD ======
+    const drillMasterModal = document.getElementById('drillMasterModal');
+    const drillMasterForm = document.getElementById('drillMasterForm');
+    const addDrillMasterBtn = document.getElementById('addDrillMasterBtn');
+    const cancelDrillMasterBtn = document.getElementById('cancelDrillMasterBtn');
+    const closeDrillMasterModalBtn = document.getElementById('closeDrillMasterModalBtn');
+
+    async function fetchDrillMasters() {
+        try {
+            const res = await fetch('/api/drill_masters');
+            const data = await res.json();
+            renderDrillMasters(data);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderDrillMasters(drills) {
+        const tbody = document.getElementById('drillMasterBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!drills || drills.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No drill records found. Click "+ Add Drill" to add one.</td></tr>';
+            return;
+        }
+        drills.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.id}</td>
+                <td><strong>${item.name}</strong></td>
+                <td>${item.size_dia || ''}</td>
+                <td>${item.specification || ''}</td>
+                <td>${item.make || ''}</td>
+                <td>${item.stock || 0}</td>
+                <td>Rs. ${(item.price || 0).toFixed(2)}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-outline edit-drill-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit</button>
+                    <button class="btn btn-outline delete-drill-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.edit-drill-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.target.getAttribute('data-id');
+                const res = await fetch('/api/drill_masters');
+                const data = await res.json();
+                const item = data.find(x => x.id == id);
+                if (item) openDrillMasterModal(item);
+            });
+        });
+
+        tbody.querySelectorAll('.delete-drill-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (confirm('Delete this drill master record?')) {
+                    const id = e.target.getAttribute('data-id');
+                    try {
+                        const res = await fetch(`/api/drill_masters/${id}`, { method: 'DELETE' });
+                        if (res.ok) fetchDrillMasters();
+                        else alert('Error deleting drill record');
+                    } catch (err) { console.error(err); }
+                }
+            });
+        });
+    }
+
+    function openDrillMasterModal(item = null) {
+        if (!drillMasterModal) return;
+        if (item) {
+            document.getElementById('drillMasterModalTitle').textContent = 'Edit Drill Master';
+            document.getElementById('drillMasterId').value = item.id;
+            document.getElementById('drillName').value = item.name;
+            document.getElementById('drillSizeDia').value = item.size_dia || '';
+            document.getElementById('drillSpec').value = item.specification || '';
+            document.getElementById('drillMake').value = item.make || '';
+            document.getElementById('drillStock').value = item.stock || 0;
+            document.getElementById('drillPrice').value = item.price || 0;
+        } else {
+            document.getElementById('drillMasterModalTitle').textContent = 'Add Drill Master';
+            drillMasterForm.reset();
+            document.getElementById('drillMasterId').value = '';
+        }
+        drillMasterModal.classList.add('show');
+    }
+
+    if (addDrillMasterBtn) addDrillMasterBtn.addEventListener('click', () => openDrillMasterModal());
+    if (cancelDrillMasterBtn) cancelDrillMasterBtn.addEventListener('click', () => drillMasterModal.classList.remove('show'));
+    if (closeDrillMasterModalBtn) closeDrillMasterModalBtn.addEventListener('click', () => drillMasterModal.classList.remove('show'));
+
+    if (drillMasterForm) {
+        drillMasterForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('drillMasterId').value;
+            const payload = {
+                name: document.getElementById('drillName').value.trim(),
+                size_dia: document.getElementById('drillSizeDia').value.trim(),
+                specification: document.getElementById('drillSpec').value.trim(),
+                make: document.getElementById('drillMake').value.trim(),
+                stock: parseInt(document.getElementById('drillStock').value) || 0,
+                price: parseFloat(document.getElementById('drillPrice').value) || 0.00
+            };
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/drill_masters/${id}` : '/api/drill_masters';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    drillMasterModal.classList.remove('show');
+                    fetchDrillMasters();
+                } else {
+                    alert('Error saving drill record');
+                }
+            } catch (err) { console.error(err); alert('Error saving drill record'); }
+        });
+    }
 });

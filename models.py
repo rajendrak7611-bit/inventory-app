@@ -181,4 +181,26 @@ class Attendance(Base):
     hours = Column(String, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class InsertMaster(Base):
+    __tablename__ = "insert_masters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    specification = Column(String, nullable=True)
+    grade = Column(String, nullable=True)
+    make = Column(String, nullable=True)
+    stock = Column(Integer, default=0)
+    price = Column(Numeric(10, 2), default=0.00)
+
+class DrillMaster(Base):
+    __tablename__ = "drill_masters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    size_dia = Column(String, nullable=True)
+    specification = Column(String, nullable=True)
+    make = Column(String, nullable=True)
+    stock = Column(Integer, default=0)
+    price = Column(Numeric(10, 2), default=0.00)
+
 

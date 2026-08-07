@@ -8,7 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog, Attendance
+from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog, Attendance, InsertMaster, DrillMaster
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -1275,6 +1275,104 @@ def save_attendance(payload: AttendanceBulkPayload, db: Session = Depends(get_db
     db.add_all(new_records)
     db.commit()
     return {"message": f"Attendance saved successfully for {m_year}"}
+
+# --- Insert Master Schemas & Endpoints ---
+class InsertMasterBase(BaseModel):
+    name: str
+    specification: Optional[str] = ""
+    grade: Optional[str] = ""
+    make: Optional[str] = ""
+    stock: Optional[int] = 0
+    price: Optional[float] = 0.00
+
+class InsertMasterCreate(InsertMasterBase):
+    pass
+
+class InsertMasterResponse(InsertMasterBase):
+    id: int
+    class Config:
+        from_attributes = True
+
+@app.get("/api/insert_masters", response_model=List[InsertMasterResponse])
+def get_insert_masters(db: Session = Depends(get_db)):
+    return db.query(InsertMaster).order_by(InsertMaster.id.desc()).all()
+
+@app.post("/api/insert_masters", response_model=InsertMasterResponse)
+def create_insert_master(item: InsertMasterCreate, db: Session = Depends(get_db)):
+    db_item = InsertMaster(**item.model_dump())
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+@app.put("/api/insert_masters/{item_id}", response_model=InsertMasterResponse)
+def update_insert_master(item_id: int, item: InsertMasterCreate, db: Session = Depends(get_db)):
+    db_item = db.query(InsertMaster).filter(InsertMaster.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Insert Master item not found")
+    for key, value in item.model_dump().items():
+        setattr(db_item, key, value)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+@app.delete("/api/insert_masters/{item_id}")
+def delete_insert_master(item_id: int, db: Session = Depends(get_db)):
+    db_item = db.query(InsertMaster).filter(InsertMaster.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Insert Master item not found")
+    db.delete(db_item)
+    db.commit()
+    return {"message": "Insert Master item deleted"}
+
+# --- Drill Master Schemas & Endpoints ---
+class DrillMasterBase(BaseModel):
+    name: str
+    size_dia: Optional[str] = ""
+    specification: Optional[str] = ""
+    make: Optional[str] = ""
+    stock: Optional[int] = 0
+    price: Optional[float] = 0.00
+
+class DrillMasterCreate(DrillMasterBase):
+    pass
+
+class DrillMasterResponse(DrillMasterBase):
+    id: int
+    class Config:
+        from_attributes = True
+
+@app.get("/api/drill_masters", response_model=List[DrillMasterResponse])
+def get_drill_masters(db: Session = Depends(get_db)):
+    return db.query(DrillMaster).order_by(DrillMaster.id.desc()).all()
+
+@app.post("/api/drill_masters", response_model=DrillMasterResponse)
+def create_drill_master(item: DrillMasterCreate, db: Session = Depends(get_db)):
+    db_item = DrillMaster(**item.model_dump())
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+@app.put("/api/drill_masters/{item_id}", response_model=DrillMasterResponse)
+def update_drill_master(item_id: int, item: DrillMasterCreate, db: Session = Depends(get_db)):
+    db_item = db.query(DrillMaster).filter(DrillMaster.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Drill Master item not found")
+    for key, value in item.model_dump().items():
+        setattr(db_item, key, value)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+@app.delete("/api/drill_masters/{item_id}")
+def delete_drill_master(item_id: int, db: Session = Depends(get_db)):
+    db_item = db.query(DrillMaster).filter(DrillMaster.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Drill Master item not found")
+    db.delete(db_item)
+    db.commit()
+    return {"message": "Drill Master item deleted"}
 
 # Serve static files (frontend)
 app.mount("/static", StaticFiles(directory="static"), name="static")
