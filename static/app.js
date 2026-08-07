@@ -1278,7 +1278,7 @@ document.addEventListener('DOMContentLoaded', () => {
             allOperators = await opRes.json();
         } catch (e) { console.error(e); }
 
-        // Group existing records and operators preserving exact Operator Master sequence
+        // Group operators in exact sequence from Operator Master and map past hours
         const empMap = {};
         allOperators.forEach(op => {
             empMap[op.name] = {
@@ -1290,21 +1290,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         existingRecords.forEach(r => {
-            if (!empMap[r.employee_name]) {
-                empMap[r.employee_name] = {
-                    name: r.employee_name,
-                    dept: r.dept || '',
-                    designation: r.designation || 'Operator',
-                    days: {}
-                };
-            } else {
-                const liveOp = allOperators.find(o => o.name === r.employee_name);
-                if (liveOp) {
-                    if (liveOp.department) empMap[r.employee_name].dept = liveOp.department;
-                    if (liveOp.designation) empMap[r.employee_name].designation = liveOp.designation;
-                }
+            if (empMap[r.employee_name]) {
+                empMap[r.employee_name].days[r.day] = r.hours;
             }
-            empMap[r.employee_name].days[r.day] = r.hours;
         });
 
         let empList = Object.values(empMap);
