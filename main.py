@@ -1326,6 +1326,18 @@ def update_insert_master(item_id: int, item: InsertMasterCreate, db: Session = D
     db.refresh(db_item)
     return db_item
 
+class BulkImportInsertMasterPayload(BaseModel):
+    inserts: List[InsertMasterCreate]
+
+@app.post("/api/insert_masters/bulk")
+def bulk_import_insert_masters(payload: BulkImportInsertMasterPayload, db: Session = Depends(get_db)):
+    new_items = []
+    for item in payload.inserts:
+        new_items.append(InsertMaster(**item.model_dump()))
+    db.add_all(new_items)
+    db.commit()
+    return {"message": f"Successfully imported {len(new_items)} insert master records"}
+
 @app.delete("/api/insert_masters/{item_id}")
 def delete_insert_master(item_id: int, db: Session = Depends(get_db)):
     db_item = db.query(InsertMaster).filter(InsertMaster.id == item_id).first()

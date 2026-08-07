@@ -413,6 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'sidebarInsertMaster': { tab: 'insertmaster', action: () => {
             const sec = document.getElementById('insertMasterSection');
             if (sec) sec.style.display = 'block';
+            importBtn.style.display = 'inline-block';
             addBtn.style.display = 'none';
             fetchInsertMasters();
         }},
@@ -4750,7 +4751,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!tbody) return;
         tbody.innerHTML = '';
         if (!inserts || inserts.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No insert records found. Click "+ Add Insert" to add one.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No insert records found. Click "+ Add Insert" or "Import Excel" to add records.</td></tr>';
             return;
         }
         inserts.forEach(item => {
@@ -4759,10 +4760,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${item.id}</td>
                 <td><strong>${item.insert_spec || item.name || ''}</strong></td>
                 <td>${item.no_of_edges || 1}</td>
-                <td>${item.grade || ''}</td>
-                <td>${item.make || ''}</td>
-                <td>${item.stock || 0}</td>
-                <td>Rs. ${(item.price || 0).toFixed(2)}</td>
                 <td class="actions-cell">
                     <button class="btn btn-outline edit-insert-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit</button>
                     <button class="btn btn-outline delete-insert-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
@@ -4802,10 +4799,6 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('insertMasterId').value = item.id;
             document.getElementById('insertSpecInput').value = item.insert_spec || item.name || '';
             document.getElementById('insertEdgesInput').value = item.no_of_edges || 1;
-            document.getElementById('insertGrade').value = item.grade || '';
-            document.getElementById('insertMake').value = item.make || '';
-            document.getElementById('insertStock').value = item.stock || 0;
-            document.getElementById('insertPrice').value = item.price || 0;
         } else {
             document.getElementById('insertMasterModalTitle').textContent = 'Add Insert Master';
             insertMasterForm.reset();
@@ -4818,6 +4811,85 @@ document.addEventListener('DOMContentLoaded', () => {
     if (cancelInsertMasterBtn) cancelInsertMasterBtn.addEventListener('click', () => insertMasterModal.classList.remove('show'));
     if (closeInsertMasterModalBtn) closeInsertMasterModalBtn.addEventListener('click', () => insertMasterModal.classList.remove('show'));
 
+    document.getElementById('importInsertMasterBtn')?.addEventListener('click', () => {
+        document.getElementById('importInsertMasterInput')?.click();
+    });
+
+    const importInsertMasterInput = document.getElementById('importInsertMasterInput');
+    if (importInsertMasterInput) {
+        importInsertMasterInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    const data = evt.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (!json || json.length === 0) {
+                        alert('No valid data found in Excel sheet.');
+                        return;
+                    }
+
+                    const inserts = [];
+                    json.forEach(row => {
+                        let specVal = '';
+                        let edgesVal = 1;
+
+                        for (const key of Object.keys(row)) {
+                            const k = key.trim().toLowerCase();
+                            if (['insert spec', 'insert_spec', 'specification', 'insert name', 'spec', 'name'].includes(k)) {
+                                specVal = String(row[key] || '').trim();
+                            }
+                            if (['no. of edges', 'no of edges', 'no_of_edges', 'edges', 'edge'].includes(k)) {
+                                edgesVal = parseInt(row[key]) || 1;
+                            }
+                        }
+
+                        if (specVal) {
+                            inserts.push({
+                                insert_spec: specVal,
+                                no_of_edges: edgesVal,
+                                grade: '',
+                                make: '',
+                                stock: 0,
+                                price: 0.0
+                            });
+                        }
+                    });
+
+                    if (inserts.length === 0) {
+                        alert('No valid insert spec rows found in Excel sheet. Make sure headers are "Insert Spec" and "No. of Edges".');
+                        return;
+                    }
+
+                    const res = await fetch('/api/insert_masters/bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ inserts })
+                    });
+
+                    if (res.ok) {
+                        alert(`Successfully imported ${inserts.length} Insert Master records!`);
+                        fetchInsertMasters();
+                    } else {
+                        alert('Error importing Excel data.');
+                    }
+                } catch (err) {
+                    console.error('Error importing Insert Master Excel:', err);
+                    alert('Error reading Excel file.');
+                } finally {
+                    importInsertMasterInput.value = '';
+                }
+            };
+            reader.readAsBinaryString(file);
+        });
+    }
+
     if (insertMasterForm) {
         insertMasterForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -4825,10 +4897,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const payload = {
                 insert_spec: document.getElementById('insertSpecInput').value.trim(),
                 no_of_edges: parseInt(document.getElementById('insertEdgesInput').value) || 1,
-                grade: document.getElementById('insertGrade').value.trim(),
-                make: document.getElementById('insertMake').value.trim(),
-                stock: parseInt(document.getElementById('insertStock').value) || 0,
-                price: parseFloat(document.getElementById('insertPrice').value) || 0.00
+                grade: '',
+                make: '',
+                stock: 0,
+                price: 0.00
             };
             const method = id ? 'PUT' : 'POST';
             const url = id ? `/api/insert_masters/${id}` : '/api/insert_masters';
