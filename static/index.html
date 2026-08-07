@@ -84,6 +84,7 @@
             <div class="sub-group" id="submenuToolcrib" style="display: none;">
                 <button class="sub-tab" id="sidebarInsertMaster" data-screen="insertmaster">Insert Master</button>
                 <button class="sub-tab" id="sidebarDrillMaster" data-screen="drillmaster">Drill Master</button>
+                <button class="sub-tab" id="sidebarInsertReceipt" data-screen="insertreceipt">Insert Receipt</button>
             </div>
             <div class="sub-group" id="submenuReports" style="display: none;">
                 <button class="sub-tab" id="sidebarRmRequirement" data-screen="reports">RM Requirement</button>
@@ -146,6 +147,36 @@
                     </tr>
                 </thead>
                 <tbody id="drillMasterBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Insert Receipt Section -->
+        <div class="table-container" id="insertReceiptSection" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2>Insert Receipt</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button id="importInsertReceiptBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Import Excel
+                    </button>
+                    <button id="addInsertReceiptBtn" class="btn btn-primary">+ Add Receipt</button>
+                </div>
+            </div>
+            <input type="file" id="importInsertReceiptInput" accept=".xlsx, .xls" style="display: none;">
+            <table id="insertReceiptTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Date</th>
+                        <th>Supplier</th>
+                        <th>Insert Spec</th>
+                        <th>Batch No</th>
+                        <th>Qty</th>
+                        <th>Rate (Rs)</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="insertReceiptBody"></tbody>
             </table>
         </div>
 
@@ -1724,6 +1755,51 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=156"></script>
+    <!-- Insert Receipt Modal -->
+    <div id="insertReceiptModal" class="modal">
+        <div class="modal-content" style="max-width: 500px; border-radius: 12px; padding: 1.5rem;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 0.75rem;">
+                <h3 id="insertReceiptModalTitle" style="margin: 0; font-size: 1.25rem;">Add Insert Receipt</h3>
+                <button class="close-btn" id="closeInsertReceiptModalBtn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+            </div>
+            <form id="insertReceiptForm">
+                <input type="hidden" id="insertReceiptId">
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label for="receiptDateInput" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Date</label>
+                    <input type="date" id="receiptDateInput" required style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                </div>
+                <div class="form-group" style="margin-top: 0.8rem;">
+                    <label for="receiptSupplierInput" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Supplier</label>
+                    <input type="text" id="receiptSupplierInput" placeholder="e.g. ABC Tools Ltd" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                </div>
+                <div class="form-group" style="margin-top: 0.8rem;">
+                    <label for="receiptInsertSpecSelect" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Insert Spec</label>
+                    <select id="receiptInsertSpecSelect" required style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                        <option value="">-- Select Insert Spec --</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-top: 0.8rem;">
+                    <label for="receiptBatchNoInput" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Batch No</label>
+                    <input type="text" id="receiptBatchNoInput" placeholder="e.g. BATCH-2026-01" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                </div>
+                <div class="form-row" style="display: flex; gap: 1rem; margin-top: 0.8rem;">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="receiptQtyInput" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Qty</label>
+                        <input type="number" id="receiptQtyInput" min="1" value="1" required style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="receiptRateInput" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Rate (Rs)</label>
+                        <input type="number" id="receiptRateInput" min="0" step="0.01" value="0.00" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                    </div>
+                </div>
+                <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.5rem;">
+                    <button type="button" class="btn btn-outline" id="cancelInsertReceiptBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Details</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/app.js?v=157"></script>
 </body>
 </html>

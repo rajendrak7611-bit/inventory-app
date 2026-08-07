@@ -209,4 +209,16 @@ class DrillMaster(Base):
     stock = Column(Integer, default=0)
     price = Column(Numeric(10, 2), default=0.00)
 
+class InsertReceipt(Base):
+    __tablename__ = "insert_receipts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(String, index=True)
+    supplier = Column(String, index=True, nullable=True)
+    insert_spec = Column(String, index=True)
+    batch_no = Column(String, nullable=True)
+    qty = Column(Integer, default=0)
+    rate = Column(Numeric(10, 2), default=0.00)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 

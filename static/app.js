@@ -232,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const sections = [
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection',
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
-            'productsSection', 'insertMasterSection', 'drillMasterSection', 'partMasterSection', 'machinesSection',
+            'productsSection', 'insertMasterSection', 'drillMasterSection', 'insertReceiptSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'htSection', 'scheduleCreateSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
             'inspectionSection', 'maintenanceSection', 'hrSection', 'attendanceSection'
@@ -423,6 +423,13 @@ document.addEventListener('DOMContentLoaded', () => {
             importBtn.style.display = 'inline-block';
             addBtn.style.display = 'none';
             fetchDrillMasters();
+        }},
+        'sidebarInsertReceipt': { tab: 'insertreceipt', action: () => {
+            const sec = document.getElementById('insertReceiptSection');
+            if (sec) sec.style.display = 'block';
+            importBtn.style.display = 'inline-block';
+            addBtn.style.display = 'none';
+            fetchInsertReceipts();
         }},
         'sidebarOperEff': { tab: 'oper_eff', action: () => {
             const operEffSec = document.getElementById('operEffSection');
@@ -5137,6 +5144,244 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert('Error saving drill record');
                 }
             } catch (err) { console.error(err); alert('Error saving drill record'); }
+        });
+    }
+
+    // ====== INSERT RECEIPT CRUD ======
+    const insertReceiptModal = document.getElementById('insertReceiptModal');
+    const insertReceiptForm = document.getElementById('insertReceiptForm');
+    const addInsertReceiptBtn = document.getElementById('addInsertReceiptBtn');
+    const cancelInsertReceiptBtn = document.getElementById('cancelInsertReceiptBtn');
+    const closeInsertReceiptModalBtn = document.getElementById('closeInsertReceiptModalBtn');
+
+    async function fetchInsertReceipts() {
+        try {
+            const res = await fetch('/api/insert_receipts');
+            const data = await res.json();
+            renderInsertReceipts(data);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderInsertReceipts(receipts) {
+        const tbody = document.getElementById('insertReceiptBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!receipts || receipts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No insert receipts found. Click "+ Add Receipt" or "Import Excel" to add records.</td></tr>';
+            return;
+        }
+        receipts.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.id}</td>
+                <td><span style="font-weight: 500;">${item.date || ''}</span></td>
+                <td>${item.supplier || ''}</td>
+                <td><strong>${item.insert_spec || ''}</strong></td>
+                <td>${item.batch_no || ''}</td>
+                <td>${item.qty || 0}</td>
+                <td>Rs. ${(item.rate || 0).toFixed(2)}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-outline edit-receipt-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit</button>
+                    <button class="btn btn-outline delete-receipt-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.edit-receipt-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.target.getAttribute('data-id');
+                const res = await fetch('/api/insert_receipts');
+                const data = await res.json();
+                const item = data.find(x => x.id == id);
+                if (item) openInsertReceiptModal(item);
+            });
+        });
+
+        tbody.querySelectorAll('.delete-receipt-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (confirm('Delete this insert receipt record?')) {
+                    const id = e.target.getAttribute('data-id');
+                    try {
+                        const res = await fetch(`/api/insert_receipts/${id}`, { method: 'DELETE' });
+                        if (res.ok) fetchInsertReceipts();
+                        else alert('Error deleting receipt record');
+                    } catch (err) { console.error(err); }
+                }
+            });
+        });
+    }
+
+    async function populateInsertSpecDropdown(selectedSpec = '') {
+        const sel = document.getElementById('receiptInsertSpecSelect');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">-- Select Insert Spec --</option>';
+        try {
+            const res = await fetch('/api/insert_masters');
+            const data = await res.json();
+            data.forEach(item => {
+                const spec = item.insert_spec || item.name || '';
+                if (spec) {
+                    const opt = document.createElement('option');
+                    opt.value = spec;
+                    opt.textContent = spec;
+                    if (selectedSpec && selectedSpec.trim().toLowerCase() === spec.trim().toLowerCase()) {
+                        opt.selected = true;
+                    }
+                    sel.appendChild(opt);
+                }
+            });
+        } catch (e) { console.error('Error fetching insert specs for dropdown:', e); }
+    }
+
+    async function openInsertReceiptModal(item = null) {
+        if (!insertReceiptModal) return;
+        await populateInsertSpecDropdown(item ? item.insert_spec : '');
+        if (item) {
+            document.getElementById('insertReceiptModalTitle').textContent = 'Edit Insert Receipt';
+            document.getElementById('insertReceiptId').value = item.id;
+            document.getElementById('receiptDateInput').value = item.date || '';
+            document.getElementById('receiptSupplierInput').value = item.supplier || '';
+            document.getElementById('receiptBatchNoInput').value = item.batch_no || '';
+            document.getElementById('receiptQtyInput').value = item.qty || 1;
+            document.getElementById('receiptRateInput').value = item.rate || 0.00;
+        } else {
+            document.getElementById('insertReceiptModalTitle').textContent = 'Add Insert Receipt';
+            insertReceiptForm.reset();
+            document.getElementById('insertReceiptId').value = '';
+            document.getElementById('receiptDateInput').valueAsDate = new Date();
+        }
+        insertReceiptModal.classList.add('show');
+    }
+
+    if (addInsertReceiptBtn) addInsertReceiptBtn.addEventListener('click', () => openInsertReceiptModal());
+    if (cancelInsertReceiptBtn) cancelInsertReceiptBtn.addEventListener('click', () => insertReceiptModal.classList.remove('show'));
+    if (closeInsertReceiptModalBtn) closeInsertReceiptModalBtn.addEventListener('click', () => insertReceiptModal.classList.remove('show'));
+
+    document.getElementById('importInsertReceiptBtn')?.addEventListener('click', () => {
+        document.getElementById('importInsertReceiptInput')?.click();
+    });
+
+    const importInsertReceiptInput = document.getElementById('importInsertReceiptInput');
+    if (importInsertReceiptInput) {
+        importInsertReceiptInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    const data = evt.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (!json || json.length === 0) {
+                        alert('No valid data found in Excel sheet.');
+                        return;
+                    }
+
+                    const receipts = [];
+                    const todayStr = new Date().toISOString().slice(0, 10);
+                    json.forEach(row => {
+                        let dateVal = todayStr;
+                        let supplierVal = '';
+                        let specVal = '';
+                        let batchVal = '';
+                        let qtyVal = 0;
+                        let rateVal = 0.0;
+
+                        for (const key of Object.keys(row)) {
+                            const k = key.trim().toLowerCase();
+                            if (['date', 'receipt date', 'receipt_date'].includes(k)) {
+                                dateVal = String(row[key] || '').trim();
+                            }
+                            if (['supplier', 'vendor', 'supplier name'].includes(k)) {
+                                supplierVal = String(row[key] || '').trim();
+                            }
+                            if (['insert spec', 'insert_spec', 'spec', 'specification', 'insert'].includes(k)) {
+                                specVal = String(row[key] || '').trim();
+                            }
+                            if (['batch no', 'batch_no', 'batch', 'batch number', 'lot no'].includes(k)) {
+                                batchVal = String(row[key] || '').trim();
+                            }
+                            if (['qty', 'quantity', 'count'].includes(k)) {
+                                qtyVal = parseInt(row[key]) || 0;
+                            }
+                            if (['rate', 'price', 'rate (rs)', 'unit rate'].includes(k)) {
+                                rateVal = parseFloat(row[key]) || 0.0;
+                            }
+                        }
+
+                        if (specVal) {
+                            receipts.push({
+                                date: dateVal || todayStr,
+                                supplier: supplierVal,
+                                insert_spec: specVal,
+                                batch_no: batchVal,
+                                qty: qtyVal,
+                                rate: rateVal
+                            });
+                        }
+                    });
+
+                    if (receipts.length === 0) {
+                        alert('No valid receipt records found in Excel sheet. Make sure headers are "Date", "Supplier", "Insert Spec", "Batch No", "Qty", and "Rate".');
+                        return;
+                    }
+
+                    const res = await fetch('/api/insert_receipts/bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ receipts })
+                    });
+
+                    if (res.ok) {
+                        alert(`Successfully imported ${receipts.length} Insert Receipt records!`);
+                        fetchInsertReceipts();
+                    } else {
+                        alert('Error importing Excel data.');
+                    }
+                } catch (err) {
+                    console.error('Error importing Insert Receipt Excel:', err);
+                    alert('Error reading Excel file.');
+                } finally {
+                    importInsertReceiptInput.value = '';
+                }
+            };
+            reader.readAsBinaryString(file);
+        });
+    }
+
+    if (insertReceiptForm) {
+        insertReceiptForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('insertReceiptId').value;
+            const payload = {
+                date: document.getElementById('receiptDateInput').value,
+                supplier: document.getElementById('receiptSupplierInput').value.trim(),
+                insert_spec: document.getElementById('receiptInsertSpecSelect').value,
+                batch_no: document.getElementById('receiptBatchNoInput').value.trim(),
+                qty: parseInt(document.getElementById('receiptQtyInput').value) || 0,
+                rate: parseFloat(document.getElementById('receiptRateInput').value) || 0.00
+            };
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/insert_receipts/${id}` : '/api/insert_receipts';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    insertReceiptModal.classList.remove('show');
+                    fetchInsertReceipts();
+                } else {
+                    alert('Error saving receipt record');
+                }
+            } catch (err) { console.error(err); alert('Error saving receipt record'); }
         });
     }
 });

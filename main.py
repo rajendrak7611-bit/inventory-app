@@ -8,7 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog, Attendance, InsertMaster, DrillMaster
+from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog, Attendance, InsertMaster, DrillMaster, InsertReceipt
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -1445,6 +1445,67 @@ def delete_drill_master(item_id: int, db: Session = Depends(get_db)):
     db.delete(db_item)
     db.commit()
     return {"message": "Drill Master item deleted"}
+
+# --- Insert Receipt Schemas & Endpoints ---
+class InsertReceiptBase(BaseModel):
+    date: str
+    supplier: Optional[str] = ""
+    insert_spec: str
+    batch_no: Optional[str] = ""
+    qty: Optional[int] = 0
+    rate: Optional[float] = 0.00
+
+class InsertReceiptCreate(InsertReceiptBase):
+    pass
+
+class InsertReceiptResponse(InsertReceiptBase):
+    id: int
+    class Config:
+        from_attributes = True
+
+@app.get("/api/insert_receipts", response_model=List[InsertReceiptResponse])
+def get_insert_receipts(db: Session = Depends(get_db)):
+    return db.query(InsertReceipt).order_by(InsertReceipt.id.desc()).all()
+
+@app.post("/api/insert_receipts", response_model=InsertReceiptResponse)
+def create_insert_receipt(item: InsertReceiptCreate, db: Session = Depends(get_db)):
+    db_item = InsertReceipt(**item.model_dump())
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+@app.put("/api/insert_receipts/{item_id}", response_model=InsertReceiptResponse)
+def update_insert_receipt(item_id: int, item: InsertReceiptCreate, db: Session = Depends(get_db)):
+    db_item = db.query(InsertReceipt).filter(InsertReceipt.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Insert Receipt item not found")
+    for key, value in item.model_dump().items():
+        setattr(db_item, key, value)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+class BulkImportInsertReceiptPayload(BaseModel):
+    receipts: List[InsertReceiptCreate]
+
+@app.post("/api/insert_receipts/bulk")
+def bulk_import_insert_receipts(payload: BulkImportInsertReceiptPayload, db: Session = Depends(get_db)):
+    new_items = []
+    for item in payload.receipts:
+        new_items.append(InsertReceipt(**item.model_dump()))
+    db.add_all(new_items)
+    db.commit()
+    return {"message": f"Successfully imported {len(new_items)} insert receipt records"}
+
+@app.delete("/api/insert_receipts/{item_id}")
+def delete_insert_receipt(item_id: int, db: Session = Depends(get_db)):
+    db_item = db.query(InsertReceipt).filter(InsertReceipt.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Insert Receipt item not found")
+    db.delete(db_item)
+    db.commit()
+    return {"message": "Insert Receipt item deleted"}
 
 # Serve static files (frontend)
 app.mount("/static", StaticFiles(directory="static"), name="static")
