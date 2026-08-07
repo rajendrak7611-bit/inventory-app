@@ -5431,12 +5431,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${item.operator || ''}</td>
                 <td>${item.partno || ''}</td>
                 <td>${item.opn_no || ''}</td>
+                <td>
+                    <button class="btn btn-outline monitor-issue-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #2563eb; border-color: #2563eb; font-weight: 600;">Insert Monitor</button>
+                </td>
                 <td class="actions-cell">
                     <button class="btn btn-outline edit-issue-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit</button>
                     <button class="btn btn-outline delete-issue-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
                 </td>
             `;
             tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.monitor-issue-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.target.getAttribute('data-id');
+                const res = await fetch('/api/insert_issues');
+                const data = await res.json();
+                const item = data.find(x => x.id == id);
+                if (item) openInsertMonitorModal(item);
+            });
         });
 
         tbody.querySelectorAll('.edit-issue-btn').forEach(btn => {
@@ -5806,6 +5819,115 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert('Error saving issue record');
                 }
             } catch (err) { console.error(err); alert('Error saving issue record'); }
+        });
+    }
+
+    // ====== INSERT MONITOR MODAL ======
+    const insertMonitorModal = document.getElementById('insertMonitorModal');
+    const closeInsertMonitorModalBtn = document.getElementById('closeInsertMonitorModalBtn');
+    const cancelInsertMonitorBtn = document.getElementById('cancelInsertMonitorBtn');
+    const saveInsertMonitorBtn = document.getElementById('saveInsertMonitorBtn');
+    let currentMonitorIssueItem = null;
+
+    if (closeInsertMonitorModalBtn) closeInsertMonitorModalBtn.addEventListener('click', () => insertMonitorModal.classList.remove('show'));
+    if (cancelInsertMonitorBtn) cancelInsertMonitorBtn.addEventListener('click', () => insertMonitorModal.classList.remove('show'));
+
+    async function openInsertMonitorModal(item) {
+        if (!insertMonitorModal || !item) return;
+        currentMonitorIssueItem = item;
+
+        const subtitleEl = document.getElementById('monitorSubtitle');
+        if (subtitleEl) subtitleEl.textContent = `${item.insert_spec || ''} | Part: ${item.partno || '-'} | Opn: ${item.opn_no || '-'} | Batch: ${item.batch_no || '-'}`;
+
+        let numEdges = 4;
+        try {
+            const specRes = await fetch('/api/insert_masters');
+            const specs = await specRes.json();
+            const master = specs.find(s => (s.insert_spec || s.name || '').trim().toLowerCase() === (item.insert_spec || '').trim().toLowerCase());
+            if (master) {
+                numEdges = parseInt(master.no_of_edges) || parseInt(master.edges) || 4;
+            }
+        } catch (e) { console.error(e); }
+
+        let edgeData = {};
+        if (item.edge_data) {
+            try {
+                edgeData = typeof item.edge_data === 'string' ? JSON.parse(item.edge_data) : item.edge_data;
+            } catch (e) { edgeData = {}; }
+        }
+
+        const tbody = document.getElementById('insertMonitorTableBody');
+        tbody.innerHTML = '';
+
+        for (let i = 1; i <= numEdges; i++) {
+            const tr = document.createElement('tr');
+            const val = edgeData[String(i)] !== undefined ? edgeData[String(i)] : '';
+            tr.innerHTML = `
+                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; font-weight: 600;">Edge ${i}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 6px;">
+                    <input type="number" class="edge-qty-input" data-edge="${i}" value="${val}" placeholder="Enter Qty" min="0" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px;">
+                </td>
+            `;
+            tbody.appendChild(tr);
+        }
+
+        updateMonitorTotalQty();
+
+        tbody.querySelectorAll('.edge-qty-input').forEach(input => {
+            input.addEventListener('input', updateMonitorTotalQty);
+        });
+
+        insertMonitorModal.classList.add('show');
+    }
+
+    function updateMonitorTotalQty() {
+        const inputs = document.querySelectorAll('#insertMonitorTableBody .edge-qty-input');
+        let total = 0;
+        inputs.forEach(inp => {
+            total += parseInt(inp.value) || 0;
+        });
+        const totalSpan = document.getElementById('monitorTotalQty');
+        if (totalSpan) totalSpan.textContent = `Total Edge Qty: ${total}`;
+    }
+
+    if (saveInsertMonitorBtn) {
+        saveInsertMonitorBtn.addEventListener('click', async () => {
+            if (!currentMonitorIssueItem) return;
+            const inputs = document.querySelectorAll('#insertMonitorTableBody .edge-qty-input');
+            const edgeDataObj = {};
+            inputs.forEach(inp => {
+                const edgeNo = inp.getAttribute('data-edge');
+                const val = parseInt(inp.value) || 0;
+                edgeDataObj[edgeNo] = val;
+            });
+
+            const payload = {
+                date: currentMonitorIssueItem.date,
+                department: currentMonitorIssueItem.department,
+                insert_spec: currentMonitorIssueItem.insert_spec,
+                batch_no: currentMonitorIssueItem.batch_no,
+                qty_issued: currentMonitorIssueItem.qty_issued,
+                machine: currentMonitorIssueItem.machine,
+                operator: currentMonitorIssueItem.operator,
+                partno: currentMonitorIssueItem.partno,
+                opn_no: currentMonitorIssueItem.opn_no,
+                receipt_id: currentMonitorIssueItem.receipt_id,
+                edge_data: JSON.stringify(edgeDataObj)
+            };
+
+            try {
+                const res = await fetch(`/api/insert_issues/${currentMonitorIssueItem.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    insertMonitorModal.classList.remove('show');
+                    fetchInsertIssues();
+                } else {
+                    alert('Error saving Edge Qty');
+                }
+            } catch (err) { console.error(err); alert('Error saving Edge Qty'); }
         });
     }
 });

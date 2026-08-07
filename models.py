@@ -235,6 +235,7 @@ class InsertIssue(Base):
     partno = Column(String, nullable=True)
     opn_no = Column(String, nullable=True)
     receipt_id = Column(Integer, nullable=True)
+    edge_data = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

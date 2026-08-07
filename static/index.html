@@ -207,6 +207,7 @@
                         <th>Operator</th>
                         <th>Part No</th>
                         <th>Opn No</th>
+                        <th>Insert Monitor</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -1917,8 +1918,37 @@
                 </div>
             </form>
         </div>
+    <!-- Insert Monitor Modal -->
+    <div id="insertMonitorModal" class="modal">
+        <div class="modal-content" style="max-width: 550px; border-radius: 12px; padding: 1.5rem;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 0.75rem;">
+                <div>
+                    <h3 style="margin: 0; font-size: 1.25rem;">Insert Monitor</h3>
+                    <div id="monitorSubtitle" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;"></div>
+                </div>
+                <button class="close-btn" id="closeInsertMonitorModalBtn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+            </div>
+            <div style="margin-top: 1rem; max-height: 350px; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f1f5f9;">
+                            <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: center; width: 100px;">Edge No</th>
+                            <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: left;">Qty per Edge</th>
+                        </tr>
+                    </thead>
+                    <tbody id="insertMonitorTableBody"></tbody>
+                </table>
+            </div>
+            <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                <span id="monitorTotalQty" style="font-weight: 600; color: var(--primary-color);">Total Edge Qty: 0</span>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button type="button" class="btn btn-outline" id="cancelInsertMonitorBtn">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveInsertMonitorBtn">Save Edge Qty</button>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script src="/static/app.js?v=159"></script>
+    <script src="/static/app.js?v=160"></script>
 </body>
 </html>

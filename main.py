@@ -102,6 +102,10 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         conn.execute(text("ALTER TABLE insert_issues ADD COLUMN department VARCHAR;"))
     except Exception:
         pass
+    try:
+        conn.execute(text("ALTER TABLE insert_issues ADD COLUMN edge_data VARCHAR;"))
+    except Exception:
+        pass
 
 # Seed default admin user
 with Session(engine) as db:
@@ -1523,6 +1527,7 @@ class InsertIssueBase(BaseModel):
     partno: Optional[str] = ""
     opn_no: Optional[str] = ""
     receipt_id: Optional[int] = None
+    edge_data: Optional[str] = ""
 
 class InsertIssueCreate(InsertIssueBase):
     pass
