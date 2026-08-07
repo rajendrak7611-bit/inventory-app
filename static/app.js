@@ -266,7 +266,10 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (group) {
                 hideAllSubmenus();
-                const submenu = document.getElementById('submenu' + group.charAt(0).toUpperCase() + group.slice(1));
+                let submenu = document.getElementById('submenu' + group.charAt(0).toUpperCase() + group.slice(1));
+                if (!submenu) {
+                    submenu = Array.from(document.querySelectorAll('.sub-group')).find(el => el.id.toLowerCase() === ('submenu' + group).toLowerCase());
+                }
                 if (submenu) {
                     submenu.style.display = 'flex';
                     // Auto-click first tab in submenu
