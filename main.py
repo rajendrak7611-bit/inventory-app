@@ -86,6 +86,18 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         conn.execute(text("ALTER TABLE operators ADD COLUMN designation VARCHAR DEFAULT 'Operator';"))
     except Exception:
         pass
+    try:
+        conn.execute(text("ALTER TABLE drill_masters ADD COLUMN drill_size VARCHAR;"))
+    except Exception:
+        pass
+    try:
+        conn.execute(text("ALTER TABLE drill_masters ADD COLUMN sl_no VARCHAR;"))
+    except Exception:
+        pass
+    try:
+        conn.execute(text("ALTER TABLE drill_masters ADD COLUMN resharp_count INTEGER DEFAULT 0;"))
+    except Exception:
+        pass
 
 # Seed default admin user
 with Session(engine) as db:
@@ -1372,7 +1384,10 @@ def delete_insert_master(item_id: int, db: Session = Depends(get_db)):
 
 # --- Drill Master Schemas & Endpoints ---
 class DrillMasterBase(BaseModel):
-    name: str
+    drill_size: str
+    sl_no: Optional[str] = ""
+    resharp_count: Optional[int] = 0
+    name: Optional[str] = ""
     size_dia: Optional[str] = ""
     specification: Optional[str] = ""
     make: Optional[str] = ""
@@ -1409,6 +1424,18 @@ def update_drill_master(item_id: int, item: DrillMasterCreate, db: Session = Dep
     db.commit()
     db.refresh(db_item)
     return db_item
+
+class BulkImportDrillMasterPayload(BaseModel):
+    drills: List[DrillMasterCreate]
+
+@app.post("/api/drill_masters/bulk")
+def bulk_import_drill_masters(payload: BulkImportDrillMasterPayload, db: Session = Depends(get_db)):
+    new_items = []
+    for item in payload.drills:
+        new_items.append(DrillMaster(**item.model_dump()))
+    db.add_all(new_items)
+    db.commit()
+    return {"message": f"Successfully imported {len(new_items)} drill master records"}
 
 @app.delete("/api/drill_masters/{item_id}")
 def delete_drill_master(item_id: int, db: Session = Depends(get_db)):

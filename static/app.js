@@ -420,6 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'sidebarDrillMaster': { tab: 'drillmaster', action: () => {
             const sec = document.getElementById('drillMasterSection');
             if (sec) sec.style.display = 'block';
+            importBtn.style.display = 'inline-block';
             addBtn.style.display = 'none';
             fetchDrillMasters();
         }},
@@ -4957,19 +4958,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!tbody) return;
         tbody.innerHTML = '';
         if (!drills || drills.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No drill records found. Click "+ Add Drill" to add one.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No drill records found. Click "+ Add Drill" or "Import Excel" to add records.</td></tr>';
             return;
         }
         drills.forEach(item => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${item.id}</td>
-                <td><strong>${item.name}</strong></td>
-                <td>${item.size_dia || ''}</td>
-                <td>${item.specification || ''}</td>
-                <td>${item.make || ''}</td>
-                <td>${item.stock || 0}</td>
-                <td>Rs. ${(item.price || 0).toFixed(2)}</td>
+                <td><strong>${item.drill_size || item.size_dia || item.name || ''}</strong></td>
+                <td>${item.sl_no || ''}</td>
+                <td>${item.resharp_count || 0}</td>
                 <td class="actions-cell">
                     <button class="btn btn-outline edit-drill-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit</button>
                     <button class="btn btn-outline delete-drill-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
@@ -5007,12 +5005,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (item) {
             document.getElementById('drillMasterModalTitle').textContent = 'Edit Drill Master';
             document.getElementById('drillMasterId').value = item.id;
-            document.getElementById('drillName').value = item.name;
-            document.getElementById('drillSizeDia').value = item.size_dia || '';
-            document.getElementById('drillSpec').value = item.specification || '';
-            document.getElementById('drillMake').value = item.make || '';
-            document.getElementById('drillStock').value = item.stock || 0;
-            document.getElementById('drillPrice').value = item.price || 0;
+            document.getElementById('drillSizeInput').value = item.drill_size || item.size_dia || item.name || '';
+            document.getElementById('drillSlNoInput').value = item.sl_no || '';
+            document.getElementById('drillResharpInput').value = item.resharp_count || 0;
         } else {
             document.getElementById('drillMasterModalTitle').textContent = 'Add Drill Master';
             drillMasterForm.reset();
@@ -5025,17 +5020,106 @@ document.addEventListener('DOMContentLoaded', () => {
     if (cancelDrillMasterBtn) cancelDrillMasterBtn.addEventListener('click', () => drillMasterModal.classList.remove('show'));
     if (closeDrillMasterModalBtn) closeDrillMasterModalBtn.addEventListener('click', () => drillMasterModal.classList.remove('show'));
 
+    document.getElementById('importDrillMasterBtn')?.addEventListener('click', () => {
+        document.getElementById('importDrillMasterInput')?.click();
+    });
+
+    const importDrillMasterInput = document.getElementById('importDrillMasterInput');
+    if (importDrillMasterInput) {
+        importDrillMasterInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    const data = evt.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (!json || json.length === 0) {
+                        alert('No valid data found in Excel sheet.');
+                        return;
+                    }
+
+                    const drills = [];
+                    json.forEach(row => {
+                        let sizeVal = '';
+                        let slNoVal = '';
+                        let resharpVal = 0;
+
+                        for (const key of Object.keys(row)) {
+                            const k = key.trim().toLowerCase();
+                            if (['drill size', 'drill_size', 'size / dia', 'size', 'dia', 'drill name', 'name'].includes(k)) {
+                                sizeVal = String(row[key] || '').trim();
+                            }
+                            if (['sl no', 'sl_no', 'serial no', 'sl.no', 'slno', 'serial'].includes(k)) {
+                                slNoVal = String(row[key] || '').trim();
+                            }
+                            if (['resharp count', 'resharp_count', 'resharp', 'resharpen count', 'resharpening'].includes(k)) {
+                                resharpVal = parseInt(row[key]) || 0;
+                            }
+                        }
+
+                        if (sizeVal || slNoVal) {
+                            drills.push({
+                                drill_size: sizeVal,
+                                sl_no: slNoVal,
+                                resharp_count: resharpVal,
+                                name: '',
+                                size_dia: '',
+                                specification: '',
+                                make: '',
+                                stock: 0,
+                                price: 0.0
+                            });
+                        }
+                    });
+
+                    if (drills.length === 0) {
+                        alert('No valid drill records found in Excel sheet. Make sure headers are "Drill Size", "Sl No", and "Resharp Count".');
+                        return;
+                    }
+
+                    const res = await fetch('/api/drill_masters/bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ drills })
+                    });
+
+                    if (res.ok) {
+                        alert(`Successfully imported ${drills.length} Drill Master records!`);
+                        fetchDrillMasters();
+                    } else {
+                        alert('Error importing Excel data.');
+                    }
+                } catch (err) {
+                    console.error('Error importing Drill Master Excel:', err);
+                    alert('Error reading Excel file.');
+                } finally {
+                    importDrillMasterInput.value = '';
+                }
+            };
+            reader.readAsBinaryString(file);
+        });
+    }
+
     if (drillMasterForm) {
         drillMasterForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const id = document.getElementById('drillMasterId').value;
             const payload = {
-                name: document.getElementById('drillName').value.trim(),
-                size_dia: document.getElementById('drillSizeDia').value.trim(),
-                specification: document.getElementById('drillSpec').value.trim(),
-                make: document.getElementById('drillMake').value.trim(),
-                stock: parseInt(document.getElementById('drillStock').value) || 0,
-                price: parseFloat(document.getElementById('drillPrice').value) || 0.00
+                drill_size: document.getElementById('drillSizeInput').value.trim(),
+                sl_no: document.getElementById('drillSlNoInput').value.trim(),
+                resharp_count: parseInt(document.getElementById('drillResharpInput').value) || 0,
+                name: '',
+                size_dia: '',
+                specification: '',
+                make: '',
+                stock: 0,
+                price: 0.00
             };
             const method = id ? 'PUT' : 'POST';
             const url = id ? `/api/drill_masters/${id}` : '/api/drill_masters';

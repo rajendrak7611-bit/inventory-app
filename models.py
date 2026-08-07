@@ -199,7 +199,10 @@ class DrillMaster(Base):
     __tablename__ = "drill_masters"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)
+    drill_size = Column(String, index=True, nullable=True)
+    sl_no = Column(String, index=True, nullable=True)
+    resharp_count = Column(Integer, default=0)
+    name = Column(String, nullable=True)
     size_dia = Column(String, nullable=True)
     specification = Column(String, nullable=True)
     make = Column(String, nullable=True)
