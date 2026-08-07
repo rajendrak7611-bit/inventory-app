@@ -48,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'inventory': ['inventory', 'rawmaterial', 'ht'],
                     'production': ['schedule', 'status', 'prodlog', 'debur'],
                     'reports': ['reports'],
+                    'maintenance': ['maintenance'],
                     'hr': ['hr', 'attendance']
                 };
                 const allowed = groupScreens[group] ? groupScreens[group].some(s => accessibleScreens.includes(s)) : false;
