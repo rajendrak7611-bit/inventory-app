@@ -1110,6 +1110,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    document.getElementById('deleteAllOperatorsBtn')?.addEventListener('click', async () => {
+        if (confirm('Are you sure you want to delete ALL operator records? This cannot be undone.')) {
+            try {
+                const res = await fetch('/api/operators/all', { method: 'DELETE' });
+                if (res.ok) {
+                    alert('All operators deleted successfully.');
+                    fetchOperators();
+                } else {
+                    alert('Failed to delete all operators.');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Error deleting all operators.');
+            }
+        }
+    });
+
     // --- SETTERS LOGIC ---
     const settersBody = document.getElementById('settersBody');
     const setterModal = document.getElementById('setterModal');

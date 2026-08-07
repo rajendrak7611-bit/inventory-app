@@ -569,6 +569,12 @@ def update_operator(operator_id: int, operator: OperatorCreate, db: Session = De
     db.refresh(db_operator)
     return db_operator
 
+@app.delete("/api/operators/all")
+def delete_all_operators(db: Session = Depends(get_db)):
+    db.query(Operator).delete()
+    db.commit()
+    return {"message": "All operators deleted successfully"}
+
 @app.delete("/api/operators/{operator_id}")
 def delete_operator(operator_id: int, db: Session = Depends(get_db)):
     db_operator = db.query(Operator).filter(Operator.id == operator_id).first()
