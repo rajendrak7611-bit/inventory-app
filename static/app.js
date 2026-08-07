@@ -2336,13 +2336,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const [schedRes, logRes] = await Promise.all([
+            const [schedRes, logRes, pmRes] = await Promise.all([
                 fetch('/api/schedule'),
-                fetch('/api/prodlog')
+                fetch('/api/prodlog'),
+                fetch('/api/partmaster')
             ]);
             
             const allSchedules = await schedRes.json();
             const allLogs = await logRes.json();
+            const allPartMasters = await pmRes.json();
             
             const deptSchedules = allSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase() && (s.status === 'Pending' || !s.status));
             const uniqueParts = [...new Set(deptSchedules.map(s => s.partno))];
@@ -2353,10 +2355,31 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             for (const partno of uniqueParts) {
+                const partObj = allPartMasters.find(p => (p.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase());
+                let lastOpnNo = '';
+                if (partObj) {
+                    const opsRes = await fetch(`/api/partmaster/${partObj.id}/operations`);
+                    const operations = await opsRes.json();
+                    if (operations.length > 0) {
+                        operations.sort((a, b) => (parseInt(a.opn_no) || 0) - (parseInt(b.opn_no) || 0));
+                        lastOpnNo = (operations[operations.length - 1].opn_no || '').trim().toLowerCase();
+                    }
+                }
+
                 const deburredTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const forInsTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                
-                const balance = deburredTotal - forInsTotal;
+                const forInsLogTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const lastOpProd = lastOpnNo ? allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === lastOpnNo).reduce((sum, l) => sum + (l.prod_qty || 0), 0) : 0;
+
+                const effectiveForIns = deburredTotal > 0 ? deburredTotal : (forInsLogTotal > 0 ? forInsLogTotal : lastOpProd);
+
+                const rfdProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const reworkProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const ncProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const rejectionProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rejection').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+
+                const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
+
+                const balance = Math.max(0, effectiveForIns - totalInspected);
                 
                 if (balance <= 0) continue; // Only show parts with positive balance for inspection
                 
