@@ -5402,10 +5402,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let allReceiptsCache = [];
     let allPartMastersCache = [];
 
+    let allInsertMastersCache = [];
+
     async function fetchInsertIssues() {
         try {
-            const res = await fetch('/api/insert_issues');
-            const data = await res.json();
+            const [issueRes, masterRes] = await Promise.all([
+                fetch('/api/insert_issues'),
+                fetch('/api/insert_masters')
+            ]);
+            const data = await issueRes.json();
+            allInsertMastersCache = await masterRes.json();
             renderInsertIssues(data);
         } catch (err) { console.error(err); }
     }
@@ -5415,10 +5421,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!tbody) return;
         tbody.innerHTML = '';
         if (!issues || issues.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No insert issue records found. Click "+ Issue Insert" or "Import Excel" to add records.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No insert issue records found. Click "+ Issue Insert" or "Import Excel" to add records.</td></tr>';
             return;
         }
         issues.forEach(item => {
+            let isComplete = false;
+            let numEdges = 4;
+            const master = allInsertMastersCache.find(s => (s.insert_spec || s.name || '').trim().toLowerCase() === (item.insert_spec || '').trim().toLowerCase());
+            if (master) {
+                numEdges = parseInt(master.no_of_edges) || parseInt(master.edges) || 4;
+            }
+
+            if (item.edge_data) {
+                try {
+                    const edgeObj = typeof item.edge_data === 'string' ? JSON.parse(item.edge_data) : item.edge_data;
+                    let filledCount = 0;
+                    for (let i = 1; i <= numEdges; i++) {
+                        const val = edgeObj[String(i)];
+                        if (val !== undefined && val !== null && val !== '' && !isNaN(val)) {
+                            filledCount++;
+                        }
+                    }
+                    if (filledCount >= numEdges) {
+                        isComplete = true;
+                    }
+                } catch (e) { isComplete = false; }
+            }
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${item.id}</td>
@@ -5432,7 +5461,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${item.partno || ''}</td>
                 <td>${item.opn_no || ''}</td>
                 <td>
-                    <button class="btn btn-outline monitor-issue-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #2563eb; border-color: #2563eb; font-weight: 600;">Insert Monitor</button>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button class="btn btn-outline monitor-issue-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #2563eb; border-color: #2563eb; font-weight: 600;">Insert Monitor</button>
+                        ${isComplete ? '<span title="All edge details entered" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background-color: #22c55e; color: white; border-radius: 4px; font-size: 14px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">✓</span>' : ''}
+                    </div>
                 </td>
                 <td class="actions-cell">
                     <button class="btn btn-outline edit-issue-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit</button>
