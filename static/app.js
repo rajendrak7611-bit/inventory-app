@@ -1780,7 +1780,15 @@ document.addEventListener('DOMContentLoaded', () => {
                                 nextProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === nextOpClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                             }
                         } else {
-                            nextProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                            const deburredTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                            const forInsLogTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                            const rfdProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                            const reworkProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                            const ncProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                            const rejectionProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rejection').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                            const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
+                            
+                            nextProd = Math.max(deburredTotal, forInsLogTotal, totalInspected);
                         }
                         
                         let balance = currentProd - nextProd;
@@ -1801,11 +1809,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const rfdProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const despProd = allRmLogs.filter(l => l.finish_part_no === partno && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
 
-                const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
+                const lastOpProd = operations.length > 0 ? allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === (operations[operations.length - 1].opn_no || '').trim().toLowerCase()).reduce((sum, l) => sum + (l.prod_qty || 0), 0) : 0;
+
+                const effectiveForIns = deburredTotal > 0 ? deburredTotal : (forInsLogTotal > 0 ? forInsLogTotal : lastOpProd);
                 const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
 
                 const deburBal = 0; // Deburring is completed once deburredTotal is logged
-                const forInsBal = effectiveForIns - totalInspected;
+                const forInsBal = Math.max(0, effectiveForIns - totalInspected);
                 const rfdBal = rfdProd - despProd;
 
                 rowHtml += `<td>${deburBal}</td>`;
@@ -1818,6 +1828,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 spiderStatusDataMap[(partno || '').trim().toUpperCase()] = {
                     schedQty,
                     opnBalances,
+                    forInsBal,
                     rfdBal,
                     despProd
                 };
@@ -1986,6 +1997,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[1] || 0}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[2] || 0}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[3] || 0}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${sData.forInsBal || 0}</td>`;
                 }
 
                 rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${sData.rfdBal || 0}</td>`;
