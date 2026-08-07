@@ -4757,8 +4757,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${item.id}</td>
-                <td><strong>${item.name}</strong></td>
-                <td>${item.specification || ''}</td>
+                <td><strong>${item.insert_spec || item.name || ''}</strong></td>
+                <td>${item.no_of_edges || 1}</td>
                 <td>${item.grade || ''}</td>
                 <td>${item.make || ''}</td>
                 <td>${item.stock || 0}</td>
@@ -4800,8 +4800,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (item) {
             document.getElementById('insertMasterModalTitle').textContent = 'Edit Insert Master';
             document.getElementById('insertMasterId').value = item.id;
-            document.getElementById('insertName').value = item.name;
-            document.getElementById('insertSpec').value = item.specification || '';
+            document.getElementById('insertSpecInput').value = item.insert_spec || item.name || '';
+            document.getElementById('insertEdgesInput').value = item.no_of_edges || 1;
             document.getElementById('insertGrade').value = item.grade || '';
             document.getElementById('insertMake').value = item.make || '';
             document.getElementById('insertStock').value = item.stock || 0;
@@ -4823,8 +4823,8 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const id = document.getElementById('insertMasterId').value;
             const payload = {
-                name: document.getElementById('insertName').value.trim(),
-                specification: document.getElementById('insertSpec').value.trim(),
+                insert_spec: document.getElementById('insertSpecInput').value.trim(),
+                no_of_edges: parseInt(document.getElementById('insertEdgesInput').value) || 1,
                 grade: document.getElementById('insertGrade').value.trim(),
                 make: document.getElementById('insertMake').value.trim(),
                 stock: parseInt(document.getElementById('insertStock').value) || 0,

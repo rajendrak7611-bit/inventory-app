@@ -74,6 +74,14 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         conn.execute(text("ALTER TABLE production_logs ADD COLUMN multiple_mc INTEGER DEFAULT 1;"))
     except Exception:
         pass
+    try:
+        conn.execute(text("ALTER TABLE insert_masters ADD COLUMN insert_spec VARCHAR;"))
+    except Exception:
+        pass
+    try:
+        conn.execute(text("ALTER TABLE insert_masters ADD COLUMN no_of_edges INTEGER DEFAULT 1;"))
+    except Exception:
+        pass
 
 # Seed default admin user
 with Session(engine) as db:
@@ -1278,7 +1286,9 @@ def save_attendance(payload: AttendanceBulkPayload, db: Session = Depends(get_db
 
 # --- Insert Master Schemas & Endpoints ---
 class InsertMasterBase(BaseModel):
-    name: str
+    insert_spec: str
+    no_of_edges: Optional[int] = 1
+    name: Optional[str] = ""
     specification: Optional[str] = ""
     grade: Optional[str] = ""
     make: Optional[str] = ""

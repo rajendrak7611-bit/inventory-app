@@ -185,7 +185,9 @@ class InsertMaster(Base):
     __tablename__ = "insert_masters"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)
+    insert_spec = Column(String, index=True, nullable=True)
+    no_of_edges = Column(Integer, default=1)
+    name = Column(String, index=True, nullable=True)
     specification = Column(String, nullable=True)
     grade = Column(String, nullable=True)
     make = Column(String, nullable=True)
