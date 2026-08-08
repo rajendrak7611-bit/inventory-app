@@ -1572,6 +1572,13 @@ def create_insert_issue(item: InsertIssueCreate, db: Session = Depends(get_db)):
     db.refresh(db_item)
     return db_item
 
+@app.get("/api/insert_issues/{item_id}", response_model=InsertIssueResponse)
+def get_single_insert_issue(item_id: int, db: Session = Depends(get_db)):
+    db_item = db.query(InsertIssue).filter(InsertIssue.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Insert Issue item not found")
+    return db_item
+
 @app.put("/api/insert_issues/{item_id}", response_model=InsertIssueResponse)
 def update_insert_issue(item_id: int, item: InsertIssueCreate, db: Session = Depends(get_db)):
     db_item = db.query(InsertIssue).filter(InsertIssue.id == item_id).first()
