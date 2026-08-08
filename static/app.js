@@ -5771,52 +5771,61 @@ document.addEventListener('DOMContentLoaded', () => {
     if (addUsageForm) {
         addUsageForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (!currentAddUsageItem) return;
+            const id = document.getElementById('addUsageIssueId').value;
+            if (!id) return;
 
-            const id = currentAddUsageItem.id;
             const mach = document.getElementById('addUsageMachineSelect').value;
             const op = document.getElementById('addUsageOperatorSelect').value;
             const part = document.getElementById('addUsagePartNoSelect').value;
             const opn = document.getElementById('addUsageOpnNoSelect').value;
 
-            let usages = [];
-            if (currentAddUsageItem.usages) {
-                try { usages = typeof currentAddUsageItem.usages === 'string' ? JSON.parse(currentAddUsageItem.usages) : currentAddUsageItem.usages; } catch(e) {}
-            }
-            if (!usages || !Array.isArray(usages) || usages.length === 0) {
-                usages = [{
-                    machine: currentAddUsageItem.machine || '',
-                    operator: currentAddUsageItem.operator || '',
-                    partno: currentAddUsageItem.partno || '',
-                    opn_no: currentAddUsageItem.opn_no || ''
-                }];
-            }
-
-            usages.push({ machine: mach, operator: op, partno: part, opn_no: opn });
-
-            const payload = {
-                date: currentAddUsageItem.date || '',
-                department: currentAddUsageItem.department || '',
-                insert_spec: currentAddUsageItem.insert_spec || '',
-                batch_no: currentAddUsageItem.batch_no || '',
-                qty_issued: currentAddUsageItem.qty_issued || 1,
-                machine: currentAddUsageItem.machine || '',
-                operator: currentAddUsageItem.operator || '',
-                partno: currentAddUsageItem.partno || '',
-                opn_no: currentAddUsageItem.opn_no || '',
-                usages: JSON.stringify(usages),
-                receipt_id: currentAddUsageItem.receipt_id || null,
-                edge_data: currentAddUsageItem.edge_data || ''
-            };
-
             try {
+                const getRes = await fetch(`/api/insert_issues/${id}`);
+                if (!getRes.ok) {
+                    alert('Error fetching issue record');
+                    return;
+                }
+                const currentItem = await getRes.json();
+
+                let usages = [];
+                if (currentItem.usages) {
+                    try { usages = typeof currentItem.usages === 'string' ? JSON.parse(currentItem.usages) : currentItem.usages; } catch(e) {}
+                }
+                if (!usages || !Array.isArray(usages) || usages.length === 0) {
+                    usages = [{
+                        machine: currentItem.machine || '',
+                        operator: currentItem.operator || '',
+                        partno: currentItem.partno || '',
+                        opn_no: currentItem.opn_no || ''
+                    }];
+                }
+
+                usages.push({ machine: mach, operator: op, partno: part, opn_no: opn });
+
+                const payload = {
+                    date: currentItem.date || '',
+                    department: currentItem.department || '',
+                    insert_spec: currentItem.insert_spec || '',
+                    batch_no: currentItem.batch_no || '',
+                    qty_issued: currentItem.qty_issued || 1,
+                    machine: currentItem.machine || '',
+                    operator: currentItem.operator || '',
+                    partno: currentItem.partno || '',
+                    opn_no: currentItem.opn_no || '',
+                    usages: JSON.stringify(usages),
+                    receipt_id: currentItem.receipt_id || null,
+                    edge_data: currentItem.edge_data || ''
+                };
+
                 const res = await fetch(`/api/insert_issues/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
+
                 if (res.ok) {
                     addUsageModal.classList.remove('show');
+                    addUsageForm.reset();
                     fetchInsertIssues();
                 } else {
                     const errTxt = await res.text();
