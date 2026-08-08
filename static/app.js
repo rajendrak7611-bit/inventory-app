@@ -5459,6 +5459,38 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) { console.error(err); }
     }
 
+    function normalizeEdgeObj(rawEdgeData) {
+        const result = {};
+        if (!rawEdgeData) return result;
+        let parsed = rawEdgeData;
+        try {
+            while (typeof parsed === 'string') {
+                parsed = JSON.parse(parsed);
+            }
+        } catch(e) {}
+        if (typeof parsed !== 'object' || parsed === null) return result;
+
+        for (const key of Object.keys(parsed)) {
+            const val = parsed[key];
+            if (val !== undefined && val !== null && val !== '') {
+                if (typeof val === 'object' && val.qty !== undefined) {
+                    result[key] = {
+                        qty: parseFloat(val.qty) || 0,
+                        uIdx: val.uIdx !== undefined ? parseInt(val.uIdx) : 0,
+                        partno: val.partno || ''
+                    };
+                } else if (!isNaN(val) && parseFloat(val) > 0) {
+                    result[key] = {
+                        qty: parseFloat(val),
+                        uIdx: 0,
+                        partno: ''
+                    };
+                }
+            }
+        }
+        return result;
+    }
+
     function renderInsertIssues(issues) {
         const tbody = document.getElementById('insertIssueBody');
         if (!tbody) return;
@@ -5483,10 +5515,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (item.edge_data) {
                 try {
-                    const edgeObj = typeof item.edge_data === 'string' ? JSON.parse(item.edge_data) : item.edge_data;
+                    const normalized = normalizeEdgeObj(item.edge_data);
                     for (let i = 1; i <= numEdges; i++) {
-                        const val = edgeObj[String(i)];
-                        if (val !== undefined && val !== null && val !== '' && !isNaN(val) && parseFloat(val) > 0) {
+                        const info = normalized[String(i)];
+                        if (info && info.qty > 0) {
                             filledCount++;
                         }
                     }
@@ -5631,11 +5663,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.querySelectorAll('.monitor-issue-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const id = e.target.getAttribute('data-id');
+                const id = btn.getAttribute('data-id');
+                const uIdx = parseInt(btn.getAttribute('data-usage-idx')) || 0;
                 const res = await fetch('/api/insert_issues');
                 const data = await res.json();
                 const item = data.find(x => x.id == id);
-                if (item) openInsertMonitorModal(item);
+                if (item) openInsertMonitorModal(item, uIdx);
             });
         });
 
@@ -6362,16 +6395,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelInsertMonitorBtn = document.getElementById('cancelInsertMonitorBtn');
     const saveInsertMonitorBtn = document.getElementById('saveInsertMonitorBtn');
     let currentMonitorIssueItem = null;
+    let currentMonitorUidx = 0;
 
     if (closeInsertMonitorModalBtn) closeInsertMonitorModalBtn.addEventListener('click', () => insertMonitorModal.classList.remove('show'));
     if (cancelInsertMonitorBtn) cancelInsertMonitorBtn.addEventListener('click', () => insertMonitorModal.classList.remove('show'));
 
-    async function openInsertMonitorModal(item) {
+    async function openInsertMonitorModal(item, targetUidx = 0) {
         if (!insertMonitorModal || !item) return;
         currentMonitorIssueItem = item;
+        currentMonitorUidx = targetUidx;
+
+        let usages = [];
+        if (item.usages) {
+            try {
+                let parsed = item.usages;
+                while (typeof parsed === 'string') {
+                    parsed = JSON.parse(parsed);
+                }
+                if (Array.isArray(parsed)) usages = parsed;
+            } catch(e) {}
+        }
+        if (!usages || !Array.isArray(usages) || usages.length === 0) {
+            usages = [{
+                machine: item.machine || '',
+                operator: item.operator || '',
+                partno: item.partno || '',
+                opn_no: item.opn_no || ''
+            }];
+        }
+
+        const currentUsage = usages[targetUidx] || usages[0];
 
         const subtitleEl = document.getElementById('monitorSubtitle');
-        if (subtitleEl) subtitleEl.textContent = `${item.insert_spec || ''} | Part: ${item.partno || '-'} | Opn: ${item.opn_no || '-'} | Batch: ${item.batch_no || '-'}`;
+        if (subtitleEl) {
+            subtitleEl.textContent = `${item.insert_spec || ''} | Part: ${currentUsage.partno || item.partno || '-'} | Opn: ${currentUsage.opn_no || item.opn_no || '-'} | Batch: ${item.batch_no || '-'}`;
+        }
 
         let numEdges = 4;
         try {
@@ -6383,30 +6441,39 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (e) { console.error(e); }
 
-        let edgeData = {};
-        if (item.edge_data) {
-            try {
-                let parsed = item.edge_data;
-                while (typeof parsed === 'string') {
-                    parsed = JSON.parse(parsed);
-                }
-                if (typeof parsed === 'object' && parsed !== null) edgeData = parsed;
-            } catch (e) { edgeData = {}; }
-        }
+        const edgeObjNormalized = normalizeEdgeObj(item.edge_data);
 
         const tbody = document.getElementById('insertMonitorTableBody');
         tbody.innerHTML = '';
 
         for (let i = 1; i <= numEdges; i++) {
             const tr = document.createElement('tr');
-            const val = (edgeData[String(i)] !== undefined && edgeData[String(i)] !== null) ? edgeData[String(i)] : '';
+            const info = edgeObjNormalized[String(i)];
+
+            let inputHtml = '';
+            if (info && info.qty > 0) {
+                if (info.uIdx === targetUidx) {
+                    // Used in THIS usage entry -> Editable!
+                    inputHtml = `<input type="number" class="edge-qty-input" data-edge="${i}" value="${info.qty}" placeholder="Enter Qty" min="0" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px;">`;
+                } else {
+                    // Used in ANOTHER usage entry -> Disabled with note & blank input
+                    const label = info.partno ? info.partno : `Usage #${info.uIdx + 1}`;
+                    inputHtml = `
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="number" class="edge-qty-input" data-edge="${i}" value="" placeholder="Filled in ${label}" disabled style="flex: 1; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px; background: rgba(0,0,0,0.05); color: var(--text-muted); opacity: 0.7; cursor: not-allowed;">
+                            <span style="font-size: 0.8rem; color: #16a34a; font-weight: 500; white-space: nowrap;">✓ (Filled in ${label}: Qty ${info.qty})</span>
+                        </div>
+                    `;
+                }
+            } else {
+                // Not used yet -> Blank editable field for this usage!
+                inputHtml = `<input type="number" class="edge-qty-input" data-edge="${i}" value="" placeholder="Enter Qty" min="0" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px;">`;
+            }
 
             tr.innerHTML = `
                 <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; font-weight: 600;">Edge ${i}</td>
                 <td style="border: 1px solid #cbd5e1; padding: 6px;">
-                    <div style="display: flex; align-items: center;">
-                        <input type="number" class="edge-qty-input" data-edge="${i}" value="${val}" placeholder="Enter Qty" min="0" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px;">
-                    </div>
+                    ${inputHtml}
                 </td>
             `;
             tbody.appendChild(tr);
@@ -6415,7 +6482,9 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMonitorTotalQty();
 
         tbody.querySelectorAll('.edge-qty-input').forEach(input => {
-            input.addEventListener('input', updateMonitorTotalQty);
+            if (!input.disabled) {
+                input.addEventListener('input', updateMonitorTotalQty);
+            }
         });
 
         insertMonitorModal.classList.add('show');
@@ -6425,7 +6494,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const inputs = document.querySelectorAll('#insertMonitorTableBody .edge-qty-input');
         let total = 0;
         inputs.forEach(inp => {
-            total += parseInt(inp.value) || 0;
+            if (!inp.disabled) {
+                total += parseInt(inp.value) || 0;
+            }
         });
         const totalSpan = document.getElementById('monitorTotalQty');
         if (totalSpan) totalSpan.textContent = `Total Edge Qty: ${total}`;
@@ -6435,16 +6506,51 @@ document.addEventListener('DOMContentLoaded', () => {
         saveInsertMonitorBtn.addEventListener('click', async () => {
             if (!currentMonitorIssueItem) return;
             const inputs = document.querySelectorAll('#insertMonitorTableBody .edge-qty-input');
-            const edgeDataObj = {};
-            inputs.forEach(inp => {
-                const edgeNo = inp.getAttribute('data-edge');
-                const val = parseInt(inp.value) || 0;
-                edgeDataObj[edgeNo] = val;
-            });
 
             try {
                 const getRes = await fetch(`/api/insert_issues/${currentMonitorIssueItem.id}`);
                 const freshItem = getRes.ok ? await getRes.json() : currentMonitorIssueItem;
+
+                let usages = [];
+                if (freshItem.usages) {
+                    try {
+                        let parsed = freshItem.usages;
+                        while (typeof parsed === 'string') {
+                            parsed = JSON.parse(parsed);
+                        }
+                        if (Array.isArray(parsed)) usages = parsed;
+                    } catch(e) {}
+                }
+                if (!usages || !Array.isArray(usages) || usages.length === 0) {
+                    usages = [{
+                        machine: freshItem.machine || '',
+                        operator: freshItem.operator || '',
+                        partno: freshItem.partno || '',
+                        opn_no: freshItem.opn_no || ''
+                    }];
+                }
+
+                const currentUsage = usages[currentMonitorUidx] || usages[0];
+                const activePartno = currentUsage.partno || freshItem.partno || '';
+
+                const normalized = normalizeEdgeObj(freshItem.edge_data);
+
+                inputs.forEach(inp => {
+                    if (inp.disabled) return;
+                    const edgeNo = inp.getAttribute('data-edge');
+                    const val = parseInt(inp.value) || 0;
+                    if (val > 0) {
+                        normalized[edgeNo] = {
+                            qty: val,
+                            uIdx: currentMonitorUidx,
+                            partno: activePartno
+                        };
+                    } else {
+                        if (normalized[edgeNo] && normalized[edgeNo].uIdx === currentMonitorUidx) {
+                            delete normalized[edgeNo];
+                        }
+                    }
+                });
 
                 const payload = {
                     date: freshItem.date || '',
@@ -6458,7 +6564,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     opn_no: freshItem.opn_no || '',
                     usages: freshItem.usages || '',
                     receipt_id: freshItem.receipt_id || null,
-                    edge_data: JSON.stringify(edgeDataObj)
+                    edge_data: JSON.stringify(normalized)
                 };
 
                 const res = await fetch(`/api/insert_issues/${currentMonitorIssueItem.id}`, {
