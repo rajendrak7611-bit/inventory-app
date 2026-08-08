@@ -5424,29 +5424,48 @@ document.addEventListener('DOMContentLoaded', () => {
             tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No insert issue records found. Click "+ Issue Insert" or "Import Excel" to add records.</td></tr>';
             return;
         }
+
+        // Aggregate edge completion per group (insert_spec + batch_no)
+        const groupEdgeMap = {}; // key: "insert_spec|batch_no" -> Set of filled edge numbers
+        const groupMaxEdgeMap = {}; // key -> numEdges
+
         issues.forEach(item => {
-            let isComplete = false;
-            let numEdges = 4;
-            const master = allInsertMastersCache.find(s => (s.insert_spec || s.name || '').trim().toLowerCase() === (item.insert_spec || '').trim().toLowerCase());
-            if (master) {
-                numEdges = parseInt(master.no_of_edges) || parseInt(master.edges) || 4;
+            const specKey = (item.insert_spec || '').trim().toLowerCase();
+            const batchKey = (item.batch_no || '').trim().toLowerCase();
+            const groupKey = `${specKey}|${batchKey}`;
+
+            if (!groupEdgeMap[groupKey]) {
+                groupEdgeMap[groupKey] = new Set();
+                let numEdges = 4;
+                const master = allInsertMastersCache.find(s => (s.insert_spec || s.name || '').trim().toLowerCase() === specKey);
+                if (master) {
+                    numEdges = parseInt(master.no_of_edges) || parseInt(master.edges) || 4;
+                }
+                groupMaxEdgeMap[groupKey] = numEdges;
             }
 
             if (item.edge_data) {
                 try {
                     const edgeObj = typeof item.edge_data === 'string' ? JSON.parse(item.edge_data) : item.edge_data;
-                    let filledCount = 0;
-                    for (let i = 1; i <= numEdges; i++) {
+                    const maxEdges = groupMaxEdgeMap[groupKey];
+                    for (let i = 1; i <= maxEdges; i++) {
                         const val = edgeObj[String(i)];
                         if (val !== undefined && val !== null && val !== '' && !isNaN(val)) {
-                            filledCount++;
+                            groupEdgeMap[groupKey].add(i);
                         }
                     }
-                    if (filledCount >= numEdges) {
-                        isComplete = true;
-                    }
-                } catch (e) { isComplete = false; }
+                } catch (e) {}
             }
+        });
+
+        issues.forEach(item => {
+            const specKey = (item.insert_spec || '').trim().toLowerCase();
+            const batchKey = (item.batch_no || '').trim().toLowerCase();
+            const groupKey = `${specKey}|${batchKey}`;
+
+            const maxEdges = groupMaxEdgeMap[groupKey] || 4;
+            const filledEdgesSet = groupEdgeMap[groupKey] || new Set();
+            const isComplete = filledEdgesSet.size >= maxEdges;
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -5463,7 +5482,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <button class="btn btn-outline monitor-issue-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #2563eb; border-color: #2563eb; font-weight: 600;">Insert Monitor</button>
-                        ${isComplete ? '<span title="All edge details entered" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background-color: #22c55e; color: white; border-radius: 4px; font-size: 14px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">✓</span>' : ''}
+                        ${isComplete ? '<span title="All edge details entered across entries" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background-color: #22c55e; color: white; border-radius: 4px; font-size: 14px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">✓</span>' : ''}
                     </div>
                 </td>
                 <td class="actions-cell">
@@ -5888,16 +5907,51 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) { edgeData = {}; }
         }
 
+        // Check other issue records sharing the same insert_spec + batch_no
+        let otherRowsEdgeData = {};
+        try {
+            const issuesRes = await fetch('/api/insert_issues');
+            const allIssues = await issuesRes.json();
+            const matchingGroupIssues = allIssues.filter(x => 
+                x.id !== item.id &&
+                (x.insert_spec || '').trim().toLowerCase() === (item.insert_spec || '').trim().toLowerCase() &&
+                (x.batch_no || '').trim().toLowerCase() === (item.batch_no || '').trim().toLowerCase()
+            );
+
+            matchingGroupIssues.forEach(other => {
+                if (other.edge_data) {
+                    try {
+                        const parsed = typeof other.edge_data === 'string' ? JSON.parse(other.edge_data) : other.edge_data;
+                        Object.keys(parsed).forEach(k => {
+                            if (parsed[k] !== undefined && parsed[k] !== null && parsed[k] !== '') {
+                                otherRowsEdgeData[k] = { val: parsed[k], rowId: other.id, opn: other.opn_no, mach: other.machine };
+                            }
+                        });
+                    } catch (e) {}
+                }
+            });
+        } catch (e) {}
+
         const tbody = document.getElementById('insertMonitorTableBody');
         tbody.innerHTML = '';
 
         for (let i = 1; i <= numEdges; i++) {
             const tr = document.createElement('tr');
             const val = edgeData[String(i)] !== undefined ? edgeData[String(i)] : '';
+            const otherInfo = otherRowsEdgeData[String(i)];
+            
+            let noteHtml = '';
+            if (!val && otherInfo) {
+                noteHtml = `<span style="font-size: 0.75rem; color: #16a34a; margin-left: 8px;">(Filled in Row ID ${otherInfo.rowId} - Opn ${otherInfo.opn}: Qty ${otherInfo.val})</span>`;
+            }
+
             tr.innerHTML = `
                 <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; font-weight: 600;">Edge ${i}</td>
                 <td style="border: 1px solid #cbd5e1; padding: 6px;">
-                    <input type="number" class="edge-qty-input" data-edge="${i}" value="${val}" placeholder="Enter Qty" min="0" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px;">
+                    <div style="display: flex; align-items: center;">
+                        <input type="number" class="edge-qty-input" data-edge="${i}" value="${val}" placeholder="Enter Qty" min="0" style="flex: 1; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px;">
+                        ${noteHtml}
+                    </div>
                 </td>
             `;
             tbody.appendChild(tr);
