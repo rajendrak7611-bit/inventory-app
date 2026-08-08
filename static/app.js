@@ -5548,11 +5548,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         if (usages.length > uIdx) {
                             usages.splice(uIdx, 1);
-                            item.usages = JSON.stringify(usages);
+                            const payload = {
+                                date: item.date || '',
+                                department: item.department || '',
+                                insert_spec: item.insert_spec || '',
+                                batch_no: item.batch_no || '',
+                                qty_issued: item.qty_issued || 1,
+                                machine: item.machine || '',
+                                operator: item.operator || '',
+                                partno: item.partno || '',
+                                opn_no: item.opn_no || '',
+                                usages: JSON.stringify(usages),
+                                receipt_id: item.receipt_id || null,
+                                edge_data: item.edge_data || ''
+                            };
                             await fetch(`/api/insert_issues/${id}`, {
                                 method: 'PUT',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(item)
+                                body: JSON.stringify(payload)
                             });
                             fetchInsertIssues();
                         }
@@ -5780,18 +5793,34 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             usages.push({ machine: mach, operator: op, partno: part, opn_no: opn });
-            currentAddUsageItem.usages = JSON.stringify(usages);
+
+            const payload = {
+                date: currentAddUsageItem.date || '',
+                department: currentAddUsageItem.department || '',
+                insert_spec: currentAddUsageItem.insert_spec || '',
+                batch_no: currentAddUsageItem.batch_no || '',
+                qty_issued: currentAddUsageItem.qty_issued || 1,
+                machine: currentAddUsageItem.machine || '',
+                operator: currentAddUsageItem.operator || '',
+                partno: currentAddUsageItem.partno || '',
+                opn_no: currentAddUsageItem.opn_no || '',
+                usages: JSON.stringify(usages),
+                receipt_id: currentAddUsageItem.receipt_id || null,
+                edge_data: currentAddUsageItem.edge_data || ''
+            };
 
             try {
                 const res = await fetch(`/api/insert_issues/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(currentAddUsageItem)
+                    body: JSON.stringify(payload)
                 });
                 if (res.ok) {
                     addUsageModal.classList.remove('show');
                     fetchInsertIssues();
                 } else {
+                    const errTxt = await res.text();
+                    console.error('Error adding usage:', errTxt);
                     alert('Error adding usage entry');
                 }
             } catch(err) { console.error(err); alert('Error adding usage entry'); }

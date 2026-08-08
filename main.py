@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func, or_
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from database import engine, get_db, Base
 from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog, Attendance, InsertMaster, DrillMaster, InsertReceipt, InsertIssue
@@ -1533,6 +1533,8 @@ class InsertIssueBase(BaseModel):
     usages: Optional[str] = ""
     receipt_id: Optional[int] = None
     edge_data: Optional[str] = ""
+
+    model_config = ConfigDict(extra="ignore")
 
 class InsertIssueCreate(InsertIssueBase):
     pass
