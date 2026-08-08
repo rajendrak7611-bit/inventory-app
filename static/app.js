@@ -1785,12 +1785,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!dept) return;
 
         try {
-            const [schedRes, logRes, rmLogRes, htLogRes, htReceiptLogRes] = await Promise.all([
+            const [schedRes, logRes, rmLogRes, htLogRes, htReceiptLogRes, rmRes] = await Promise.all([
                 fetch('/api/schedule'),
                 fetch('/api/prodlog'),
                 fetch('/api/rawmateriallogs'),
                 fetch('/api/ht_logs'),
-                fetch('/api/ht_receipt_logs')
+                fetch('/api/ht_receipt_logs'),
+                fetch('/api/rawmaterials')
             ]);
             
             const allSchedules = await schedRes.json();
@@ -1798,7 +1799,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const allRmLogs = await rmLogRes.json();
             const allHtLogs = await htLogRes.json();
             const allHtReceiptLogs = await htReceiptLogRes.json();
-            
+            const allRawMaterials = await rmRes.json();
+
             const deptSchedules = allSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase() && (s.status === 'Pending' || !s.status));
             const uniqueParts = [...new Set(deptSchedules.map(s => s.partno))];
             
@@ -1917,7 +1919,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (dept.trim().toUpperCase() === 'SPIDER') {
-                renderSpiderReport(allSchedules, allLogs, allRmLogs, allHtLogs, allHtReceiptLogs);
+                await renderSpiderReport(allSchedules, allLogs, allRmLogs, allHtLogs, allHtReceiptLogs, allRawMaterials);
             } else {
                 const spiderContainer = document.getElementById('spiderReportContainer');
                 if (spiderContainer) spiderContainer.style.display = 'none';
@@ -1927,7 +1929,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderSpiderReport(allSchedules, allLogs, allRmLogs, allHtLogs, allHtReceiptLogs) {
+    async function renderSpiderReport(allSchedules, allLogs, allRmLogs, allHtLogs, allHtReceiptLogs, allRawMaterials = null) {
         const spiderContainer = document.getElementById('spiderReportContainer');
         const tbody = document.getElementById('spiderReportBody');
         if (!spiderContainer || !tbody) return;
@@ -1935,8 +1937,13 @@ document.addEventListener('DOMContentLoaded', () => {
         spiderContainer.style.display = 'block';
         tbody.innerHTML = '';
 
-        let allRms = [];
-        fetch('/api/rawmaterials').then(r => r.json()).then(data => { allRms = data; }).catch(() => {});
+        let allRms = allRawMaterials;
+        if (!allRms) {
+            try {
+                const rRes = await fetch('/api/rawmaterials');
+                allRms = await rRes.json();
+            } catch(e) { allRms = []; }
+        }
 
         const groups = [
             {
@@ -2041,9 +2048,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sData = spiderStatusDataMap[partKey] || { schedQty: 0, opnBalances: [0,0,0,0,0,0,0,0,0,0], rfdBal: 0, despProd: 0 };
                 const opn = sData.opnBalances || [0,0,0,0,0,0,0,0,0,0];
 
-                const fpn = partObj ? (partObj.forge_pn || '') : '';
-                const rmObj = allRms.find(r => (r.forge_pn || '').trim().toUpperCase() === fpn.trim().toUpperCase());
-                const fAvail = rmObj ? (rmObj.stock || 0) : 0;
+                const fpn = partObj ? (partObj.forge_pn || '').trim().toUpperCase() : '';
+                
+                // Match RM stock by partno or by forge_pn
+                const rmObj = (allRms || []).find(r => {
+                    const rKey = (r.forge_pn || '').trim().toUpperCase();
+                    return rKey === partKey || (fpn && rKey === fpn);
+                });
+                
+                let fAvail = 0;
+                if (rmObj) {
+                    fAvail = (rmObj.stock !== undefined && rmObj.stock !== null) ? parseInt(rmObj.stock) : ((parseInt(rmObj.receipt) || 0) - (parseInt(rmObj.despatch) || 0));
+                    if (isNaN(fAvail)) fAvail = 0;
+                }
 
                 const sentAnusha = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === partKey && (l.vendor || '').toLowerCase().includes('anusha')).reduce((sum, l) => sum + (l.qty || 0), 0);
                 const recAnusha = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === partKey && (l.vendor || '').toLowerCase().includes('anusha')).reduce((sum, l) => sum + (l.qty || 0), 0);
