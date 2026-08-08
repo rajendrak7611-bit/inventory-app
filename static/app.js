@@ -6343,54 +6343,26 @@ document.addEventListener('DOMContentLoaded', () => {
         let edgeData = {};
         if (item.edge_data) {
             try {
-                edgeData = typeof item.edge_data === 'string' ? JSON.parse(item.edge_data) : item.edge_data;
+                let parsed = item.edge_data;
+                while (typeof parsed === 'string') {
+                    parsed = JSON.parse(parsed);
+                }
+                if (typeof parsed === 'object' && parsed !== null) edgeData = parsed;
             } catch (e) { edgeData = {}; }
         }
-
-        // Check other issue records sharing the same insert_spec + batch_no
-        let otherRowsEdgeData = {};
-        try {
-            const issuesRes = await fetch('/api/insert_issues');
-            const allIssues = await issuesRes.json();
-            const matchingGroupIssues = allIssues.filter(x => 
-                x.id !== item.id &&
-                (x.insert_spec || '').trim().toLowerCase() === (item.insert_spec || '').trim().toLowerCase() &&
-                (x.batch_no || '').trim().toLowerCase() === (item.batch_no || '').trim().toLowerCase()
-            );
-
-            matchingGroupIssues.forEach(other => {
-                if (other.edge_data) {
-                    try {
-                        const parsed = typeof other.edge_data === 'string' ? JSON.parse(other.edge_data) : other.edge_data;
-                        Object.keys(parsed).forEach(k => {
-                            if (parsed[k] !== undefined && parsed[k] !== null && parsed[k] !== '') {
-                                otherRowsEdgeData[k] = { val: parsed[k], rowId: other.id, opn: other.opn_no, mach: other.machine };
-                            }
-                        });
-                    } catch (e) {}
-                }
-            });
-        } catch (e) {}
 
         const tbody = document.getElementById('insertMonitorTableBody');
         tbody.innerHTML = '';
 
         for (let i = 1; i <= numEdges; i++) {
             const tr = document.createElement('tr');
-            const val = edgeData[String(i)] !== undefined ? edgeData[String(i)] : '';
-            const otherInfo = otherRowsEdgeData[String(i)];
-            
-            let noteHtml = '';
-            if (!val && otherInfo) {
-                noteHtml = `<span style="font-size: 0.75rem; color: #16a34a; margin-left: 8px;">(Filled in Row ID ${otherInfo.rowId} - Opn ${otherInfo.opn}: Qty ${otherInfo.val})</span>`;
-            }
+            const val = (edgeData[String(i)] !== undefined && edgeData[String(i)] !== null) ? edgeData[String(i)] : '';
 
             tr.innerHTML = `
                 <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; font-weight: 600;">Edge ${i}</td>
                 <td style="border: 1px solid #cbd5e1; padding: 6px;">
                     <div style="display: flex; align-items: center;">
-                        <input type="number" class="edge-qty-input" data-edge="${i}" value="${val}" placeholder="Enter Qty" min="0" style="flex: 1; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px;">
-                        ${noteHtml}
+                        <input type="number" class="edge-qty-input" data-edge="${i}" value="${val}" placeholder="Enter Qty" min="0" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px;">
                     </div>
                 </td>
             `;
