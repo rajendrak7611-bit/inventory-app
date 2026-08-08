@@ -5427,45 +5427,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Aggregate edge completion per group (insert_spec + batch_no)
         const groupEdgeMap = {}; // key: "insert_spec|batch_no" -> Set of filled edge numbers
-        const groupMaxEdgeMap = {}; // key -> numEdges
-
         issues.forEach(item => {
+            let numEdges = 4;
             const specKey = (item.insert_spec || '').trim().toLowerCase();
-            const batchKey = (item.batch_no || '').trim().toLowerCase();
-            const groupKey = `${specKey}|${batchKey}`;
-
-            if (!groupEdgeMap[groupKey]) {
-                groupEdgeMap[groupKey] = new Set();
-                let numEdges = 4;
-                const master = allInsertMastersCache.find(s => (s.insert_spec || s.name || '').trim().toLowerCase() === specKey);
-                if (master) {
-                    numEdges = parseInt(master.no_of_edges) || parseInt(master.edges) || 4;
-                }
-                groupMaxEdgeMap[groupKey] = numEdges;
+            const master = allInsertMastersCache.find(s => (s.insert_spec || s.name || '').trim().toLowerCase() === specKey);
+            if (master) {
+                numEdges = parseInt(master.no_of_edges) || parseInt(master.edges) || 4;
             }
+
+            let isComplete = false;
+            let filledCount = 0;
 
             if (item.edge_data) {
                 try {
                     const edgeObj = typeof item.edge_data === 'string' ? JSON.parse(item.edge_data) : item.edge_data;
-                    const maxEdges = groupMaxEdgeMap[groupKey];
-                    for (let i = 1; i <= maxEdges; i++) {
+                    for (let i = 1; i <= numEdges; i++) {
                         const val = edgeObj[String(i)];
-                        if (val !== undefined && val !== null && val !== '' && !isNaN(val)) {
-                            groupEdgeMap[groupKey].add(i);
+                        if (val !== undefined && val !== null && val !== '' && !isNaN(val) && parseFloat(val) > 0) {
+                            filledCount++;
                         }
                     }
-                } catch (e) {}
+                    if (filledCount >= numEdges && numEdges > 0) {
+                        isComplete = true;
+                    }
+                } catch (e) { isComplete = false; }
             }
-        });
-
-        issues.forEach(item => {
-            const specKey = (item.insert_spec || '').trim().toLowerCase();
-            const batchKey = (item.batch_no || '').trim().toLowerCase();
-            const groupKey = `${specKey}|${batchKey}`;
-
-            const maxEdges = groupMaxEdgeMap[groupKey] || 4;
-            const filledEdgesSet = groupEdgeMap[groupKey] || new Set();
-            const isComplete = filledEdgesSet.size >= maxEdges;
 
             let usages = [];
             if (item.usages) {
@@ -5503,7 +5489,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <button class="btn btn-outline monitor-issue-btn" data-id="${item.id}" data-usage-idx="${uIdx}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #2563eb; border-color: #2563eb; font-weight: 600;">Insert Monitor</button>
-                                ${isComplete ? '<span title="All edge details entered across entries" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background-color: #22c55e; color: white; border-radius: 4px; font-size: 14px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">✓</span>' : ''}
+                                ${isComplete ? '<span title="All edge details entered for this issue" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background-color: #22c55e; color: white; border-radius: 4px; font-size: 14px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">✓</span>' : ''}
                             </div>
                         </td>
                         <td class="actions-cell">
@@ -5523,7 +5509,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <button class="btn btn-outline monitor-issue-btn" data-id="${item.id}" data-usage-idx="${uIdx}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #2563eb; border-color: #2563eb; font-weight: 600;">Insert Monitor</button>
-                                ${isComplete ? '<span title="All edge details entered across entries" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background-color: #22c55e; color: white; border-radius: 4px; font-size: 14px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">✓</span>' : ''}
+                                ${isComplete ? '<span title="All edge details entered for this issue" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background-color: #22c55e; color: white; border-radius: 4px; font-size: 14px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">✓</span>' : ''}
                             </div>
                         </td>
                         <td class="actions-cell">
@@ -5536,8 +5522,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         tbody.querySelectorAll('.add-usage-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const id = e.target.getAttribute('data-id');
+            btn.addEventListener('click', async () => {
+                const id = btn.getAttribute('data-id');
                 const res = await fetch('/api/insert_issues');
                 const data = await res.json();
                 const item = data.find(x => x.id == id);
@@ -5546,9 +5532,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         tbody.querySelectorAll('.delete-subusage-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const id = e.target.getAttribute('data-id');
-                const uIdx = parseInt(e.target.getAttribute('data-usage-idx'));
+            btn.addEventListener('click', async () => {
+                const id = btn.getAttribute('data-id');
+                const uIdx = parseInt(btn.getAttribute('data-usage-idx'));
                 if (confirm('Delete this additional usage entry?')) {
                     try {
                         const res = await fetch('/api/insert_issues');
@@ -5688,6 +5674,20 @@ document.addEventListener('DOMContentLoaded', () => {
         currentAddUsageItem = item;
         document.getElementById('addUsageIssueId').value = item.id;
         document.getElementById('addUsageSubtitle').textContent = `ID #${item.id} | ${item.insert_spec || ''} (Batch: ${item.batch_no || '-'})`;
+
+        // Ensure dependency caches are populated
+        if (allMachinesCache.length === 0 || allOperatorsCache.length === 0 || allPartMastersCache.length === 0) {
+            try {
+                const [mRes, oRes, pRes] = await Promise.all([
+                    fetch('/api/machines'),
+                    fetch('/api/operators'),
+                    fetch('/api/partmaster')
+                ]);
+                allMachinesCache = await mRes.json();
+                allOperatorsCache = await oRes.json();
+                allPartMastersCache = await pRes.json();
+            } catch (e) { console.error(e); }
+        }
 
         const machSel = document.getElementById('addUsageMachineSelect');
         const opSel = document.getElementById('addUsageOperatorSelect');
