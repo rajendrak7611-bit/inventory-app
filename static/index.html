@@ -1877,39 +1877,20 @@
                     </div>
                 </div>
 
-                <div class="form-row" style="display: flex; gap: 1rem; margin-top: 0.8rem;">
-                    <div class="form-group" style="flex: 1;">
-                        <label for="issueQtyInput" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Qty Issued</label>
-                        <input type="number" id="issueQtyInput" min="1" value="1" required style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
-                    </div>
-                    <div class="form-group" style="flex: 1;">
-                        <label for="issueMachineSelect" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Machine</label>
-                        <select id="issueMachineSelect" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
-                            <option value="">-- Select Machine --</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-row" style="display: flex; gap: 1rem; margin-top: 0.8rem;">
-                    <div class="form-group" style="flex: 1;">
-                        <label for="issueOperatorSelect" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Operator</label>
-                        <select id="issueOperatorSelect" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
-                            <option value="">-- Select Operator --</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="flex: 1;">
-                        <label for="issuePartNoSelect" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Part No</label>
-                        <select id="issuePartNoSelect" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
-                            <option value="">-- Select Part No --</option>
-                        </select>
-                    </div>
-                </div>
-
                 <div class="form-group" style="margin-top: 0.8rem;">
-                    <label for="issueOpnNoSelect" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Opn No</label>
-                    <select id="issueOpnNoSelect" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
-                        <option value="">-- Select Operation --</option>
-                    </select>
+                    <label for="issueQtyInput" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Qty Issued</label>
+                    <input type="number" id="issueQtyInput" min="1" value="1" required style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                </div>
+
+                <!-- Usage Entries Container -->
+                <div style="margin-top: 1rem; border-top: 1px dashed var(--border-color, #cbd5e1); padding-top: 0.8rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <label style="font-weight: 700; font-size: 0.9rem;">Machine, Operator, Part & Operation Usages</label>
+                        <button type="button" id="addUsageEntryRowBtn" class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.8rem; color: #2563eb; border-color: #2563eb; font-weight: 600;">+ Add Usage Entry</button>
+                    </div>
+                    <div id="usageEntriesContainer" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <!-- Usage rows rendered dynamically via JS -->
+                    </div>
                 </div>
 
                 <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.5rem;">
@@ -1951,6 +1932,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=163"></script>
+    <script src="/static/app.js?v=164"></script>
 </body>
 </html>

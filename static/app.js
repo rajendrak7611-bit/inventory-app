@@ -5467,6 +5467,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const filledEdgesSet = groupEdgeMap[groupKey] || new Set();
             const isComplete = filledEdgesSet.size >= maxEdges;
 
+            // Extract usages array
+            let usages = [];
+            if (item.usages) {
+                try { usages = typeof item.usages === 'string' ? JSON.parse(item.usages) : item.usages; } catch(e) {}
+            }
+            if (!usages || !Array.isArray(usages) || usages.length === 0) {
+                usages = [{
+                    machine: item.machine || '',
+                    operator: item.operator || '',
+                    partno: item.partno || '',
+                    opn_no: item.opn_no || ''
+                }];
+            }
+
+            const machineStr = usages.map(u => `<div style="padding: 2px 0;">${u.machine || '-'}</div>`).join('');
+            const operatorStr = usages.map(u => `<div style="padding: 2px 0;">${u.operator || '-'}</div>`).join('');
+            const partnoStr = usages.map(u => `<div style="padding: 2px 0;">${u.partno || '-'}</div>`).join('');
+            const opnStr = usages.map(u => `<div style="padding: 2px 0;">${u.opn_no || '-'}</div>`).join('');
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${item.id}</td>
@@ -5475,10 +5494,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td><strong>${item.insert_spec || ''}</strong></td>
                 <td>${item.batch_no || ''}</td>
                 <td><span style="font-weight: 600; color: var(--primary-color);">${item.qty_issued || 0}</span></td>
-                <td>${item.machine || ''}</td>
-                <td>${item.operator || ''}</td>
-                <td>${item.partno || ''}</td>
-                <td>${item.opn_no || ''}</td>
+                <td>${machineStr}</td>
+                <td>${operatorStr}</td>
+                <td>${partnoStr}</td>
+                <td>${opnStr}</td>
                 <td>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <button class="btn btn-outline monitor-issue-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #2563eb; border-color: #2563eb; font-weight: 600;">Insert Monitor</button>
@@ -5586,10 +5605,127 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectedSpec) {
             await updateBatchDropdownForSpec(selectedSpec, selectedBatch);
         }
-        if (selectedPart) {
-            await updateOpnDropdownForPart(selectedPart, selectedOpn);
+    }
+
+    function createUsageCard(usageData = null) {
+        const container = document.getElementById('usageEntriesContainer');
+        if (!container) return;
+
+        const cardIndex = container.children.length + 1;
+        const card = document.createElement('div');
+        card.className = 'usage-entry-card';
+        card.style.cssText = 'background: rgba(0,0,0,0.02); border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; padding: 0.8rem; position: relative; margin-bottom: 0.4rem;';
+
+        const cleanDept = (document.getElementById('issueDeptSelect')?.value || '').trim().toUpperCase();
+
+        const filteredMachines = cleanDept ? allMachinesCache.filter(m => (m.department || '').trim().toUpperCase() === cleanDept) : allMachinesCache;
+        const machinesToDisplay = filteredMachines.length > 0 ? filteredMachines : allMachinesCache;
+        let machineOpts = '<option value="">-- Select Machine --</option>';
+        machinesToDisplay.forEach(m => {
+            const sel = (usageData && usageData.machine === m.name) ? 'selected' : '';
+            machineOpts += `<option value="${m.name}" ${sel}>${m.name}</option>`;
+        });
+
+        const filteredOperators = cleanDept ? allOperatorsCache.filter(o => (o.department || '').trim().toUpperCase() === cleanDept) : allOperatorsCache;
+        const operatorsToDisplay = filteredOperators.length > 0 ? filteredOperators : allOperatorsCache;
+        operatorsToDisplay.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        let operatorOpts = '<option value="">-- Select Operator --</option>';
+        operatorsToDisplay.forEach(o => {
+            const sel = (usageData && usageData.operator === o.name) ? 'selected' : '';
+            operatorOpts += `<option value="${o.name}" ${sel}>${o.name}</option>`;
+        });
+
+        const filteredParts = cleanDept ? allPartMastersCache.filter(p => (p.department || '').trim().toUpperCase() === cleanDept) : allPartMastersCache;
+        const partsToDisplay = filteredParts.length > 0 ? filteredParts : allPartMastersCache;
+        let partOpts = '<option value="">-- Select Part No --</option>';
+        partsToDisplay.forEach(p => {
+            if (p.partno) {
+                const sel = (usageData && usageData.partno === p.partno) ? 'selected' : '';
+                partOpts += `<option value="${p.partno}" ${sel}>${p.partno}</option>`;
+            }
+        });
+
+        card.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                <span style="font-weight: 600; font-size: 0.8rem; color: var(--text-muted);">Usage Entry #${cardIndex}</span>
+                ${cardIndex > 1 ? '<button type="button" class="remove-usage-card-btn" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.1rem; font-weight: bold;" title="Remove Entry">&times;</button>' : ''}
+            </div>
+            <div class="form-row" style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <div style="flex: 1;">
+                    <label style="font-size: 0.8rem; font-weight: 600; display: block; margin-bottom: 0.2rem;">Machine</label>
+                    <select class="usage-machine-select" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem;">
+                        ${machineOpts}
+                    </select>
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 0.8rem; font-weight: 600; display: block; margin-bottom: 0.2rem;">Operator</label>
+                    <select class="usage-operator-select" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem;">
+                        ${operatorOpts}
+                    </select>
+                </div>
+            </div>
+            <div class="form-row" style="display: flex; gap: 0.5rem;">
+                <div style="flex: 1;">
+                    <label style="font-size: 0.8rem; font-weight: 600; display: block; margin-bottom: 0.2rem;">Part No</label>
+                    <select class="usage-partno-select" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem;">
+                        ${partOpts}
+                    </select>
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 0.8rem; font-weight: 600; display: block; margin-bottom: 0.2rem;">Opn No</label>
+                    <select class="usage-opnno-select" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem;">
+                        <option value="">-- Select Opn --</option>
+                    </select>
+                </div>
+            </div>
+        `;
+
+        container.appendChild(card);
+
+        const removeBtn = card.querySelector('.remove-usage-card-btn');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', () => {
+                card.remove();
+                container.querySelectorAll('.usage-entry-card').forEach((c, idx) => {
+                    const label = c.querySelector('span');
+                    if (label) label.textContent = `Usage Entry #${idx + 1}`;
+                });
+            });
+        }
+
+        const partSel = card.querySelector('.usage-partno-select');
+        const opnSel = card.querySelector('.usage-opnno-select');
+
+        partSel.addEventListener('change', async (e) => {
+            const selectedPart = e.target.value;
+            opnSel.innerHTML = '<option value="">-- Select Opn --</option>';
+            if (!selectedPart) return;
+
+            const partObj = allPartMastersCache.find(p => (p.partno || '').trim().toUpperCase() === selectedPart.trim().toUpperCase());
+            if (!partObj) return;
+
+            try {
+                const res = await fetch(`/api/partmaster/${partObj.id}/operations`);
+                const ops = await res.json();
+                ops.sort((a, b) => (parseInt(a.opn_no) || 0) - (parseInt(b.opn_no) || 0));
+                ops.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o.opn_no;
+                    opt.textContent = `${o.opn_no} - ${o.description || ''}`;
+                    if (usageData && usageData.opn_no && usageData.opn_no.trim().toLowerCase() === o.opn_no.trim().toLowerCase()) {
+                        opt.selected = true;
+                    }
+                    opnSel.appendChild(opt);
+                });
+            } catch (err) { console.error(err); }
+        });
+
+        if (usageData && usageData.partno) {
+            partSel.dispatchEvent(new Event('change'));
         }
     }
+
+    document.getElementById('addUsageEntryRowBtn')?.addEventListener('click', () => createUsageCard());
 
     function filterIssueDropdownsByDept(dept = '', selectedPart = '') {
         const machSel = document.getElementById('issueMachineSelect');
@@ -5722,20 +5858,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function openInsertIssueModal(item = null) {
         if (!insertIssueModal) return;
+        const container = document.getElementById('usageEntriesContainer');
+        if (container) container.innerHTML = '';
+
         if (item) {
             document.getElementById('insertIssueModalTitle').textContent = 'Edit Insert Issue';
             document.getElementById('insertIssueId').value = item.id;
             document.getElementById('issueDateInput').value = item.date || '';
             document.getElementById('issueQtyInput').value = item.qty_issued || 1;
             await populateIssueModalDropdowns(item.department, item.insert_spec, item.batch_no, item.partno, item.opn_no);
-            document.getElementById('issueMachineSelect').value = item.machine || '';
-            document.getElementById('issueOperatorSelect').value = item.operator || '';
+
+            let usages = [];
+            if (item.usages) {
+                try { usages = typeof item.usages === 'string' ? JSON.parse(item.usages) : item.usages; } catch(e) {}
+            }
+            if (!usages || !Array.isArray(usages) || usages.length === 0) {
+                usages = [{
+                    machine: item.machine || '',
+                    operator: item.operator || '',
+                    partno: item.partno || '',
+                    opn_no: item.opn_no || ''
+                }];
+            }
+            usages.forEach(u => createUsageCard(u));
         } else {
             document.getElementById('insertIssueModalTitle').textContent = 'Issue Insert';
             insertIssueForm.reset();
             document.getElementById('insertIssueId').value = '';
             document.getElementById('issueDateInput').valueAsDate = new Date();
             await populateIssueModalDropdowns();
+            createUsageCard();
         }
         insertIssueModal.classList.add('show');
     }
@@ -5842,16 +5994,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const selectedOpt = batchSel.options[batchSel.selectedIndex];
             const receiptId = selectedOpt ? selectedOpt.getAttribute('data-receipt-id') : null;
 
+            const usageCards = document.querySelectorAll('#usageEntriesContainer .usage-entry-card');
+            const usagesList = [];
+            usageCards.forEach(c => {
+                const mach = c.querySelector('.usage-machine-select')?.value || '';
+                const op = c.querySelector('.usage-operator-select')?.value || '';
+                const part = c.querySelector('.usage-partno-select')?.value || '';
+                const opn = c.querySelector('.usage-opnno-select')?.value || '';
+                usagesList.push({ machine: mach, operator: op, partno: part, opn_no: opn });
+            });
+
+            const firstUsage = usagesList[0] || {};
+
             const payload = {
                 date: document.getElementById('issueDateInput').value,
                 department: document.getElementById('issueDeptSelect').value,
                 insert_spec: document.getElementById('issueInsertSpecSelect').value,
                 batch_no: batchSel.value,
                 qty_issued: parseInt(document.getElementById('issueQtyInput').value) || 1,
-                machine: document.getElementById('issueMachineSelect').value,
-                operator: document.getElementById('issueOperatorSelect').value,
-                partno: document.getElementById('issuePartNoSelect').value,
-                opn_no: document.getElementById('issueOpnNoSelect').value,
+                machine: firstUsage.machine || '',
+                operator: firstUsage.operator || '',
+                partno: firstUsage.partno || '',
+                opn_no: firstUsage.opn_no || '',
+                usages: JSON.stringify(usagesList),
                 receipt_id: receiptId ? parseInt(receiptId) : null
             };
             const method = id ? 'PUT' : 'POST';
