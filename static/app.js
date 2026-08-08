@@ -6427,21 +6427,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 edgeDataObj[edgeNo] = val;
             });
 
-            const payload = {
-                date: currentMonitorIssueItem.date,
-                department: currentMonitorIssueItem.department,
-                insert_spec: currentMonitorIssueItem.insert_spec,
-                batch_no: currentMonitorIssueItem.batch_no,
-                qty_issued: currentMonitorIssueItem.qty_issued,
-                machine: currentMonitorIssueItem.machine,
-                operator: currentMonitorIssueItem.operator,
-                partno: currentMonitorIssueItem.partno,
-                opn_no: currentMonitorIssueItem.opn_no,
-                receipt_id: currentMonitorIssueItem.receipt_id,
-                edge_data: JSON.stringify(edgeDataObj)
-            };
-
             try {
+                const getRes = await fetch(`/api/insert_issues/${currentMonitorIssueItem.id}`);
+                const freshItem = getRes.ok ? await getRes.json() : currentMonitorIssueItem;
+
+                const payload = {
+                    date: freshItem.date || '',
+                    department: freshItem.department || '',
+                    insert_spec: freshItem.insert_spec || '',
+                    batch_no: freshItem.batch_no || '',
+                    qty_issued: freshItem.qty_issued || 1,
+                    machine: freshItem.machine || '',
+                    operator: freshItem.operator || '',
+                    partno: freshItem.partno || '',
+                    opn_no: freshItem.opn_no || '',
+                    usages: freshItem.usages || '',
+                    receipt_id: freshItem.receipt_id || null,
+                    edge_data: JSON.stringify(edgeDataObj)
+                };
+
                 const res = await fetch(`/api/insert_issues/${currentMonitorIssueItem.id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
