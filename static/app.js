@@ -5455,7 +5455,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let usages = [];
             if (item.usages) {
-                try { usages = typeof item.usages === 'string' ? JSON.parse(item.usages) : item.usages; } catch(e) {}
+                try {
+                    let parsed = item.usages;
+                    while (typeof parsed === 'string') {
+                        parsed = JSON.parse(parsed);
+                    }
+                    if (Array.isArray(parsed)) usages = parsed;
+                } catch(e) {}
             }
             if (!usages || !Array.isArray(usages) || usages.length === 0) {
                 usages = [{
@@ -5544,7 +5550,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         let usages = [];
                         if (item.usages) {
-                            try { usages = typeof item.usages === 'string' ? JSON.parse(item.usages) : item.usages; } catch(e) {}
+                            try {
+                                let parsed = item.usages;
+                                while (typeof parsed === 'string') {
+                                    parsed = JSON.parse(parsed);
+                                }
+                                if (Array.isArray(parsed)) usages = parsed;
+                            } catch(e) {}
                         }
                         if (usages.length > uIdx) {
                             usages.splice(uIdx, 1);
@@ -5789,7 +5801,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 let usages = [];
                 if (currentItem.usages) {
-                    try { usages = typeof currentItem.usages === 'string' ? JSON.parse(currentItem.usages) : currentItem.usages; } catch(e) {}
+                    try {
+                        let parsed = currentItem.usages;
+                        while (typeof parsed === 'string') {
+                            parsed = JSON.parse(parsed);
+                        }
+                        if (Array.isArray(parsed)) usages = parsed;
+                    } catch(e) {}
                 }
                 if (!usages || !Array.isArray(usages) || usages.length === 0) {
                     usages = [{
@@ -6105,7 +6123,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let usages = [];
             if (item.usages) {
-                try { usages = typeof item.usages === 'string' ? JSON.parse(item.usages) : item.usages; } catch(e) {}
+                try {
+                    let parsed = item.usages;
+                    while (typeof parsed === 'string') {
+                        parsed = JSON.parse(parsed);
+                    }
+                    if (Array.isArray(parsed)) usages = parsed;
+                } catch(e) {}
             }
             if (!usages || !Array.isArray(usages) || usages.length === 0) {
                 usages = [{
@@ -6243,7 +6267,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         const existing = await res.json();
                         if (existing.usages) {
                             try {
-                                const parsed = typeof existing.usages === 'string' ? JSON.parse(existing.usages) : existing.usages;
+                                let parsed = existing.usages;
+                                while (typeof parsed === 'string') {
+                                    parsed = JSON.parse(parsed);
+                                }
                                 if (Array.isArray(parsed) && parsed.length > 1) {
                                     parsed[0] = { machine: mach, operator: op, partno: part, opn_no: opn };
                                     usagesList = parsed;
