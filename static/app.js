@@ -1953,6 +1953,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     { title: "Part No", rowspan: 2 },
                     { title: "sch qty", rowspan: 2 },
                     { title: "F Avail", rowspan: 2 },
+                    { title: "WIP", rowspan: 2 },
+                    { title: "RM Status", rowspan: 2 },
                     { title: "Fac & cen", rowspan: 2 },
                     { title: "HT", colspan: 3, subList: ["For HT", "Anusha", "JMS"] },
                     { title: "Grinding", colspan: 2, subList: ["For Grind", "For Ins"] },
@@ -1967,6 +1969,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     { title: "Part No" },
                     { title: "sch qty" },
                     { title: "F Avail" },
+                    { title: "WIP" },
+                    { title: "RM Status" },
                     { title: "Boring" },
                     { title: "Fac & cen" },
                     { title: "turning" },
@@ -1983,6 +1987,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     { title: "Part No" },
                     { title: "sch qty" },
                     { title: "F Avail" },
+                    { title: "WIP" },
+                    { title: "RM Status" },
                     { title: "Boring" },
                     { title: "Fac & cen" },
                     { title: "Pre Turn" },
@@ -1999,6 +2005,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     { title: "Part No" },
                     { title: "sch qty" },
                     { title: "F Avail" },
+                    { title: "WIP" },
+                    { title: "RM Status" },
                     { title: "Boring" },
                     { title: "Thickness" },
                     { title: "Fac & cen" },
@@ -2076,23 +2084,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${fAvail || 0}</td>`;
 
                 if (group.name === 'Group 1') {
-                    // Mapping per user instructions:
-                    // Fac & Cen = OPN 2 (opn[1])
-                    // For HT = OPN 3 (opn[2])
-                    // For Grind = OPN 4 (opn[3])
-                    // For Ins = OPN 5 (opn[4])
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[1] || 0}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[2] || 0}</td>`;
+                    const facCen = opn[1] || 0;
+                    const forHt = opn[2] || 0;
+                    const forGrind = opn[3] || 0;
+                    const forIns = opn[4] || 0;
+                    const rfdVal = sData.rfdBal || 0;
+
+                    const wip = facCen + forHt + pendingAnusha + pendingJMS + forGrind + forIns + rfdVal;
+                    const rmStatus = fAvail - wip;
+
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:600;">${wip}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:600; color: ${rmStatus < 0 ? '#ef4444' : '#16a34a'};">${rmStatus}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${facCen}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${forHt}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingAnusha}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; color:#d97706; font-weight:bold;">${pendingJMS}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[3] || 0}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[4] || 0}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${forGrind}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${forIns}</td>`;
                 } else if (group.name === 'Group 2' || group.name === 'Group 3' || group.name === 'Group 4') {
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[0] || 0}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[1] || 0}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[2] || 0}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn[3] || 0}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${sData.forInsBal || 0}</td>`;
+                    const opn0 = opn[0] || 0;
+                    const opn1 = opn[1] || 0;
+                    const opn2 = opn[2] || 0;
+                    const opn3 = opn[3] || 0;
+                    const forInsBal = sData.forInsBal || 0;
+                    const rfdVal = sData.rfdBal || 0;
+
+                    const wip = opn0 + opn1 + opn2 + opn3 + forInsBal + rfdVal;
+                    const rmStatus = fAvail - wip;
+
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:600;">${wip}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:600; color: ${rmStatus < 0 ? '#ef4444' : '#16a34a'};">${rmStatus}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn0}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn1}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn2}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn3}</td>`;
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${forInsBal}</td>`;
                 }
 
                 rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${sData.rfdBal || 0}</td>`;
