@@ -5467,7 +5467,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const filledEdgesSet = groupEdgeMap[groupKey] || new Set();
             const isComplete = filledEdgesSet.size >= maxEdges;
 
-            // Extract usages array
             let usages = [];
             if (item.usages) {
                 try { usages = typeof item.usages === 'string' ? JSON.parse(item.usages) : item.usages; } catch(e) {}
@@ -5481,35 +5480,99 @@ document.addEventListener('DOMContentLoaded', () => {
                 }];
             }
 
-            const machineStr = usages.map(u => `<div style="padding: 2px 0;">${u.machine || '-'}</div>`).join('');
-            const operatorStr = usages.map(u => `<div style="padding: 2px 0;">${u.operator || '-'}</div>`).join('');
-            const partnoStr = usages.map(u => `<div style="padding: 2px 0;">${u.partno || '-'}</div>`).join('');
-            const opnStr = usages.map(u => `<div style="padding: 2px 0;">${u.opn_no || '-'}</div>`).join('');
+            const rowSpan = usages.length;
 
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${item.id}</td>
-                <td><span style="font-weight: 500;">${item.date || ''}</span></td>
-                <td>${item.department || ''}</td>
-                <td><strong>${item.insert_spec || ''}</strong></td>
-                <td>${item.batch_no || ''}</td>
-                <td><span style="font-weight: 600; color: var(--primary-color);">${item.qty_issued || 0}</span></td>
-                <td>${machineStr}</td>
-                <td>${operatorStr}</td>
-                <td>${partnoStr}</td>
-                <td>${opnStr}</td>
-                <td>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <button class="btn btn-outline monitor-issue-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #2563eb; border-color: #2563eb; font-weight: 600;">Insert Monitor</button>
-                        ${isComplete ? '<span title="All edge details entered across entries" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background-color: #22c55e; color: white; border-radius: 4px; font-size: 14px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">✓</span>' : ''}
-                    </div>
-                </td>
-                <td class="actions-cell">
-                    <button class="btn btn-outline edit-issue-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit</button>
-                    <button class="btn btn-outline delete-issue-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
-                </td>
-            `;
-            tbody.appendChild(tr);
+            usages.forEach((u, uIdx) => {
+                const tr = document.createElement('tr');
+                if (uIdx > 0) {
+                    tr.style.background = '#f9fafb';
+                }
+
+                if (uIdx === 0) {
+                    tr.innerHTML = `
+                        <td rowspan="${rowSpan}" style="vertical-align: middle; font-weight: bold;">${item.id}</td>
+                        <td rowspan="${rowSpan}" style="vertical-align: middle;"><span style="font-weight: 500;">${item.date || ''}</span></td>
+                        <td rowspan="${rowSpan}" style="vertical-align: middle;">${item.department || ''}</td>
+                        <td rowspan="${rowSpan}" style="vertical-align: middle;"><strong>${item.insert_spec || ''}</strong></td>
+                        <td rowspan="${rowSpan}" style="vertical-align: middle;">${item.batch_no || ''}</td>
+                        <td rowspan="${rowSpan}" style="vertical-align: middle;"><span style="font-weight: 600; color: var(--primary-color);">${item.qty_issued || 0}</span></td>
+                        <td>${u.machine || ''}</td>
+                        <td>${u.operator || ''}</td>
+                        <td>${u.partno || ''}</td>
+                        <td>${u.opn_no || ''}</td>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <button class="btn btn-outline monitor-issue-btn" data-id="${item.id}" data-usage-idx="${uIdx}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #2563eb; border-color: #2563eb; font-weight: 600;">Insert Monitor</button>
+                                ${isComplete ? '<span title="All edge details entered across entries" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background-color: #22c55e; color: white; border-radius: 4px; font-size: 14px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">✓</span>' : ''}
+                            </div>
+                        </td>
+                        <td class="actions-cell">
+                            <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                <button class="btn btn-outline add-usage-btn" data-id="${item.id}" style="padding: 0.25rem 0.45rem; font-size: 0.78rem; color: #16a34a; border-color: #16a34a; font-weight: 600;" title="Add Usage Entry">+ Add Usage</button>
+                                <button class="btn btn-outline edit-issue-btn" data-id="${item.id}" style="padding: 0.25rem 0.45rem; font-size: 0.78rem;">Edit</button>
+                                <button class="btn btn-outline delete-issue-btn" data-id="${item.id}" style="padding: 0.25rem 0.45rem; font-size: 0.78rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                            </div>
+                        </td>
+                    `;
+                } else {
+                    tr.innerHTML = `
+                        <td>${u.machine || ''}</td>
+                        <td>${u.operator || ''}</td>
+                        <td>${u.partno || ''}</td>
+                        <td>${u.opn_no || ''}</td>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <button class="btn btn-outline monitor-issue-btn" data-id="${item.id}" data-usage-idx="${uIdx}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #2563eb; border-color: #2563eb; font-weight: 600;">Insert Monitor</button>
+                                ${isComplete ? '<span title="All edge details entered across entries" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background-color: #22c55e; color: white; border-radius: 4px; font-size: 14px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">✓</span>' : ''}
+                            </div>
+                        </td>
+                        <td class="actions-cell">
+                            <button class="btn btn-outline delete-subusage-btn" data-id="${item.id}" data-usage-idx="${uIdx}" style="padding: 0.25rem 0.45rem; font-size: 0.78rem; color: #ef4444; border-color: #ef4444;" title="Remove this usage entry">Delete Usage</button>
+                        </td>
+                    `;
+                }
+                tbody.appendChild(tr);
+            });
+        });
+
+        tbody.querySelectorAll('.add-usage-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.target.getAttribute('data-id');
+                const res = await fetch('/api/insert_issues');
+                const data = await res.json();
+                const item = data.find(x => x.id == id);
+                if (item) openAddUsageModal(item);
+            });
+        });
+
+        tbody.querySelectorAll('.delete-subusage-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.target.getAttribute('data-id');
+                const uIdx = parseInt(e.target.getAttribute('data-usage-idx'));
+                if (confirm('Delete this additional usage entry?')) {
+                    try {
+                        const res = await fetch('/api/insert_issues');
+                        const data = await res.json();
+                        const item = data.find(x => x.id == id);
+                        if (!item) return;
+
+                        let usages = [];
+                        if (item.usages) {
+                            try { usages = typeof item.usages === 'string' ? JSON.parse(item.usages) : item.usages; } catch(e) {}
+                        }
+                        if (usages.length > uIdx) {
+                            usages.splice(uIdx, 1);
+                            item.usages = JSON.stringify(usages);
+                            await fetch(`/api/insert_issues/${id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(item)
+                            });
+                            fetchInsertIssues();
+                        }
+                    } catch(err) { console.error(err); }
+                }
+            });
         });
 
         tbody.querySelectorAll('.monitor-issue-btn').forEach(btn => {
@@ -5605,6 +5668,134 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectedSpec) {
             await updateBatchDropdownForSpec(selectedSpec, selectedBatch);
         }
+        if (selectedPart) {
+            await updateOpnDropdownForPart(selectedPart, selectedOpn);
+        }
+    }
+
+    // ====== ADD USAGE MODAL LOGIC ======
+    const addUsageModal = document.getElementById('addUsageModal');
+    const closeAddUsageModalBtn = document.getElementById('closeAddUsageModalBtn');
+    const cancelAddUsageBtn = document.getElementById('cancelAddUsageBtn');
+    const addUsageForm = document.getElementById('addUsageForm');
+    let currentAddUsageItem = null;
+
+    if (closeAddUsageModalBtn) closeAddUsageModalBtn.addEventListener('click', () => addUsageModal.classList.remove('show'));
+    if (cancelAddUsageBtn) cancelAddUsageBtn.addEventListener('click', () => addUsageModal.classList.remove('show'));
+
+    async function openAddUsageModal(item) {
+        if (!addUsageModal || !item) return;
+        currentAddUsageItem = item;
+        document.getElementById('addUsageIssueId').value = item.id;
+        document.getElementById('addUsageSubtitle').textContent = `ID #${item.id} | ${item.insert_spec || ''} (Batch: ${item.batch_no || '-'})`;
+
+        const machSel = document.getElementById('addUsageMachineSelect');
+        const opSel = document.getElementById('addUsageOperatorSelect');
+        const partSel = document.getElementById('addUsagePartNoSelect');
+        const opnSel = document.getElementById('addUsageOpnNoSelect');
+
+        const cleanDept = (item.department || '').trim().toUpperCase();
+
+        machSel.innerHTML = '<option value="">-- Select Machine --</option>';
+        const filteredMachines = cleanDept ? allMachinesCache.filter(m => (m.department || '').trim().toUpperCase() === cleanDept) : allMachinesCache;
+        const machinesToDisplay = filteredMachines.length > 0 ? filteredMachines : allMachinesCache;
+        machinesToDisplay.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.name;
+            opt.textContent = m.name;
+            machSel.appendChild(opt);
+        });
+
+        opSel.innerHTML = '<option value="">-- Select Operator --</option>';
+        const filteredOperators = cleanDept ? allOperatorsCache.filter(o => (o.department || '').trim().toUpperCase() === cleanDept) : allOperatorsCache;
+        const operatorsToDisplay = filteredOperators.length > 0 ? filteredOperators : allOperatorsCache;
+        operatorsToDisplay.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        operatorsToDisplay.forEach(o => {
+            const opt = document.createElement('option');
+            opt.value = o.name;
+            opt.textContent = o.name;
+            opSel.appendChild(opt);
+        });
+
+        partSel.innerHTML = '<option value="">-- Select Part No --</option>';
+        const filteredParts = cleanDept ? allPartMastersCache.filter(p => (p.department || '').trim().toUpperCase() === cleanDept) : allPartMastersCache;
+        const partsToDisplay = filteredParts.length > 0 ? filteredParts : allPartMastersCache;
+        partsToDisplay.forEach(p => {
+            if (p.partno) {
+                const opt = document.createElement('option');
+                opt.value = p.partno;
+                opt.textContent = p.partno;
+                partSel.appendChild(opt);
+            }
+        });
+
+        opnSel.innerHTML = '<option value="">-- Select Operation --</option>';
+        addUsageModal.classList.add('show');
+    }
+
+    document.getElementById('addUsagePartNoSelect')?.addEventListener('change', async (e) => {
+        const opnSel = document.getElementById('addUsageOpnNoSelect');
+        opnSel.innerHTML = '<option value="">-- Select Operation --</option>';
+        const partVal = e.target.value;
+        if (!partVal) return;
+
+        const partObj = allPartMastersCache.find(p => (p.partno || '').trim().toUpperCase() === partVal.trim().toUpperCase());
+        if (!partObj) return;
+
+        try {
+            const res = await fetch(`/api/partmaster/${partObj.id}/operations`);
+            const ops = await res.json();
+            ops.sort((a, b) => (parseInt(a.opn_no) || 0) - (parseInt(b.opn_no) || 0));
+            ops.forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.opn_no;
+                opt.textContent = `${o.opn_no} - ${o.description || ''}`;
+                opnSel.appendChild(opt);
+            });
+        } catch (err) { console.error(err); }
+    });
+
+    if (addUsageForm) {
+        addUsageForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentAddUsageItem) return;
+
+            const id = currentAddUsageItem.id;
+            const mach = document.getElementById('addUsageMachineSelect').value;
+            const op = document.getElementById('addUsageOperatorSelect').value;
+            const part = document.getElementById('addUsagePartNoSelect').value;
+            const opn = document.getElementById('addUsageOpnNoSelect').value;
+
+            let usages = [];
+            if (currentAddUsageItem.usages) {
+                try { usages = typeof currentAddUsageItem.usages === 'string' ? JSON.parse(currentAddUsageItem.usages) : currentAddUsageItem.usages; } catch(e) {}
+            }
+            if (!usages || !Array.isArray(usages) || usages.length === 0) {
+                usages = [{
+                    machine: currentAddUsageItem.machine || '',
+                    operator: currentAddUsageItem.operator || '',
+                    partno: currentAddUsageItem.partno || '',
+                    opn_no: currentAddUsageItem.opn_no || ''
+                }];
+            }
+
+            usages.push({ machine: mach, operator: op, partno: part, opn_no: opn });
+            currentAddUsageItem.usages = JSON.stringify(usages);
+
+            try {
+                const res = await fetch(`/api/insert_issues/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentAddUsageItem)
+                });
+                if (res.ok) {
+                    addUsageModal.classList.remove('show');
+                    fetchInsertIssues();
+                } else {
+                    alert('Error adding usage entry');
+                }
+            } catch(err) { console.error(err); alert('Error adding usage entry'); }
+        });
     }
 
     function createUsageCard(usageData = null) {
@@ -6005,17 +6196,30 @@ document.addEventListener('DOMContentLoaded', () => {
             const selectedOpt = batchSel.options[batchSel.selectedIndex];
             const receiptId = selectedOpt ? selectedOpt.getAttribute('data-receipt-id') : null;
 
-            const usageCards = document.querySelectorAll('#usageEntriesContainer .usage-entry-card');
-            const usagesList = [];
-            usageCards.forEach(c => {
-                const mach = c.querySelector('.usage-machine-select')?.value || '';
-                const op = c.querySelector('.usage-operator-select')?.value || '';
-                const part = c.querySelector('.usage-partno-select')?.value || '';
-                const opn = c.querySelector('.usage-opnno-select')?.value || '';
-                usagesList.push({ machine: mach, operator: op, partno: part, opn_no: opn });
-            });
+            const mach = document.getElementById('issueMachineSelect').value;
+            const op = document.getElementById('issueOperatorSelect').value;
+            const part = document.getElementById('issuePartNoSelect').value;
+            const opn = document.getElementById('issueOpnNoSelect').value;
 
-            const firstUsage = usagesList[0] || {};
+            let usagesList = [{ machine: mach, operator: op, partno: part, opn_no: opn }];
+
+            if (id) {
+                try {
+                    const res = await fetch(`/api/insert_issues/${id}`);
+                    if (res.ok) {
+                        const existing = await res.json();
+                        if (existing.usages) {
+                            try {
+                                const parsed = typeof existing.usages === 'string' ? JSON.parse(existing.usages) : existing.usages;
+                                if (Array.isArray(parsed) && parsed.length > 1) {
+                                    parsed[0] = { machine: mach, operator: op, partno: part, opn_no: opn };
+                                    usagesList = parsed;
+                                }
+                            } catch(e) {}
+                        }
+                    }
+                } catch(e) {}
+            }
 
             const payload = {
                 date: document.getElementById('issueDateInput').value,
@@ -6023,10 +6227,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 insert_spec: document.getElementById('issueInsertSpecSelect').value,
                 batch_no: batchSel.value,
                 qty_issued: parseInt(document.getElementById('issueQtyInput').value) || 1,
-                machine: firstUsage.machine || '',
-                operator: firstUsage.operator || '',
-                partno: firstUsage.partno || '',
-                opn_no: firstUsage.opn_no || '',
+                machine: mach,
+                operator: op,
+                partno: part,
+                opn_no: opn,
                 usages: JSON.stringify(usagesList),
                 receipt_id: receiptId ? parseInt(receiptId) : null
             };
