@@ -5727,49 +5727,60 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('addUsageEntryRowBtn')?.addEventListener('click', () => createUsageCard());
 
-    function filterIssueDropdownsByDept(dept = '', selectedPart = '') {
-        const machSel = document.getElementById('issueMachineSelect');
-        const opSel = document.getElementById('issueOperatorSelect');
-        const partSel = document.getElementById('issuePartNoSelect');
-
+    function filterIssueDropdownsByDept(dept = '') {
         const cleanDept = (dept || '').trim().toUpperCase();
+        const container = document.getElementById('usageEntriesContainer');
+        if (!container) return;
 
-        // 1. Filter Machines
-        machSel.innerHTML = '<option value="">-- Select Machine --</option>';
-        const filteredMachines = cleanDept ? allMachinesCache.filter(m => (m.department || '').trim().toUpperCase() === cleanDept) : allMachinesCache;
-        const machinesToDisplay = filteredMachines.length > 0 ? filteredMachines : allMachinesCache;
-        machinesToDisplay.forEach(m => {
-            const opt = document.createElement('option');
-            opt.value = m.name;
-            opt.textContent = m.name;
-            machSel.appendChild(opt);
-        });
+        container.querySelectorAll('.usage-entry-card').forEach(card => {
+            const machSel = card.querySelector('.usage-machine-select');
+            const opSel = card.querySelector('.usage-operator-select');
+            const partSel = card.querySelector('.usage-partno-select');
 
-        // 2. Filter Operators
-        opSel.innerHTML = '<option value="">-- Select Operator --</option>';
-        const filteredOperators = cleanDept ? allOperatorsCache.filter(o => (o.department || '').trim().toUpperCase() === cleanDept) : allOperatorsCache;
-        const operatorsToDisplay = filteredOperators.length > 0 ? filteredOperators : allOperatorsCache;
-        operatorsToDisplay.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        operatorsToDisplay.forEach(o => {
-            const opt = document.createElement('option');
-            opt.value = o.name;
-            opt.textContent = o.name;
-            opSel.appendChild(opt);
-        });
+            const currentMach = machSel ? machSel.value : '';
+            const currentOp = opSel ? opSel.value : '';
+            const currentPart = partSel ? partSel.value : '';
 
-        // 3. Filter Parts
-        partSel.innerHTML = '<option value="">-- Select Part No --</option>';
-        const filteredParts = cleanDept ? allPartMastersCache.filter(p => (p.department || '').trim().toUpperCase() === cleanDept) : allPartMastersCache;
-        const partsToDisplay = filteredParts.length > 0 ? filteredParts : allPartMastersCache;
-        partsToDisplay.forEach(p => {
-            if (p.partno) {
-                const opt = document.createElement('option');
-                opt.value = p.partno;
-                opt.textContent = p.partno;
-                if (selectedPart && selectedPart.trim().toUpperCase() === p.partno.trim().toUpperCase()) {
-                    opt.selected = true;
-                }
-                partSel.appendChild(opt);
+            if (machSel) {
+                machSel.innerHTML = '<option value="">-- Select Machine --</option>';
+                const filteredMachines = cleanDept ? allMachinesCache.filter(m => (m.department || '').trim().toUpperCase() === cleanDept) : allMachinesCache;
+                const machinesToDisplay = filteredMachines.length > 0 ? filteredMachines : allMachinesCache;
+                machinesToDisplay.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.name;
+                    opt.textContent = m.name;
+                    if (currentMach && currentMach === m.name) opt.selected = true;
+                    machSel.appendChild(opt);
+                });
+            }
+
+            if (opSel) {
+                opSel.innerHTML = '<option value="">-- Select Operator --</option>';
+                const filteredOperators = cleanDept ? allOperatorsCache.filter(o => (o.department || '').trim().toUpperCase() === cleanDept) : allOperatorsCache;
+                const operatorsToDisplay = filteredOperators.length > 0 ? filteredOperators : allOperatorsCache;
+                operatorsToDisplay.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                operatorsToDisplay.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o.name;
+                    opt.textContent = o.name;
+                    if (currentOp && currentOp === o.name) opt.selected = true;
+                    opSel.appendChild(opt);
+                });
+            }
+
+            if (partSel) {
+                partSel.innerHTML = '<option value="">-- Select Part No --</option>';
+                const filteredParts = cleanDept ? allPartMastersCache.filter(p => (p.department || '').trim().toUpperCase() === cleanDept) : allPartMastersCache;
+                const partsToDisplay = filteredParts.length > 0 ? filteredParts : allPartMastersCache;
+                partsToDisplay.forEach(p => {
+                    if (p.partno) {
+                        const opt = document.createElement('option');
+                        opt.value = p.partno;
+                        opt.textContent = p.partno;
+                        if (currentPart && currentPart.trim().toUpperCase() === p.partno.trim().toUpperCase()) opt.selected = true;
+                        partSel.appendChild(opt);
+                    }
+                });
             }
         });
     }
