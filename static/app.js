@@ -4772,7 +4772,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                const displayAttHours = totalAttHours > 0 ? totalAttHours.toFixed(2) : (sumRuntime + sumIdleTime > 0 ? (sumRuntime + sumIdleTime).toFixed(2) : '0.00');
+                const displayAttHours = totalAttHours.toFixed(2);
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
