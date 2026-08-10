@@ -3506,7 +3506,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    window.exportDeliveryChallanToExcel = (item) => {
+    window.exportDeliveryChallanToExcel = async (item) => {
         const dcNo = item.dc_no && item.dc_no !== '-' ? item.dc_no : '';
         const dateParts = (item.date || '').split('-');
         let dateFormatted = item.date;
@@ -3522,6 +3522,27 @@ document.addEventListener('DOMContentLoaded', () => {
         // Row 11: Date, DC No, Forge Part No, Finish Part No, Qty (Tab separated)
         txtContent += `${dateFormatted}\t${dcNo}\t${forgePn}\t${finishPartNo}\t${qty}\r\n`;
 
+        // Modern File System Access API allows selecting & overwriting dc.txt directly
+        if ('showSaveFilePicker' in window) {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: 'dc.txt',
+                    types: [{
+                        description: 'Text Document (*.txt)',
+                        accept: { 'text/plain': ['.txt'] }
+                    }]
+                });
+                const writable = await handle.createWritable();
+                await writable.write(txtContent);
+                await writable.close();
+                return;
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+                console.warn('showSaveFilePicker fallback:', err);
+            }
+        }
+
+        // Fallback for older browsers
         const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
