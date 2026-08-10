@@ -8,7 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog, Attendance, InsertMaster, DrillMaster, InsertReceipt, InsertIssue
+from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog, Attendance, InsertMaster, DrillMaster, InsertReceipt, InsertIssue, BreakdownSlip
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -1659,7 +1659,64 @@ def delete_insert_issue(item_id: int, db: Session = Depends(get_db)):
 
     db.delete(db_item)
     db.commit()
-    return {"message": "Insert Issue item deleted and stock restored"}
+# --- Breakdown Slip Schemas & API Routes ---
+class BreakdownSlipCreate(BaseModel):
+    date_time: str
+    department: Optional[str] = ""
+    shift: Optional[str] = ""
+    maint_type: Optional[str] = ""
+    request_by: Optional[str] = ""
+    machine: Optional[str] = ""
+    problem: Optional[str] = ""
+    signoff_date_time: Optional[str] = ""
+    status: Optional[str] = "Open"
+
+class BreakdownSlipResponse(BaseModel):
+    id: int
+    date_time: str
+    department: Optional[str] = ""
+    shift: Optional[str] = ""
+    maint_type: Optional[str] = ""
+    request_by: Optional[str] = ""
+    machine: Optional[str] = ""
+    problem: Optional[str] = ""
+    signoff_date_time: Optional[str] = ""
+    status: Optional[str] = "Open"
+
+    class Config:
+        from_attributes = True
+
+@app.get("/api/breakdown_slips", response_model=List[BreakdownSlipResponse])
+def get_breakdown_slips(db: Session = Depends(get_db)):
+    return db.query(BreakdownSlip).order_by(BreakdownSlip.id.desc()).all()
+
+@app.post("/api/breakdown_slips", response_model=BreakdownSlipResponse)
+def create_breakdown_slip(slip: BreakdownSlipCreate, db: Session = Depends(get_db)):
+    db_slip = BreakdownSlip(**slip.dict())
+    db.add(db_slip)
+    db.commit()
+    db.refresh(db_slip)
+    return db_slip
+
+@app.put("/api/breakdown_slips/{slip_id}", response_model=BreakdownSlipResponse)
+def update_breakdown_slip(slip_id: int, slip: BreakdownSlipCreate, db: Session = Depends(get_db)):
+    db_slip = db.query(BreakdownSlip).filter(BreakdownSlip.id == slip_id).first()
+    if not db_slip:
+        raise HTTPException(status_code=404, detail="Breakdown Slip not found")
+    for key, value in slip.dict().items():
+        setattr(db_slip, key, value)
+    db.commit()
+    db.refresh(db_slip)
+    return db_slip
+
+@app.delete("/api/breakdown_slips/{slip_id}")
+def delete_breakdown_slip(slip_id: int, db: Session = Depends(get_db)):
+    db_slip = db.query(BreakdownSlip).filter(BreakdownSlip.id == slip_id).first()
+    if not db_slip:
+        raise HTTPException(status_code=404, detail="Breakdown Slip not found")
+    db.delete(db_slip)
+    db.commit()
+    return {"message": "Breakdown Slip deleted successfully"}
 
 # Serve static files (frontend)
 app.mount("/static", StaticFiles(directory="static"), name="static")

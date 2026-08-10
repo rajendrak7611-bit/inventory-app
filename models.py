@@ -239,4 +239,20 @@ class InsertIssue(Base):
     edge_data = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class BreakdownSlip(Base):
+    __tablename__ = "breakdown_slips"
+
+    id = Column(Integer, primary_key=True, index=True)
+    date_time = Column(String, index=True)
+    department = Column(String, index=True, nullable=True)
+    shift = Column(String, index=True, nullable=True)
+    maint_type = Column(String, index=True, nullable=True)
+    request_by = Column(String, index=True, nullable=True)
+    machine = Column(String, index=True, nullable=True)
+    problem = Column(String, nullable=True)
+    signoff_date_time = Column(String, nullable=True)
+    status = Column(String, default="Open")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 

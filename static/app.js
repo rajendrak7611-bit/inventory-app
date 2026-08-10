@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'production': ['schedule', 'status', 'prodlog', 'debur'],
                     'toolcrib': ['insertmaster', 'drillmaster', 'products'],
                     'reports': ['reports'],
-                    'maintenance': ['maintenance'],
+                    'maintenance': ['maintenance', 'bdslip'],
                     'hr': ['hr', 'attendance']
                 };
                 const allowed = groupScreens[group] ? groupScreens[group].some(s => accessibleScreens.includes(s)) : false;
@@ -478,6 +478,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (attSec) attSec.style.display = 'block';
             addBtn.style.display = 'none';
             initAttendance();
+        }},
+        'sidebarBdSlip': { tab: 'bdslip', action: () => {
+            const bdSec = document.getElementById('bdSlipSection');
+            if (bdSec) bdSec.style.display = 'block';
+            addBtn.style.display = 'none';
+            fetchBdSlips();
         }}
     };
 
@@ -6697,6 +6703,221 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert('Error saving Edge Qty');
                 }
             } catch (err) { console.error(err); alert('Error saving Edge Qty'); }
+        });
+    }
+
+    // ====== BREAKDOWN SLIP (B/D SLIP) LOGIC ======
+    const bdSlipModal = document.getElementById('bdSlipModal');
+    const bdSlipForm = document.getElementById('bdSlipForm');
+    const addBdSlipBtn = document.getElementById('addBdSlipBtn');
+    const cancelBdSlipBtn = document.getElementById('cancelBdSlipBtn');
+    const closeBdSlipModalBtn = document.getElementById('closeBdSlipModalBtn');
+
+    async function fetchBdSlips() {
+        try {
+            const res = await fetch('/api/breakdown_slips');
+            const data = await res.json();
+            renderBdSlips(data);
+        } catch (err) { console.error('Error fetching breakdown slips:', err); }
+    }
+
+    function renderBdSlips(slips) {
+        const tbody = document.getElementById('bdSlipBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!slips || slips.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No breakdown slips found. Click "+ Add B/d Slip" to create a record.</td></tr>';
+            return;
+        }
+
+        slips.forEach(item => {
+            const tr = document.createElement('tr');
+            const isSignedOff = item.status === 'Signed Off' || (item.signoff_date_time && item.signoff_date_time.trim() !== '');
+            const statusBadge = isSignedOff 
+                ? '<span style="color: #16a34a; font-weight: 600; background: #dcfce7; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">Signed Off</span>' 
+                : '<span style="color: #d97706; font-weight: 600; background: #fef3c7; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">Open</span>';
+
+            const formattedDateTime = item.date_time ? item.date_time.replace('T', ' ') : '';
+            const formattedSignoff = item.signoff_date_time ? item.signoff_date_time.replace('T', ' ') : '-';
+
+            tr.innerHTML = `
+                <td>${item.id}</td>
+                <td><span style="font-weight: 500;">${formattedDateTime}</span></td>
+                <td>${item.department || ''}</td>
+                <td>${item.shift || ''}</td>
+                <td><strong>${item.maint_type || 'Breakdown'}</strong></td>
+                <td>${item.request_by || ''}</td>
+                <td><strong>${item.machine || ''}</strong></td>
+                <td style="max-width: 200px; white-space: pre-wrap; font-size: 0.85rem;">${item.problem || ''}</td>
+                <td>${formattedSignoff}</td>
+                <td>${statusBadge}</td>
+                <td class="actions-cell">
+                    ${!isSignedOff ? `<button class="btn btn-outline signoff-bd-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; color: #16a34a; border-color: #16a34a; margin-right: 4px;">Sign-off</button>` : ''}
+                    <button class="btn btn-outline edit-bd-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; margin-right: 4px;">Edit</button>
+                    <button class="btn btn-outline delete-bd-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.signoff-bd-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.target.getAttribute('data-id');
+                const now = new Date();
+                const nowStr = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+                const res = await fetch('/api/breakdown_slips');
+                const data = await res.json();
+                const item = data.find(x => x.id == id);
+                if (item) {
+                    item.signoff_date_time = nowStr;
+                    item.status = 'Signed Off';
+                    try {
+                        const updateRes = await fetch(`/api/breakdown_slips/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(item)
+                        });
+                        if (updateRes.ok) fetchBdSlips();
+                    } catch(err) { console.error(err); }
+                }
+            });
+        });
+
+        tbody.querySelectorAll('.edit-bd-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.target.getAttribute('data-id');
+                const res = await fetch('/api/breakdown_slips');
+                const data = await res.json();
+                const item = data.find(x => x.id == id);
+                if (item) openBdSlipModal(item);
+            });
+        });
+
+        tbody.querySelectorAll('.delete-bd-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (confirm('Delete this Breakdown Slip record?')) {
+                    const id = e.target.getAttribute('data-id');
+                    try {
+                        const res = await fetch(`/api/breakdown_slips/${id}`, { method: 'DELETE' });
+                        if (res.ok) fetchBdSlips();
+                        else alert('Error deleting breakdown slip');
+                    } catch (err) { console.error(err); }
+                }
+            });
+        });
+    }
+
+    async function openBdSlipModal(item = null) {
+        if (!bdSlipModal) return;
+
+        const [deptRes, shiftRes, machRes] = await Promise.all([
+            fetch('/api/departments'),
+            fetch('/api/shifts'),
+            fetch('/api/machines')
+        ]);
+        const depts = await deptRes.json();
+        const shifts = await shiftRes.json();
+        const machines = await machRes.json();
+
+        const deptSel = document.getElementById('bdDeptSelect');
+        deptSel.innerHTML = '<option value="">-- Select Dept --</option>';
+        depts.forEach(d => {
+            deptSel.innerHTML += `<option value="${d.name}">${d.name}</option>`;
+        });
+
+        const shiftSel = document.getElementById('bdShiftSelect');
+        shiftSel.innerHTML = '<option value="">-- Select Shift --</option>';
+        shifts.forEach(s => {
+            shiftSel.innerHTML += `<option value="${s.name}">${s.name}</option>`;
+        });
+
+        const updateMachineDropdown = (selectedDept, currentMach = '') => {
+            const machSel = document.getElementById('bdMachineSelect');
+            machSel.innerHTML = '<option value="">-- Select Machine --</option>';
+            const cleanDept = (selectedDept || '').trim().toUpperCase();
+            let filtered = machines;
+            if (cleanDept) {
+                const matches = machines.filter(m => (m.department || '').trim().toUpperCase() === cleanDept);
+                if (matches.length > 0) filtered = matches;
+            }
+            filtered.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.name;
+                opt.textContent = m.name;
+                if (m.name === currentMach) opt.selected = true;
+                machSel.appendChild(opt);
+            });
+        };
+
+        deptSel.onchange = (e) => {
+            updateMachineDropdown(e.target.value);
+        };
+
+        if (item) {
+            document.getElementById('bdSlipModalTitle').textContent = 'Edit B/d Slip';
+            document.getElementById('bdSlipId').value = item.id;
+            document.getElementById('bdDateTimeInput').value = item.date_time || '';
+            document.getElementById('bdDeptSelect').value = item.department || '';
+            document.getElementById('bdShiftSelect').value = item.shift || '';
+            document.getElementById('bdMaintTypeSelect').value = item.maint_type || 'Breakdown';
+            document.getElementById('bdRequestByInput').value = item.request_by || '';
+            updateMachineDropdown(item.department || '', item.machine || '');
+            document.getElementById('bdProblemInput').value = item.problem || '';
+            document.getElementById('bdSignoffDateTimeInput').value = item.signoff_date_time || '';
+        } else {
+            document.getElementById('bdSlipModalTitle').textContent = 'Create B/d Slip';
+            bdSlipForm.reset();
+            document.getElementById('bdSlipId').value = '';
+            const now = new Date();
+            const nowStr = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+            document.getElementById('bdDateTimeInput').value = nowStr;
+            updateMachineDropdown('');
+        }
+
+        bdSlipModal.classList.add('show');
+    }
+
+    if (addBdSlipBtn) addBdSlipBtn.addEventListener('click', () => openBdSlipModal());
+    if (cancelBdSlipBtn) cancelBdSlipBtn.addEventListener('click', () => bdSlipModal.classList.remove('show'));
+    if (closeBdSlipModalBtn) closeBdSlipModalBtn.addEventListener('click', () => bdSlipModal.classList.remove('show'));
+
+    if (bdSlipForm) {
+        bdSlipForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('bdSlipId').value;
+            const signoffVal = document.getElementById('bdSignoffDateTimeInput').value;
+
+            const payload = {
+                date_time: document.getElementById('bdDateTimeInput').value,
+                department: document.getElementById('bdDeptSelect').value,
+                shift: document.getElementById('bdShiftSelect').value,
+                maint_type: document.getElementById('bdMaintTypeSelect').value,
+                request_by: document.getElementById('bdRequestByInput').value.trim(),
+                machine: document.getElementById('bdMachineSelect').value,
+                problem: document.getElementById('bdProblemInput').value.trim(),
+                signoff_date_time: signoffVal,
+                status: signoffVal ? 'Signed Off' : 'Open'
+            };
+
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/breakdown_slips/${id}` : '/api/breakdown_slips';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    bdSlipModal.classList.remove('show');
+                    fetchBdSlips();
+                } else {
+                    alert('Error saving Breakdown Slip');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error saving Breakdown Slip');
+            }
         });
     }
 });
