@@ -3087,6 +3087,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 editBtn.onclick = () => openEditProdLogDateModal(log.id, log.date);
                 actionTd.appendChild(editBtn);
 
+                const editMachineBtn = document.createElement('button');
+                editMachineBtn.className = 'btn-text';
+                editMachineBtn.style.color = 'var(--primary-color, #2563eb)';
+                editMachineBtn.style.marginRight = '8px';
+                editMachineBtn.textContent = 'Edit Machine';
+                editMachineBtn.onclick = () => openEditProdLogMachineModal(log.id, log.machine, log.dept);
+                actionTd.appendChild(editMachineBtn);
+
                 const delBtn = document.createElement('button');
                 delBtn.className = 'btn-text';
                 delBtn.style.color = 'var(--danger-color)';
@@ -3352,6 +3360,77 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 console.error(err);
                 alert('Error updating log date.');
+            }
+        });
+    }
+
+    // --- Edit Prod Log Machine Modal Logic ---
+    const editProdLogMachineModal = document.getElementById('editProdLogMachineModal');
+    const editProdLogMachineForm = document.getElementById('editProdLogMachineForm');
+    const closeEditProdLogMachineModalBtn = document.getElementById('closeEditProdLogMachineModalBtn');
+    const cancelEditProdLogMachineBtn = document.getElementById('cancelEditProdLogMachineBtn');
+
+    async function openEditProdLogMachineModal(logId, currentMachine, dept) {
+        if (!editProdLogMachineModal) return;
+        document.getElementById('editProdLogMachineId').value = logId;
+        
+        if (!prodLogAllMachines || prodLogAllMachines.length === 0) {
+            try {
+                const machRes = await fetch('/api/machines');
+                prodLogAllMachines = await machRes.json();
+            } catch(e) { console.error(e); }
+        }
+        
+        const select = document.getElementById('editProdLogMachineSelect');
+        select.innerHTML = '<option value="">-- Select Machine --</option>';
+        
+        const cleanDept = (dept || '').trim().toUpperCase();
+        let filteredMachines = prodLogAllMachines;
+        if (cleanDept) {
+            const matches = prodLogAllMachines.filter(m => (m.department || '').trim().toUpperCase() === cleanDept);
+            if (matches.length > 0) filteredMachines = matches;
+        }
+        
+        filteredMachines.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.name;
+            opt.textContent = m.name;
+            if (m.name === currentMachine) opt.selected = true;
+            select.appendChild(opt);
+        });
+
+        editProdLogMachineModal.classList.add('show');
+    }
+
+    function closeEditProdLogMachineModal() {
+        if (editProdLogMachineModal) editProdLogMachineModal.classList.remove('show');
+    }
+
+    if (closeEditProdLogMachineModalBtn) closeEditProdLogMachineModalBtn.addEventListener('click', closeEditProdLogMachineModal);
+    if (cancelEditProdLogMachineBtn) cancelEditProdLogMachineBtn.addEventListener('click', closeEditProdLogMachineModal);
+
+    if (editProdLogMachineForm) {
+        editProdLogMachineForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const logId = document.getElementById('editProdLogMachineId').value;
+            const newMachine = document.getElementById('editProdLogMachineSelect').value;
+            if (!logId || !newMachine) return;
+
+            try {
+                const res = await fetch(`/api/prodlog/${logId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ machine: newMachine })
+                });
+                if (res.ok) {
+                    closeEditProdLogMachineModal();
+                    fetchProdLogs();
+                } else {
+                    alert('Failed to update log machine.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error updating log machine.');
             }
         });
     }
