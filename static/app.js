@@ -3518,102 +3518,31 @@ document.addEventListener('DOMContentLoaded', () => {
         if (dateParts.length === 3) {
             dateFormatted = `${parseInt(dateParts[2])}/${parseInt(dateParts[1])}/${dateParts[0]}`;
         }
-        const description = `${item.forge_pn || ''} ${item.finish_part_no || ''}`.trim();
+        const forgePn = item.forge_pn || '';
+        const finishPartNo = item.finish_part_no || '';
         const qty = item.qty || 0;
-        const finYear = getFinYear(item.date);
 
-        function buildChallanBlock() {
-            return [
-                ["DELIVERY CHALLAN FOR JOB WORK", "", "", "", "", "", ""],
-                ["GRS ENGINEERING PVT LTD", "", "", "", "Authenticated by", "", ""],
-                ["No.129/A, BIA, Metagalli. Mysore - 570 016", "", "", "", "", "", ""],
-                ["Email: grsind@yahoo.com.", "", "", "", "", "", ""],
-                ["GST NO..: 29AACCG5906E1ZP", "", "", "", "", "", ""],
-                ["PAN NO..: AACCG5906E", "", "", "", "", "", ""],
-                ["TO", "", "", "Our DC No:", `${dcNo} /${finYear}`, "", ""],
-                ["M/s GRS ENGINEERING PVT LTD -UNIT 1", "", "", "Our DC Dt.:", dateFormatted, "", ""],
-                ["PLOT NO. 3, Belagola Industrial Area", "", "", "Ref. PO No:", "", "", ""],
-                ["Belagola Ind Area,", "", "", "Mode of Despatch :", "", "", ""],
-                ["Mysore -570016 -STATE CODE : 29", "", "", "", "", "", ""],
-                ['GST NO..: "29AACCG5906E1ZP"', "", "", "", "", "", ""],
-                ["Sl. No.", "Description", "", "HSN Code", "Qty", "GP Date", "Remarks"],
-                [1, description, "", "7326", qty, "", ""],
-                ["", "", "", "", "", "", ""],
-                ["", "", "", "", "", "NOT FOR SALES", ""],
-                ["(Processed Under Job Work Contract) Raw materials supplied by the party the same has been processed & returning to the party", "", "", "", "", "", ""],
-                ["", "", "", "", "For GRS ENGINEERING PVT LTD", "", ""],
-                ["", "", "", "", "", "", ""],
-                ["Received By", "", "Prepared By", "", "Authorised Signatory", "", ""]
-            ];
+        const aoa = [];
+        // Rows 1 to 10 empty
+        for (let i = 0; i < 10; i++) {
+            aoa.push(["", "", "", "", ""]);
         }
+        // Row 11: Date, DC No, Forge Part No, Finish Part No, Qty
+        aoa.push([dateFormatted, dcNo, forgePn, finishPartNo, qty]);
 
-        const block1 = buildChallanBlock();
-        const gap1 = ["", "", "", "", "", "", ""];
-        const gap2 = ["", "", "", "", "", "", ""];
-        const block2 = buildChallanBlock();
-
-        const fullAOA = [...block1, gap1, gap2, ...block2];
-        const ws = XLSX.utils.aoa_to_sheet(fullAOA);
-
-        ws['!merges'] = [
-            { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
-            { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
-            { s: { r: 1, c: 4 }, e: { r: 1, c: 6 } },
-            { s: { r: 2, c: 0 }, e: { r: 2, c: 3 } },
-            { s: { r: 3, c: 0 }, e: { r: 3, c: 3 } },
-            { s: { r: 4, c: 0 }, e: { r: 4, c: 3 } },
-            { s: { r: 5, c: 0 }, e: { r: 5, c: 3 } },
-            { s: { r: 6, c: 0 }, e: { r: 6, c: 2 } },
-            { s: { r: 7, c: 0 }, e: { r: 7, c: 2 } },
-            { s: { r: 8, c: 0 }, e: { r: 8, c: 2 } },
-            { s: { r: 9, c: 0 }, e: { r: 9, c: 2 } },
-            { s: { r: 10, c: 0 }, e: { r: 10, c: 2 } },
-            { s: { r: 11, c: 0 }, e: { r: 11, c: 2 } },
-            { s: { r: 12, c: 1 }, e: { r: 12, c: 2 } },
-            { s: { r: 13, c: 1 }, e: { r: 13, c: 2 } },
-            { s: { r: 15, c: 5 }, e: { r: 15, c: 6 } },
-            { s: { r: 16, c: 0 }, e: { r: 16, c: 6 } },
-            { s: { r: 17, c: 4 }, e: { r: 17, c: 6 } },
-            { s: { r: 19, c: 0 }, e: { r: 19, c: 1 } },
-            { s: { r: 19, c: 2 }, e: { r: 19, c: 3 } },
-            { s: { r: 19, c: 4 }, e: { r: 19, c: 6 } },
-
-            { s: { r: 22, c: 0 }, e: { r: 22, c: 6 } },
-            { s: { r: 23, c: 0 }, e: { r: 23, c: 3 } },
-            { s: { r: 23, c: 4 }, e: { r: 23, c: 6 } },
-            { s: { r: 24, c: 0 }, e: { r: 24, c: 3 } },
-            { s: { r: 25, c: 0 }, e: { r: 25, c: 3 } },
-            { s: { r: 26, c: 0 }, e: { r: 26, c: 3 } },
-            { s: { r: 27, c: 0 }, e: { r: 27, c: 3 } },
-            { s: { r: 28, c: 0 }, e: { r: 28, c: 2 } },
-            { s: { r: 29, c: 0 }, e: { r: 29, c: 2 } },
-            { s: { r: 30, c: 0 }, e: { r: 30, c: 2 } },
-            { s: { r: 31, c: 0 }, e: { r: 31, c: 2 } },
-            { s: { r: 32, c: 0 }, e: { r: 32, c: 2 } },
-            { s: { r: 33, c: 0 }, e: { r: 33, c: 2 } },
-            { s: { r: 34, c: 1 }, e: { r: 34, c: 2 } },
-            { s: { r: 35, c: 1 }, e: { r: 35, c: 2 } },
-            { s: { r: 37, c: 5 }, e: { r: 37, c: 6 } },
-            { s: { r: 38, c: 0 }, e: { r: 38, c: 6 } },
-            { s: { r: 39, c: 4 }, e: { r: 39, c: 6 } },
-            { s: { r: 41, c: 0 }, e: { r: 41, c: 1 } },
-            { s: { r: 41, c: 2 }, e: { r: 41, c: 3 } },
-            { s: { r: 41, c: 4 }, e: { r: 41, c: 6 } }
-        ];
+        const ws = XLSX.utils.aoa_to_sheet(aoa);
 
         ws['!cols'] = [
-            { wch: 8 },  // Sl No
-            { wch: 22 }, // Description col 1
-            { wch: 22 }, // Description col 2
-            { wch: 18 }, // HSN / Labels
-            { wch: 16 }, // Qty / Values
-            { wch: 16 }, // GP Date
-            { wch: 16 }  // Remarks
+            { wch: 14 }, // Date
+            { wch: 12 }, // DC No
+            { wch: 14 }, // Forge PN
+            { wch: 16 }, // Finish Part No
+            { wch: 10 }  // Qty
         ];
 
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Delivery Challan");
-        XLSX.writeFile(wb, `Delivery_Challan_${dcNo || 'DC'}.xlsx`);
+        XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+        XLSX.writeFile(wb, "dc.xlsx");
     };
 
     window.deleteRmLog = async (id, type) => {
