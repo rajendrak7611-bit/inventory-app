@@ -563,6 +563,23 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 document.getElementById('rmLogDcNoGroup').style.display = 'block';
                 document.getElementById('rmLogFinishPartNoGroup').style.display = 'block';
+
+                // Autofill next continuous DC No starting from 1353
+                try {
+                    const res = await fetch('/api/rawmateriallogs');
+                    const logs = await res.json();
+                    const despatchLogs = logs.filter(l => l.type === 'despatch' && l.dc_no);
+                    let maxDc = 1352;
+                    despatchLogs.forEach(l => {
+                        const num = parseInt(l.dc_no, 10);
+                        if (!isNaN(num) && num > maxDc) {
+                            maxDc = num;
+                        }
+                    });
+                    document.getElementById('rmLogDcNo').value = (maxDc + 1).toString();
+                } catch(e) {
+                    document.getElementById('rmLogDcNo').value = '1353';
+                }
                 
                 if (globalPartMasters.length === 0) {
                     const pmRes = await fetch('/api/partmaster');
