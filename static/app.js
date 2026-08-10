@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         allTabs.forEach(tab => {
             const screen = tab.getAttribute('data-screen');
-            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || ((screen === 'rawmaterial' || screen === 'ht') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) || (screen === 'attendance' && accessibleScreens.includes('hr'));
+            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || ((screen === 'rawmaterial' || screen === 'ht') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) || (screen === 'attendance' && accessibleScreens.includes('hr')) || ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'insertreceipt' || screen === 'insertissue') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib')));
             if (isAllowed) {
                 tab.style.display = 'inline-block';
                 if (!firstAvailableTab) firstAvailableTab = tab;
@@ -71,10 +71,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 tab.style.display = 'inline-block';
             } else {
                 const groupScreens = {
-                    'master': ['partmaster', 'machines', 'operators', 'dept', 'shift', 'vendors', 'setters'],
+                    'master': ['partmaster', 'machines', 'operators', 'dept', 'shift', 'vendors', 'setters', 'suppliers'],
                     'inventory': ['inventory', 'rawmaterial', 'ht'],
                     'production': ['schedule', 'status', 'prodlog', 'debur'],
-                    'toolcrib': ['insertmaster', 'drillmaster', 'products'],
+                    'toolcrib': ['insertmaster', 'drillmaster', 'products', 'insertreceipt', 'insertissue'],
                     'reports': ['reports'],
                     'maintenance': ['maintenance', 'bdslip'],
                     'hr': ['hr', 'attendance']
