@@ -215,18 +215,40 @@
             </table>
         </div>
 
-            <div class="table-container" id="partMasterSection" style="display: none;">
-                <table id="partMasterTable">
+            <div class="table-container" id="partMasterSection" style="display: none; max-height: calc(100vh - 160px); overflow: auto; position: relative;">
+                <table id="partMasterTable" style="width: 100%; border-collapse: separate; border-spacing: 0;">
                     <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Customer</th>
-                            <th>Dept</th>
-                            <th>Family</th>
-                            <th>Forge PN</th>
-                            <th>Part No</th>
-                            <th>VA</th>
-                            <th>Actions</th>
+                        <tr style="background: #cbd5e1;">
+                            <th style="position: sticky; top: 0; z-index: 25; background: #cbd5e1; color: #0f172a; padding: 8px 6px; border-bottom: 1px solid #94a3b8; font-weight: 600;">ID</th>
+                            <th style="position: sticky; top: 0; z-index: 25; background: #cbd5e1; color: #0f172a; padding: 8px 6px; border-bottom: 1px solid #94a3b8; font-weight: 600;">Customer</th>
+                            <th style="position: sticky; top: 0; z-index: 25; background: #cbd5e1; color: #0f172a; padding: 8px 6px; border-bottom: 1px solid #94a3b8; font-weight: 600;">Dept</th>
+                            <th style="position: sticky; top: 0; z-index: 25; background: #cbd5e1; color: #0f172a; padding: 8px 6px; border-bottom: 1px solid #94a3b8; font-weight: 600;">Family</th>
+                            <th style="position: sticky; top: 0; z-index: 25; background: #cbd5e1; color: #0f172a; padding: 8px 6px; border-bottom: 1px solid #94a3b8; font-weight: 600;">Forge PN</th>
+                            <th style="position: sticky; top: 0; z-index: 25; background: #cbd5e1; color: #0f172a; padding: 8px 6px; border-bottom: 1px solid #94a3b8; font-weight: 600;">Part No</th>
+                            <th style="position: sticky; top: 0; z-index: 25; background: #cbd5e1; color: #0f172a; padding: 8px 6px; border-bottom: 1px solid #94a3b8; font-weight: 600;">VA</th>
+                            <th style="position: sticky; top: 0; z-index: 25; background: #cbd5e1; color: #0f172a; padding: 8px 6px; border-bottom: 1px solid #94a3b8; font-weight: 600;">Actions</th>
+                        </tr>
+                        <tr style="background: #f1f5f9;">
+                            <th style="position: sticky; top: 33px; z-index: 24; background: #f1f5f9; padding: 4px; border-bottom: 2px solid #cbd5e1;"></th>
+                            <th style="position: sticky; top: 33px; z-index: 24; background: #f1f5f9; padding: 4px; border-bottom: 2px solid #cbd5e1;">
+                                <input type="text" class="part-master-col-filter" data-col="1" placeholder="Filter Customer..." style="width: 100%; padding: 4px 6px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: var(--text-main);">
+                            </th>
+                            <th style="position: sticky; top: 33px; z-index: 24; background: #f1f5f9; padding: 4px; border-bottom: 2px solid #cbd5e1;">
+                                <input type="text" class="part-master-col-filter" data-col="2" placeholder="Filter Dept..." style="width: 100%; padding: 4px 6px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: var(--text-main);">
+                            </th>
+                            <th style="position: sticky; top: 33px; z-index: 24; background: #f1f5f9; padding: 4px; border-bottom: 2px solid #cbd5e1;">
+                                <input type="text" class="part-master-col-filter" data-col="3" placeholder="Filter Family..." style="width: 100%; padding: 4px 6px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: var(--text-main);">
+                            </th>
+                            <th style="position: sticky; top: 33px; z-index: 24; background: #f1f5f9; padding: 4px; border-bottom: 2px solid #cbd5e1;">
+                                <input type="text" class="part-master-col-filter" data-col="4" placeholder="Filter Forge PN..." style="width: 100%; padding: 4px 6px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: var(--text-main);">
+                            </th>
+                            <th style="position: sticky; top: 33px; z-index: 24; background: #f1f5f9; padding: 4px; border-bottom: 2px solid #cbd5e1;">
+                                <input type="text" class="part-master-col-filter" data-col="5" placeholder="Filter Part No..." style="width: 100%; padding: 4px 6px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: var(--text-main);">
+                            </th>
+                            <th style="position: sticky; top: 33px; z-index: 24; background: #f1f5f9; padding: 4px; border-bottom: 2px solid #cbd5e1;"></th>
+                            <th style="position: sticky; top: 33px; z-index: 24; background: #f1f5f9; padding: 4px; border-bottom: 2px solid #cbd5e1; text-align: center;">
+                                <button type="button" id="clearPartMasterFiltersBtn" class="btn btn-text" style="font-size: 0.75rem; color: #ef4444; padding: 2px 6px; font-weight: 600; cursor: pointer;">Clear</button>
+                            </th>
                         </tr>
                     </thead>
                     <tbody id="partMasterBody">
@@ -2003,6 +2025,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=179"></script>
+    <script src="/static/app.js?v=180"></script>
 </body>
 </html>

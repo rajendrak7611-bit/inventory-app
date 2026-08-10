@@ -862,8 +862,47 @@ document.addEventListener('DOMContentLoaded', () => {
                     </td>`;
                 partMasterBody.appendChild(tr);
             });
+            applyPartMasterHeaderFilters();
         } catch (e) { console.error(e); }
     }
+
+    function applyPartMasterHeaderFilters() {
+        const filters = {};
+        document.querySelectorAll('.part-master-col-filter').forEach(input => {
+            const val = input.value.trim().toLowerCase();
+            if (val) {
+                filters[input.getAttribute('data-col')] = val;
+            }
+        });
+
+        const rows = document.querySelectorAll('#partMasterBody tr');
+        rows.forEach(tr => {
+            const cells = tr.children;
+            let show = true;
+            for (const colIdx in filters) {
+                const cell = cells[parseInt(colIdx)];
+                if (cell) {
+                    const cellText = (cell.textContent || '').trim().toLowerCase();
+                    if (!cellText.includes(filters[colIdx])) {
+                        show = false;
+                        break;
+                    }
+                }
+            }
+            tr.style.display = show ? '' : 'none';
+        });
+    }
+
+    document.addEventListener('input', (e) => {
+        if (e.target && e.target.classList.contains('part-master-col-filter')) {
+            applyPartMasterHeaderFilters();
+        }
+    });
+
+    document.getElementById('clearPartMasterFiltersBtn')?.addEventListener('click', () => {
+        document.querySelectorAll('.part-master-col-filter').forEach(input => input.value = '');
+        applyPartMasterHeaderFilters();
+    });
 
     function openPartModal(isEdit) {
         partModal.classList.add('show');
