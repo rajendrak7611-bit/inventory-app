@@ -4958,7 +4958,12 @@ document.addEventListener('DOMContentLoaded', () => {
             tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No insert records found. Click "+ Add Insert" or "Import Excel" to add records.</td></tr>';
             return;
         }
-        inserts.forEach(item => {
+        const sorted = [...inserts].sort((a, b) => {
+            const specA = (a.insert_spec || a.name || '').trim().toLowerCase();
+            const specB = (b.insert_spec || b.name || '').trim().toLowerCase();
+            return specA.localeCompare(specB, undefined, { numeric: true, sensitivity: 'base' });
+        });
+        sorted.forEach(item => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${item.id}</td>

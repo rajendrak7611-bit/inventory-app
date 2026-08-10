@@ -1356,7 +1356,7 @@ class InsertMasterResponse(InsertMasterBase):
 
 @app.get("/api/insert_masters", response_model=List[InsertMasterResponse])
 def get_insert_masters(db: Session = Depends(get_db)):
-    return db.query(InsertMaster).order_by(InsertMaster.id.desc()).all()
+    return db.query(InsertMaster).order_by(InsertMaster.insert_spec.asc(), InsertMaster.id.asc()).all()
 
 @app.post("/api/insert_masters", response_model=InsertMasterResponse)
 def create_insert_master(item: InsertMasterCreate, db: Session = Depends(get_db)):
