@@ -5397,118 +5397,37 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Reusable Searchable Select helper
-    function makeSearchableSelect(selectId) {
+    // Reusable Searchable Select helper using TomSelect
+    const tomSelectCache = {};
+
+    function makeSearchableSelect(selectId, placeholderText = '-- Select Insert Spec --') {
         const select = typeof selectId === 'string' ? document.getElementById(selectId) : selectId;
         if (!select) return;
+        const id = select.id || 'select_' + Math.random().toString(36).substr(2, 5);
 
-        let wrapper = select.parentElement ? select.parentElement.querySelector('.searchable-select-wrapper') : null;
-        let input, dropdown;
-
-        if (!wrapper) {
-            select.style.display = 'none';
-
-            wrapper = document.createElement('div');
-            wrapper.className = 'searchable-select-wrapper';
-            wrapper.style.cssText = 'position: relative; width: 100%;';
-
-            input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'searchable-select-input';
-            input.placeholder = '-- Search or select Insert Spec --';
-            input.style.cssText = 'width: 100%; padding: 0.5rem 2rem 0.5rem 0.75rem; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; font-size: 0.95rem; font-family: inherit; background: #ffffff url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 12 12\'%3E%3Cpath fill=\'%23475569\' d=\'M6 8.825L1.175 4 2.238 2.938 6 6.7 9.763 2.938 10.825 4z\'/%3E%3C/svg%3E") no-repeat right 0.75rem center;';
-
-            dropdown = document.createElement('div');
-            dropdown.className = 'searchable-select-dropdown';
-            dropdown.style.cssText = 'position: absolute; top: calc(100% + 4px); left: 0; right: 0; max-height: 220px; overflow-y: auto; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1); z-index: 99999; display: none;';
-
-            wrapper.appendChild(input);
-            wrapper.appendChild(dropdown);
-            select.parentNode.insertBefore(wrapper, select);
-
-            const renderOptions = (filterText = '') => {
-                dropdown.innerHTML = '';
-                const filter = filterText.trim().toLowerCase();
-                let count = 0;
-                Array.from(select.options).forEach(opt => {
-                    if (!opt.value && opt.textContent.includes('--')) return;
-                    const text = opt.textContent;
-                    if (!filter || text.toLowerCase().includes(filter)) {
-                        count++;
-                        const item = document.createElement('div');
-                        item.className = 'searchable-select-item';
-                        item.style.cssText = 'padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; color: #1e293b; transition: background 0.15s;';
-                        item.textContent = text;
-                        if (select.value === opt.value) {
-                            item.style.background = '#e0f2fe';
-                            item.style.fontWeight = '600';
-                            item.style.color = '#0284c7';
-                        }
-                        item.addEventListener('mouseenter', () => {
-                            if (select.value !== opt.value) item.style.background = '#f8fafc';
-                        });
-                        item.addEventListener('mouseleave', () => {
-                            item.style.background = (select.value === opt.value) ? '#e0f2fe' : '#ffffff';
-                        });
-                        item.addEventListener('mousedown', (e) => {
-                            e.preventDefault();
-                            select.value = opt.value;
-                            input.value = opt.textContent;
-                            dropdown.style.display = 'none';
-                            select.dispatchEvent(new Event('change', { bubbles: true }));
-                        });
-                        dropdown.appendChild(item);
-                    }
-                });
-                if (count === 0) {
-                    const noOpt = document.createElement('div');
-                    noOpt.style.cssText = 'padding: 10px 12px; color: #94a3b8; font-style: italic; font-size: 0.85rem; text-align: center;';
-                    noOpt.textContent = 'No matching specs found';
-                    dropdown.appendChild(noOpt);
-                }
-            };
-
-            input.addEventListener('focus', () => {
-                renderOptions(input.value);
-                dropdown.style.display = 'block';
-            });
-
-            input.addEventListener('click', () => {
-                renderOptions(input.value);
-                dropdown.style.display = 'block';
-            });
-
-            input.addEventListener('input', () => {
-                renderOptions(input.value);
-                dropdown.style.display = 'block';
-                const filter = input.value.trim().toLowerCase();
-                const exact = Array.from(select.options).find(o => o.value && o.textContent.toLowerCase() === filter);
-                if (exact) {
-                    select.value = exact.value;
-                } else {
-                    select.value = input.value;
-                }
-                select.dispatchEvent(new Event('change', { bubbles: true }));
-            });
-
-            input.addEventListener('blur', () => {
-                setTimeout(() => {
-                    dropdown.style.display = 'none';
-                }, 200);
-            });
-
-            select.addEventListener('change', () => {
-                const selOpt = select.options[select.selectedIndex];
-                input.value = (selOpt && selOpt.value) ? selOpt.textContent : select.value || '';
-            });
-        } else {
-            input = wrapper.querySelector('.searchable-select-input');
-            dropdown = wrapper.querySelector('.searchable-select-dropdown');
+        if (tomSelectCache[id]) {
+            try { tomSelectCache[id].destroy(); } catch(e) {}
+            delete tomSelectCache[id];
         }
 
-        const selOpt = select.options[select.selectedIndex];
-        if (input) {
-            input.value = (selOpt && selOpt.value) ? selOpt.textContent : select.value || '';
+        const oldWrapper = select.parentElement ? select.parentElement.querySelector('.searchable-select-wrapper') : null;
+        if (oldWrapper) {
+            oldWrapper.remove();
+            select.style.display = 'block';
+        }
+
+        try {
+            if (window.TomSelect) {
+                tomSelectCache[id] = new TomSelect(select, {
+                    create: false,
+                    placeholder: placeholderText,
+                    allowEmptyOption: true,
+                    maxOptions: 500,
+                    sortField: { field: "text", direction: "asc" }
+                });
+            }
+        } catch (e) {
+            console.error('Error initializing TomSelect on ' + id, e);
         }
     }
 
