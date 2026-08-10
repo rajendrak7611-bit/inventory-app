@@ -67,6 +67,7 @@
                 <button class="sub-tab" id="sidebarShift" data-screen="shift">Shift</button>
                 <button class="sub-tab" id="sidebarVendors" data-screen="vendors">Vendors</button>
                 <button class="sub-tab" id="sidebarSetters" data-screen="setters">Setters</button>
+                <button class="sub-tab" id="sidebarSuppliers" data-screen="suppliers">Suppliers</button>
             </div>
             <div class="sub-group" id="submenuInventory" style="display: none;">
                 <button class="sub-tab" id="sidebarRmReceipt" data-screen="rawmaterial">Receipt</button>
@@ -480,6 +481,20 @@
                         </tr>
                     </thead>
                     <tbody id="settersBody"></tbody>
+                </table>
+            </div>
+
+            <div class="table-container" id="suppliersSection" style="display: none;">
+                <table id="suppliersTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Supplier Name</th>
+                            <th>Details</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="suppliersBody"></tbody>
                 </table>
             </div>
 
@@ -1636,6 +1651,31 @@
         </div>
     </div>
 
+    <!-- Modal for Supplier Add/Edit -->
+    <div id="supplierModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="supplierModalTitle">Add Supplier</h2>
+                <button class="close-btn" id="closeSupplierModalBtn">&times;</button>
+            </div>
+            <form id="supplierForm">
+                <input type="hidden" id="supplierId">
+                <div class="form-group">
+                    <label for="supplierName">Supplier Name</label>
+                    <input type="text" id="supplierName" required placeholder="e.g. ABC Tools Ltd">
+                </div>
+                <div class="form-group">
+                    <label for="supplierDetails">Details</label>
+                    <input type="text" id="supplierDetails" placeholder="Contact, Address, etc.">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="cancelSupplierBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Details</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Modal for HT Entry -->
     <div id="htModal" class="modal">
         <div class="modal-content">
@@ -2274,6 +2314,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=197"></script>
+    <script src="/static/app.js?v=198"></script>
 </body>
 </html>

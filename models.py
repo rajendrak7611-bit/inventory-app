@@ -92,6 +92,14 @@ class Vendor(Base):
     details = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class Supplier(Base):
+    __tablename__ = "suppliers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True, unique=True)
+    details = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class Schedule(Base):
     __tablename__ = "schedules"
 

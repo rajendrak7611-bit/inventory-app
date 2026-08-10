@@ -8,7 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog, Attendance, InsertMaster, DrillMaster, InsertReceipt, InsertIssue, BreakdownSlip, ServiceDetail
+from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, Supplier, HTLog, HTReceiptLog, Attendance, InsertMaster, DrillMaster, InsertReceipt, InsertIssue, BreakdownSlip, ServiceDetail
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -348,6 +348,19 @@ class VendorCreate(VendorBase):
     pass
 
 class VendorResponse(VendorBase):
+    id: int
+    
+    class Config:
+        from_attributes = True
+
+class SupplierBase(BaseModel):
+    name: str
+    details: Optional[str] = None
+
+class SupplierCreate(SupplierBase):
+    pass
+
+class SupplierResponse(SupplierBase):
     id: int
     
     class Config:
@@ -751,6 +764,39 @@ def delete_vendor(vendor_id: int, db: Session = Depends(get_db)):
     db.delete(db_vendor)
     db.commit()
     return {"message": "Vendor deleted successfully"}
+
+# --- SUPPLIER API ENDPOINTS ---
+@app.get("/api/suppliers", response_model=List[SupplierResponse])
+def get_suppliers(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
+    return db.query(Supplier).order_by(Supplier.name.asc()).offset(skip).limit(limit).all()
+
+@app.post("/api/suppliers", response_model=SupplierResponse)
+def create_supplier(supplier: SupplierCreate, db: Session = Depends(get_db)):
+    db_supplier = Supplier(**supplier.model_dump())
+    db.add(db_supplier)
+    db.commit()
+    db.refresh(db_supplier)
+    return db_supplier
+
+@app.put("/api/suppliers/{supplier_id}", response_model=SupplierResponse)
+def update_supplier(supplier_id: int, supplier: SupplierCreate, db: Session = Depends(get_db)):
+    db_supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+    if not db_supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    for key, value in supplier.model_dump().items():
+        setattr(db_supplier, key, value)
+    db.commit()
+    db.refresh(db_supplier)
+    return db_supplier
+
+@app.delete("/api/suppliers/{supplier_id}")
+def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
+    db_supplier = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+    if not db_supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    db.delete(db_supplier)
+    db.commit()
+    return {"message": "Supplier deleted successfully"}
 
 # --- HT LOG ENDPOINTS ---
 @app.get("/api/ht_logs", response_model=List[HTLogResponse])

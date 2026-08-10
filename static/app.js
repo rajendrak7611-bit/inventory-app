@@ -363,6 +363,14 @@ document.addEventListener('DOMContentLoaded', () => {
             addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Setter';
             fetchSetters();
         }},
+        'sidebarSuppliers': { tab: 'suppliers', action: () => {
+            const suppliersSection = document.getElementById('suppliersSection');
+            if (suppliersSection) suppliersSection.style.display = 'block';
+            importBtn.style.display = 'none';
+            addBtn.style.display = 'inline-flex';
+            addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Supplier';
+            fetchSuppliers();
+        }},
         'sidebarHt': { tab: 'ht', action: () => {
             if (htSection) htSection.style.display = 'block';
             importBtn.style.display = 'none';
@@ -517,6 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (currentTab === 'shift') openShiftModal();
         else if (currentTab === 'vendors') openVendorModal();
         else if (currentTab === 'setters') openSetterModal(false);
+        else if (currentTab === 'suppliers') openSupplierModal();
         else if (currentTab === 'ht') openHtModal();
         else if (currentTab === 'rawmaterial') {
             document.getElementById('rmModalTitle').innerText = 'Add Raw Material';
@@ -4371,6 +4380,125 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 console.error(err);
                 alert('Error saving vendor');
+            }
+        });
+    }
+
+    // ====== SUPPLIER CRUD ======
+    const supplierModal = document.getElementById('supplierModal');
+    const supplierForm = document.getElementById('supplierForm');
+    const supplierIdInput = document.getElementById('supplierId');
+    const supplierNameInput = document.getElementById('supplierName');
+    const supplierDetailsInput = document.getElementById('supplierDetails');
+    const supplierModalTitle = document.getElementById('supplierModalTitle');
+    const cancelSupplierBtn = document.getElementById('cancelSupplierBtn');
+    const closeSupplierModalBtn = document.getElementById('closeSupplierModalBtn');
+
+    async function fetchSuppliers() {
+        try {
+            const res = await fetch('/api/suppliers');
+            const data = await res.json();
+            renderSuppliers(data);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderSuppliers(suppliers) {
+        const tbody = document.getElementById('suppliersBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!suppliers || suppliers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No suppliers found. Click "+ Add Supplier" to create one.</td></tr>';
+            return;
+        }
+        suppliers.forEach(s => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${s.id}</td>
+                <td><strong>${s.name}</strong></td>
+                <td>${s.details || ''}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-outline edit-supplier-btn" data-id="${s.id}" data-name="${s.name}" data-details="${s.details || ''}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit</button>
+                    <button class="btn btn-outline delete-supplier-btn" data-id="${s.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.edit-supplier-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.target.getAttribute('data-id');
+                const name = e.target.getAttribute('data-name');
+                const details = e.target.getAttribute('data-details');
+                openSupplierModal({ id, name, details });
+            });
+        });
+
+        tbody.querySelectorAll('.delete-supplier-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (confirm('Delete this supplier?')) {
+                    const id = e.target.getAttribute('data-id');
+                    try {
+                        const res = await fetch(`/api/suppliers/${id}`, { method: 'DELETE' });
+                        if (res.ok) fetchSuppliers();
+                        else alert('Error deleting supplier');
+                    } catch (err) { console.error(err); }
+                }
+            });
+        });
+    }
+
+    function openSupplierModal(supplier = null) {
+        if (!supplierModal) return;
+        if (supplier) {
+            supplierModalTitle.textContent = 'Edit Supplier';
+            supplierIdInput.value = supplier.id;
+            supplierNameInput.value = supplier.name;
+            supplierDetailsInput.value = supplier.details || '';
+        } else {
+            supplierModalTitle.textContent = 'Add Supplier';
+            if (supplierForm) supplierForm.reset();
+            supplierIdInput.value = '';
+        }
+        supplierModal.classList.add('show');
+    }
+
+    if (cancelSupplierBtn) {
+        cancelSupplierBtn.addEventListener('click', () => {
+            supplierModal.classList.remove('show');
+        });
+    }
+    if (closeSupplierModalBtn) {
+        closeSupplierModalBtn.addEventListener('click', () => {
+            supplierModal.classList.remove('show');
+        });
+    }
+
+    if (supplierForm) {
+        supplierForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                name: supplierNameInput.value.trim(),
+                details: supplierDetailsInput.value.trim()
+            };
+            const id = supplierIdInput.value;
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/suppliers/${id}` : '/api/suppliers';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    supplierModal.classList.remove('show');
+                    fetchSuppliers();
+                } else {
+                    alert('Error saving supplier details');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error saving supplier details');
             }
         });
     }
