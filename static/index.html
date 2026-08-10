@@ -94,6 +94,7 @@
             </div>
             <div class="sub-group" id="submenuMaintenance" style="display: none;">
                 <button class="sub-tab" id="sidebarBdSlip" data-screen="bdslip">Breakdown Slip</button>
+                <button class="sub-tab" id="sidebarServiceDetails" data-screen="servicedetails">Service Details</button>
             </div>
             <div class="sub-group" id="submenuHr" style="display: none;">
                 <button class="sub-tab" id="sidebarAttendance" data-screen="attendance">Attendance</button>
@@ -242,6 +243,131 @@
                 </thead>
                 <tbody id="bdSlipBody"></tbody>
             </table>
+        </div>
+
+        <!-- Service Details Section -->
+        <div class="table-container" id="serviceDetailsSection" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2>Service Details</h2>
+                <div>
+                    <button id="sdToggleViewBtn" class="btn btn-outline" style="margin-right: 8px;">View Service History</button>
+                    <button id="newServiceEntryBtn" class="btn btn-primary">+ New Service Entry</button>
+                </div>
+            </div>
+
+            <!-- Service Entry Form Container -->
+            <div id="sdFormContainer">
+                <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                    <label for="sdBreakdownSelect" style="font-weight: 600; font-size: 1rem; display: block; margin-bottom: 0.5rem; color: #1e293b;">Select Machine (Open Breakdown):</label>
+                    <select id="sdBreakdownSelect" style="width: 100%; max-width: 600px; padding: 0.6rem; border: 1px solid #94a3b8; border-radius: 6px; font-size: 0.95rem; font-weight: 500; background: #ffffff;">
+                        <option value="">-- Select Open Breakdown Machine --</option>
+                    </select>
+
+                    <div id="sdBreakdownInfoCard" style="display: none; margin-top: 1rem; padding: 0.75rem 1rem; background: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 4px; font-size: 0.9rem;">
+                        <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                            <div><strong>Breakdown ID:</strong> <span id="sdInfoId">-</span></div>
+                            <div><strong>Date/Time:</strong> <span id="sdInfoDate">-</span></div>
+                            <div><strong>Dept:</strong> <span id="sdInfoDept">-</span></div>
+                            <div><strong>Machine:</strong> <span id="sdInfoMachine">-</span></div>
+                            <div><strong>Requested By:</strong> <span id="sdInfoRequestBy">-</span></div>
+                        </div>
+                        <div style="margin-top: 0.5rem;"><strong>Problem Description:</strong> <span id="sdInfoProblem" style="color: #1e40af; font-weight: 500;">-</span></div>
+                    </div>
+                </div>
+
+                <!-- Section 1: Spares -->
+                <div style="margin-bottom: 1.5rem; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; border-bottom: 2px solid #cbd5e1; padding-bottom: 0.5rem;">
+                        <h3 style="margin: 0; font-size: 1.1rem; color: #0f172a;"><i class="fas fa-cogs" style="margin-right: 6px; color: #0284c7;"></i> Section 1: Spares Used</h3>
+                        <button type="button" id="sdAddSpareRowBtn" class="btn btn-outline" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">+ Add Spare Row</button>
+                    </div>
+                    <table id="sdSparesTable" style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: #f1f5f9; text-align: left;">
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1;">Spare Part Name / Spec</th>
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 100px;">Qty</th>
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 130px;">Unit Cost (₹)</th>
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 130px;">Total Cost (₹)</th>
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1;">Supplier / Remarks</th>
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 60px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sdSparesBody"></tbody>
+                    </table>
+                </div>
+
+                <!-- Section 2: Service / Action Taken -->
+                <div style="margin-bottom: 1.5rem; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; border-bottom: 2px solid #cbd5e1; padding-bottom: 0.5rem;">
+                        <h3 style="margin: 0; font-size: 1.1rem; color: #0f172a;"><i class="fas fa-tools" style="margin-right: 6px; color: #16a34a;"></i> Section 2: Service / Work Done</h3>
+                        <button type="button" id="sdAddServiceRowBtn" class="btn btn-outline" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">+ Add Service Row</button>
+                    </div>
+                    <table id="sdServiceTable" style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: #f1f5f9; text-align: left;">
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1;">Work Done / Action Taken</th>
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1;">Technician / Vendor</th>
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 180px;">Start Time</th>
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 180px;">Completion Time</th>
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 130px;">Service Cost (₹)</th>
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 60px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sdServiceBody"></tbody>
+                    </table>
+                </div>
+
+                <!-- Footer & Cost Summary -->
+                <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                    <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="font-weight: 600; display: block; margin-bottom: 0.3rem;">Spares Total (₹):</label>
+                            <input type="number" id="sdSparesTotal" readonly style="width: 100%; padding: 0.5rem; background: #e2e8f0; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 6px;" value="0.00">
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="font-weight: 600; display: block; margin-bottom: 0.3rem;">Service Total (₹):</label>
+                            <input type="number" id="sdServiceTotal" readonly style="width: 100%; padding: 0.5rem; background: #e2e8f0; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 6px;" value="0.00">
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="font-weight: 600; display: block; margin-bottom: 0.3rem; color: #0284c7;">Grand Total Cost (₹):</label>
+                            <input type="number" id="sdGrandTotal" readonly style="width: 100%; padding: 0.5rem; background: #bae6fd; font-weight: bold; border: 1px solid #0284c7; border-radius: 6px; color: #0369a1;" value="0.00">
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 1rem;">
+                        <label style="font-weight: 600; display: block; margin-bottom: 0.3rem;">General Remarks / Notes:</label>
+                        <textarea id="sdRemarksInput" rows="2" placeholder="Any final remarks, observations or warranty info..." style="width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-family: inherit;"></textarea>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #cbd5e1; padding-top: 0.75rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; color: #16a34a; cursor: pointer;">
+                            <input type="checkbox" id="sdSignoffCheckbox" style="width: 18px; height: 18px; accent-color: #16a34a;" checked>
+                            Sign-off & Close Breakdown Slip upon saving
+                        </label>
+
+                        <button type="button" id="saveServiceDetailBtn" class="btn btn-primary" style="padding: 0.6rem 1.5rem; font-size: 1rem;">Save Service Details</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Service Details History Section -->
+            <div id="sdHistoryContainer" style="display: none;">
+                <table id="sdHistoryTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Breakdown ID</th>
+                            <th>Machine</th>
+                            <th>Spares Cost (₹)</th>
+                            <th>Service Cost (₹)</th>
+                            <th>Total Cost (₹)</th>
+                            <th>Remarks</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sdHistoryBody"></tbody>
+                </table>
+            </div>
         </div>
 
         <div class="table-container" id="partMasterSection" style="display: none; max-height: calc(100vh - 160px); overflow: auto; position: relative;">
@@ -2148,6 +2274,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=185"></script>
+    <script src="/static/app.js?v=186"></script>
 </body>
 </html>

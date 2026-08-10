@@ -8,7 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog, Attendance, InsertMaster, DrillMaster, InsertReceipt, InsertIssue, BreakdownSlip
+from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, HTLog, HTReceiptLog, Attendance, InsertMaster, DrillMaster, InsertReceipt, InsertIssue, BreakdownSlip, ServiceDetail
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -1716,7 +1716,85 @@ def delete_breakdown_slip(slip_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Breakdown Slip not found")
     db.delete(db_slip)
     db.commit()
-    return {"message": "Breakdown Slip deleted successfully"}
+# --- Service Detail Schemas & API Routes ---
+class ServiceDetailCreate(BaseModel):
+    breakdown_slip_id: Optional[int] = None
+    machine: Optional[str] = ""
+    spares_data: Optional[str] = "[]"
+    service_data: Optional[str] = "[]"
+    spares_cost: Optional[float] = 0.0
+    service_cost: Optional[float] = 0.0
+    total_cost: Optional[float] = 0.0
+    remarks: Optional[str] = ""
+    close_breakdown: Optional[bool] = False
+
+class ServiceDetailResponse(BaseModel):
+    id: int
+    breakdown_slip_id: Optional[int] = None
+    machine: Optional[str] = ""
+    spares_data: Optional[str] = "[]"
+    service_data: Optional[str] = "[]"
+    spares_cost: Optional[float] = 0.0
+    service_cost: Optional[float] = 0.0
+    total_cost: Optional[float] = 0.0
+    remarks: Optional[str] = ""
+
+    class Config:
+        from_attributes = True
+
+@app.get("/api/service_details", response_model=List[ServiceDetailResponse])
+def get_service_details(db: Session = Depends(get_db)):
+    return db.query(ServiceDetail).order_by(ServiceDetail.id.desc()).all()
+
+@app.post("/api/service_details", response_model=ServiceDetailResponse)
+def create_service_detail(sd: ServiceDetailCreate, db: Session = Depends(get_db)):
+    data = sd.dict()
+    close_bd = data.pop("close_breakdown", False)
+    db_sd = ServiceDetail(**data)
+    db.add(db_sd)
+    
+    if close_bd and db_sd.breakdown_slip_id:
+        slip = db.query(BreakdownSlip).filter(BreakdownSlip.id == db_sd.breakdown_slip_id).first()
+        if slip:
+            from datetime import datetime
+            slip.status = "Signed Off"
+            if not slip.signoff_date_time:
+                slip.signoff_date_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    db.commit()
+    db.refresh(db_sd)
+    return db_sd
+
+@app.put("/api/service_details/{sd_id}", response_model=ServiceDetailResponse)
+def update_service_detail(sd_id: int, sd: ServiceDetailCreate, db: Session = Depends(get_db)):
+    db_sd = db.query(ServiceDetail).filter(ServiceDetail.id == sd_id).first()
+    if not db_sd:
+        raise HTTPException(status_code=404, detail="Service Detail not found")
+    data = sd.dict()
+    close_bd = data.pop("close_breakdown", False)
+    for key, value in data.items():
+        setattr(db_sd, key, value)
+        
+    if close_bd and db_sd.breakdown_slip_id:
+        slip = db.query(BreakdownSlip).filter(BreakdownSlip.id == db_sd.breakdown_slip_id).first()
+        if slip:
+            from datetime import datetime
+            slip.status = "Signed Off"
+            if not slip.signoff_date_time:
+                slip.signoff_date_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    db.commit()
+    db.refresh(db_sd)
+    return db_sd
+
+@app.delete("/api/service_details/{sd_id}")
+def delete_service_detail(sd_id: int, db: Session = Depends(get_db)):
+    db_sd = db.query(ServiceDetail).filter(ServiceDetail.id == sd_id).first()
+    if not db_sd:
+        raise HTTPException(status_code=404, detail="Service Detail not found")
+    db.delete(db_sd)
+    db.commit()
+    return {"message": "Service Detail deleted successfully"}
 
 # Serve static files (frontend)
 app.mount("/static", StaticFiles(directory="static"), name="static")

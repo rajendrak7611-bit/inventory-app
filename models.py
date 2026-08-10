@@ -254,5 +254,20 @@ class BreakdownSlip(Base):
     status = Column(String, default="Open")
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class ServiceDetail(Base):
+    __tablename__ = "service_details"
+
+    id = Column(Integer, primary_key=True, index=True)
+    breakdown_slip_id = Column(Integer, index=True, nullable=True)
+    machine = Column(String, index=True, nullable=True)
+    spares_data = Column(String, nullable=True)
+    service_data = Column(String, nullable=True)
+    spares_cost = Column(Float, default=0.0)
+    service_cost = Column(Float, default=0.0)
+    total_cost = Column(Float, default=0.0)
+    remarks = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 
 
