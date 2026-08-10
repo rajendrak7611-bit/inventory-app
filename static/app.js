@@ -3507,11 +3507,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.exportDeliveryChallanToExcel = (item) => {
-        if (!window.XLSX) {
-            alert('XLSX library not available');
-            return;
-        }
-
         const dcNo = item.dc_no && item.dc_no !== '-' ? item.dc_no : '';
         const dateParts = (item.date || '').split('-');
         let dateFormatted = item.date;
@@ -3522,27 +3517,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const finishPartNo = item.finish_part_no || '';
         const qty = item.qty || 0;
 
-        const aoa = [];
-        // Rows 1 to 10 empty
-        for (let i = 0; i < 10; i++) {
-            aoa.push(["", "", "", "", ""]);
-        }
-        // Row 11: Date, DC No, Forge Part No, Finish Part No, Qty
-        aoa.push([dateFormatted, dcNo, forgePn, finishPartNo, qty]);
+        // 10 empty lines for rows 1 to 10
+        let txtContent = '\r\n'.repeat(10);
+        // Row 11: Date, DC No, Forge Part No, Finish Part No, Qty (Tab separated)
+        txtContent += `${dateFormatted}\t${dcNo}\t${forgePn}\t${finishPartNo}\t${qty}\r\n`;
 
-        const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-        ws['!cols'] = [
-            { wch: 14 }, // Date
-            { wch: 12 }, // DC No
-            { wch: 14 }, // Forge PN
-            { wch: 16 }, // Finish Part No
-            { wch: 10 }  // Qty
-        ];
-
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-        XLSX.writeFile(wb, "dc.xlsx");
+        const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'dc.txt';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
     };
 
     window.deleteRmLog = async (id, type) => {
