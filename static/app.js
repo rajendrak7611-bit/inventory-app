@@ -235,7 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'productsSection', 'insertMasterSection', 'drillMasterSection', 'insertReceiptSection', 'insertIssueSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'htSection', 'scheduleCreateSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
-            'inspectionSection', 'maintenanceSection', 'hrSection', 'attendanceSection'
+            'inspectionSection', 'maintenanceSection', 'bdSlipSection', 'hrSection', 'attendanceSection'
         ];
         sections.forEach(id => {
             const el = document.getElementById(id);
