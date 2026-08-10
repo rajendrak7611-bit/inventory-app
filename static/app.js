@@ -6726,7 +6726,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!tbody) return;
         tbody.innerHTML = '';
         if (!slips || slips.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No breakdown slips found. Click "+ Add B/d Slip" to create a record.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No breakdown slips found. Click "+ Add Breakdown Slip" to create a record.</td></tr>';
             return;
         }
 
@@ -6854,7 +6854,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         if (item) {
-            document.getElementById('bdSlipModalTitle').textContent = 'Edit B/d Slip';
+            document.getElementById('bdSlipModalTitle').textContent = 'Edit Breakdown Slip';
             document.getElementById('bdSlipId').value = item.id;
             document.getElementById('bdDateTimeInput').value = item.date_time || '';
             document.getElementById('bdDeptSelect').value = item.department || '';
@@ -6865,7 +6865,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('bdProblemInput').value = item.problem || '';
             document.getElementById('bdSignoffDateTimeInput').value = item.signoff_date_time || '';
         } else {
-            document.getElementById('bdSlipModalTitle').textContent = 'Create B/d Slip';
+            document.getElementById('bdSlipModalTitle').textContent = 'Create Breakdown Slip';
             bdSlipForm.reset();
             document.getElementById('bdSlipId').value = '';
             const now = new Date();
