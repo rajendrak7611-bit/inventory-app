@@ -5742,14 +5742,74 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let receiptSupplierTomSelect = null;
+
+    async function populateSupplierDropdown(selectedSupplier = '') {
+        const sel = document.getElementById('receiptSupplierInput');
+        if (!sel) return;
+
+        if (receiptSupplierTomSelect) {
+            try { receiptSupplierTomSelect.destroy(); } catch (e) {}
+            receiptSupplierTomSelect = null;
+        }
+
+        sel.innerHTML = '<option value="">-- Select Supplier --</option>';
+
+        try {
+            const res = await fetch('/api/suppliers');
+            const suppliers = await res.json();
+            
+            // Sort suppliers A-Z
+            suppliers.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+
+            suppliers.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.name;
+                opt.textContent = s.name;
+                if (selectedSupplier && (s.name.trim().toLowerCase() === selectedSupplier.trim().toLowerCase())) {
+                    opt.selected = true;
+                }
+                sel.appendChild(opt);
+            });
+
+            // If selectedSupplier exists but is not yet in suppliers list, add it dynamically
+            if (selectedSupplier && !suppliers.some(s => s.name.trim().toLowerCase() === selectedSupplier.trim().toLowerCase())) {
+                const customOpt = document.createElement('option');
+                customOpt.value = selectedSupplier;
+                customOpt.textContent = selectedSupplier;
+                customOpt.selected = true;
+                sel.appendChild(customOpt);
+            }
+        } catch (err) {
+            console.error('Error fetching suppliers for dropdown:', err);
+        }
+
+        try {
+            if (window.TomSelect) {
+                receiptSupplierTomSelect = new TomSelect(sel, {
+                    create: true,
+                    placeholder: '-- Select or Type Supplier --',
+                    allowEmptyOption: true,
+                    maxOptions: 500,
+                    sortField: { field: "text", direction: "asc" }
+                });
+                if (selectedSupplier) {
+                    receiptSupplierTomSelect.setValue(selectedSupplier);
+                }
+            }
+        } catch (e) {
+            console.error('Error initializing TomSelect on receiptSupplierInput:', e);
+        }
+    }
+
     async function openInsertReceiptModal(item = null) {
         if (!insertReceiptModal) return;
         await populateInsertSpecDropdown(item ? item.insert_spec : '');
+        await populateSupplierDropdown(item ? item.supplier : '');
         if (item) {
             document.getElementById('insertReceiptModalTitle').textContent = 'Edit Insert Receipt';
             document.getElementById('insertReceiptId').value = item.id;
             document.getElementById('receiptDateInput').value = item.date || '';
-            document.getElementById('receiptSupplierInput').value = item.supplier || '';
             document.getElementById('receiptBatchNoInput').value = item.batch_no || '';
             document.getElementById('receiptQtyInput').value = item.qty || 1;
             document.getElementById('receiptRateInput').value = item.rate || 0.00;
@@ -5880,7 +5940,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const id = document.getElementById('insertReceiptId').value;
             const payload = {
                 date: document.getElementById('receiptDateInput').value,
-                supplier: document.getElementById('receiptSupplierInput').value.trim(),
+                supplier: (receiptSupplierTomSelect ? receiptSupplierTomSelect.getValue() : document.getElementById('receiptSupplierInput').value || '').trim(),
                 insert_spec: document.getElementById('receiptInsertSpecSelect').value,
                 batch_no: document.getElementById('receiptBatchNoInput').value.trim(),
                 qty: parseInt(document.getElementById('receiptQtyInput').value) || 0,
