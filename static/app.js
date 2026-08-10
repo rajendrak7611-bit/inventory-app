@@ -3761,6 +3761,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    document.getElementById('deleteAllRawMaterialsBtn')?.addEventListener('click', async () => {
+        if (!checkAdminAccess()) return;
+        if (confirm('Are you sure you want to delete ALL items in RM Status? This action cannot be undone.')) {
+            try {
+                const res = await fetch('/api/rawmaterials/all', { method: 'DELETE' });
+                if (res.ok) {
+                    alert('All RM Status items deleted successfully!');
+                    fetchRawMaterials();
+                } else {
+                    alert('Failed to delete RM Status items.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error deleting RM Status items.');
+            }
+        }
+    });
+
 
     // --- USER MANAGEMENT LOGIC ---
     let allUsersList = [];

@@ -1174,6 +1174,12 @@ def update_raw_material(rm_id: int, rm: RawMaterialCreate, db: Session = Depends
     db.refresh(db_rm)
     return db_rm
 
+@app.delete("/api/rawmaterials/all")
+def delete_all_raw_materials(db: Session = Depends(get_db)):
+    db.query(RawMaterial).delete()
+    db.commit()
+    return {"message": "All Raw Material items deleted successfully"}
+
 @app.delete("/api/rawmaterials/{rm_id}")
 def delete_raw_material(rm_id: int, db: Session = Depends(get_db)):
     db_rm = db.query(RawMaterial).filter(RawMaterial.id == rm_id).first()
