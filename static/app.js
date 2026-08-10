@@ -3044,7 +3044,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${log.date ? log.date.split('-').slice(1).reverse().join('/') : ''}</td>
+                    <td>${log.date ? log.date.split('-').reverse().join('/') : ''}</td>
                     <td>${log.dept}</td>
                     <td>${log.shift}</td>
                     <td>${log.setter || ''}</td>
