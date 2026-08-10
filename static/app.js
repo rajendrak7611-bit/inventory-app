@@ -7008,7 +7008,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const sdBreakdownSelect = document.getElementById('sdBreakdownSelect');
     if (sdBreakdownSelect) {
-        sdBreakdownSelect.addEventListener('change', (e) => {
+        sdBreakdownSelect.addEventListener('change', async (e) => {
             const bdId = e.target.value;
             const infoCard = document.getElementById('sdBreakdownInfoCard');
             if (bdId && openBreakdownSlipsMap[bdId]) {
@@ -7020,10 +7020,58 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('sdInfoRequestBy').textContent = item.request_by || '-';
                 document.getElementById('sdInfoProblem').textContent = item.problem || '-';
                 if (infoCard) infoCard.style.display = 'block';
+
+                await loadExistingServiceDetailForBreakdown(item.id);
             } else {
                 if (infoCard) infoCard.style.display = 'none';
+                resetServiceDetailsForm(false);
             }
         });
+    }
+
+    async function loadExistingServiceDetailForBreakdown(breakdownSlipId) {
+        try {
+            const res = await fetch('/api/service_details');
+            const list = await res.json();
+            const existing = list.find(s => s.breakdown_slip_id == breakdownSlipId);
+            if (existing) {
+                currentServiceDetailId = existing.id;
+                
+                // Load Spares Data
+                let sparesList = [];
+                try { sparesList = JSON.parse(existing.spares_data || '[]'); } catch(e) {}
+                sdSparesBody.innerHTML = '';
+                if (sparesList.length > 0) {
+                    sparesList.forEach(sp => addSpareRow(sp));
+                } else {
+                    addSpareRow();
+                }
+
+                // Load Service Data
+                let serviceList = [];
+                try { serviceList = JSON.parse(existing.service_data || '[]'); } catch(e) {}
+                sdServiceBody.innerHTML = '';
+                if (serviceList.length > 0) {
+                    serviceList.forEach(srv => addServiceRow(srv));
+                } else {
+                    addServiceRow();
+                }
+
+                // Load Remarks
+                document.getElementById('sdRemarksInput').value = existing.remarks || '';
+                calcServiceTotals();
+            } else {
+                currentServiceDetailId = null;
+                if (sdSparesBody) sdSparesBody.innerHTML = '';
+                if (sdServiceBody) sdServiceBody.innerHTML = '';
+                addSpareRow();
+                addServiceRow();
+                document.getElementById('sdRemarksInput').value = '';
+                calcServiceTotals();
+            }
+        } catch (err) {
+            console.error('Error loading existing service detail:', err);
+        }
     }
 
     // Dynamic Spares Rows Logic
@@ -7032,13 +7080,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function addSpareRow(data = {}) {
         if (!sdSparesBody) return;
+        const defaultToday = new Date().toISOString().split('T')[0];
         const tr = document.createElement('tr');
         tr.className = 'spare-row';
         tr.innerHTML = `
+            <td style="padding: 6px;"><input type="date" class="spare-date" style="width: 100%; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px;" value="${data.date || defaultToday}"></td>
             <td style="padding: 6px;"><input type="text" class="spare-name" placeholder="Spare name/spec" style="width: 100%; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px;" value="${data.part_name || ''}"></td>
-            <td style="padding: 6px;"><input type="number" class="spare-qty" min="1" step="1" style="width: 100%; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px;" value="${data.qty || 1}"></td>
+            <td style="padding: 6px;"><input type="number" class="spare-qty" min="1" step="1" style="width: 100%; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px;" value="${data.qty !== undefined ? data.qty : 1}"></td>
             <td style="padding: 6px;"><input type="number" class="spare-unit-cost" min="0" step="0.01" style="width: 100%; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px;" value="${data.unit_cost || 0}"></td>
             <td style="padding: 6px;"><input type="number" class="spare-total-cost" readonly style="width: 100%; padding: 4px 6px; background: #f1f5f9; font-weight: bold; border: 1px solid #cbd5e1; border-radius: 4px;" value="${data.total_cost || 0}"></td>
+            <td style="padding: 6px;">
+                <select class="spare-received" style="width: 100%; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                    <option value="Yes" ${data.received === 'Yes' || !data.received ? 'selected' : ''}>Yes</option>
+                    <option value="No" ${data.received === 'No' ? 'selected' : ''}>No</option>
+                </select>
+            </td>
+            <td style="padding: 6px;"><input type="date" class="spare-date-received" style="width: 100%; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px;" value="${data.date_received || defaultToday}"></td>
             <td style="padding: 6px;"><input type="text" class="spare-remarks" placeholder="Supplier / remarks" style="width: 100%; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px;" value="${data.remarks || ''}"></td>
             <td style="padding: 6px; text-align: center;"><button type="button" class="btn btn-outline remove-row-btn" style="padding: 2px 8px; color: #ef4444; border-color: #ef4444; font-weight: bold;">&times;</button></td>
         `;
@@ -7127,12 +7184,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (grandIn) grandIn.value = grandTotal.toFixed(2);
     }
 
-    function resetServiceDetailsForm() {
+    function resetServiceDetailsForm(clearSelect = true) {
         currentServiceDetailId = null;
-        const select = document.getElementById('sdBreakdownSelect');
-        if (select) select.value = '';
-        const infoCard = document.getElementById('sdBreakdownInfoCard');
-        if (infoCard) infoCard.style.display = 'none';
+        if (clearSelect) {
+            const select = document.getElementById('sdBreakdownSelect');
+            if (select) select.value = '';
+            const infoCard = document.getElementById('sdBreakdownInfoCard');
+            if (infoCard) infoCard.style.display = 'none';
+        }
 
         if (sdSparesBody) sdSparesBody.innerHTML = '';
         if (sdServiceBody) sdServiceBody.innerHTML = '';
@@ -7142,9 +7201,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const remarksIn = document.getElementById('sdRemarksInput');
         if (remarksIn) remarksIn.value = '';
-
-        const signoffCb = document.getElementById('sdSignoffCheckbox');
-        if (signoffCb) signoffCb.checked = true;
 
         calcServiceTotals();
     }
@@ -7162,13 +7218,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const sparesList = [];
             document.querySelectorAll('.spare-row').forEach(tr => {
+                const date = tr.querySelector('.spare-date').value;
                 const name = tr.querySelector('.spare-name').value.trim();
                 const qty = parseFloat(tr.querySelector('.spare-qty').value) || 0;
                 const unit_cost = parseFloat(tr.querySelector('.spare-unit-cost').value) || 0;
                 const total_cost = parseFloat(tr.querySelector('.spare-total-cost').value) || 0;
+                const received = tr.querySelector('.spare-received').value;
+                const date_received = tr.querySelector('.spare-date-received').value;
                 const remarks = tr.querySelector('.spare-remarks').value.trim();
-                if (name || total_cost > 0) {
-                    sparesList.push({ part_name: name, qty, unit_cost, total_cost, remarks });
+                if (name || total_cost > 0 || remarks) {
+                    sparesList.push({ date, part_name: name, qty, unit_cost, total_cost, received, date_received, remarks });
                 }
             });
 
@@ -7188,7 +7247,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const service_cost = parseFloat(document.getElementById('sdServiceTotal').value) || 0;
             const total_cost = parseFloat(document.getElementById('sdGrandTotal').value) || 0;
             const remarks = document.getElementById('sdRemarksInput').value.trim();
-            const close_breakdown = document.getElementById('sdSignoffCheckbox').checked;
 
             const payload = {
                 breakdown_slip_id: parseInt(bdIdVal) || (bdItem.id ? parseInt(bdItem.id) : null),
@@ -7198,8 +7256,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 spares_cost,
                 service_cost,
                 total_cost,
-                remarks,
-                close_breakdown
+                remarks
             };
 
             const method = currentServiceDetailId ? 'PUT' : 'POST';
@@ -7213,9 +7270,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 if (res.ok) {
+                    const savedItem = await res.json();
+                    currentServiceDetailId = savedItem.id;
                     alert('Service Details saved successfully!');
-                    resetServiceDetailsForm();
-                    await loadOpenBreakdownMachinesDropdown();
                     fetchServiceHistory();
                 } else {
                     alert('Error saving Service Details');

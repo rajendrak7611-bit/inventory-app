@@ -284,10 +284,13 @@
                     <table id="sdSparesTable" style="width: 100%; border-collapse: collapse;">
                         <thead>
                             <tr style="background: #f1f5f9; text-align: left;">
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 130px;">Date</th>
                                 <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1;">Spare Part Name / Spec</th>
-                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 100px;">Qty</th>
-                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 130px;">Unit Cost (₹)</th>
-                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 130px;">Total Cost (₹)</th>
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 80px;">Qty</th>
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 110px;">Unit Cost (₹)</th>
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 110px;">Total Cost (₹)</th>
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 110px;">Received</th>
+                                <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 130px;">Date Received</th>
                                 <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1;">Supplier / Remarks</th>
                                 <th style="padding: 8px; font-size: 0.85rem; border-bottom: 1px solid #cbd5e1; width: 60px;">Action</th>
                             </tr>
@@ -339,12 +342,7 @@
                         <textarea id="sdRemarksInput" rows="2" placeholder="Any final remarks, observations or warranty info..." style="width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-family: inherit;"></textarea>
                     </div>
 
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #cbd5e1; padding-top: 0.75rem;">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; color: #16a34a; cursor: pointer;">
-                            <input type="checkbox" id="sdSignoffCheckbox" style="width: 18px; height: 18px; accent-color: #16a34a;" checked>
-                            Sign-off & Close Breakdown Slip upon saving
-                        </label>
-
+                    <div style="display: flex; justify-content: flex-end; align-items: center; border-top: 1px solid #cbd5e1; padding-top: 0.75rem;">
                         <button type="button" id="saveServiceDetailBtn" class="btn btn-primary" style="padding: 0.6rem 1.5rem; font-size: 1rem;">Save Service Details</button>
                     </div>
                 </div>
@@ -2274,6 +2272,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=186"></script>
+    <script src="/static/app.js?v=187"></script>
 </body>
 </html>
