@@ -11,12 +11,39 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentUser) userObj = JSON.parse(currentUser);
     } catch(e) {}
 
+    function checkAdminAccess() {
+        if (!userObj || userObj.role !== 'admin') {
+            alert('Access Denied: Only Admin users are authorized to delete records.');
+            return false;
+        }
+        return true;
+    }
+    window.checkAdminAccess = checkAdminAccess;
+
     if (!userObj) {
         appContainer.style.display = 'none';
         loginOverlay.style.display = 'flex';
     } else {
         loginOverlay.style.display = 'none';
         appContainer.style.display = '';
+
+        // Restrict Delete Access across all screens to Admin only
+        if (userObj.role !== 'admin') {
+            const deleteStyle = document.createElement('style');
+            deleteStyle.id = 'admin-only-delete-style';
+            deleteStyle.innerHTML = `
+                .delete-btn, .delete-part-btn, .delete-machine-btn, .delete-operator-btn, .delete-dept-btn,
+                .delete-shift-btn, .delete-vendor-btn, .delete-setter-btn, .delete-supplier-btn, .delete-rm-btn,
+                .delete-ht-btn, .delete-insert-btn, .delete-drill-btn, .delete-receipt-btn, .delete-issue-btn,
+                .delete-prodlog-btn, .delete-debur-btn, .delete-inspection-btn, .delete-bdslip-btn, .delete-user-btn,
+                .delete-insp-log-btn, .delete-service-btn,
+                #deleteAllPartMasterBtn, #deleteAllOperatorsBtn, #bulkDeleteLogsBtn, #deleteAllSchedulesBtn,
+                button[class*="delete"], button[id*="delete"], button[onclick*="delete"] {
+                    display: none !important;
+                }
+            `;
+            document.head.appendChild(deleteStyle);
+        }
         
         // Access Control Logic
         const allTabs = document.querySelectorAll('[data-screen]');
@@ -863,6 +890,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     window.deleteProduct = async (id) => {
+        if (!checkAdminAccess()) return;
         if (confirm('Delete this tool?')) {
             await fetch(`/api/products/${id}`, { method: 'DELETE' });
             fetchProducts();
@@ -964,6 +992,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     window.deletePartMaster = async (id) => {
+        if (!checkAdminAccess()) return;
         if (confirm('Delete this part master?')) {
             await fetch(`/api/partmaster/${id}`, { method: 'DELETE' });
             fetchPartMasters();
@@ -1126,6 +1155,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     window.deleteMachine = async (id) => {
+        if (!checkAdminAccess()) return;
         if (confirm('Delete this machine?')) {
             await fetch(`/api/machines/${id}`, { method: 'DELETE' });
             fetchMachines();
@@ -1185,10 +1215,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     window.deleteOperator = async (id) => {
+        if (!checkAdminAccess()) return;
         if (confirm('Delete this operator?')) {
             await fetch(`/api/operators/${id}`, { method: 'DELETE' });
-            deburOperatorsLoaded = false;
-            inspOperatorsLoaded = false;
             fetchOperators();
         }
     };
@@ -1288,6 +1317,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.deleteSetter = async (id) => {
+        if (!checkAdminAccess()) return;
         if (confirm('Delete this setter?')) {
             await fetch(`/api/setters/${id}`, { method: 'DELETE' });
             fetchSetters();
@@ -3580,6 +3610,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     window.deleteRmLog = async (id, type) => {
+        if (!checkAdminAccess()) return;
         if (confirm('Are you sure you want to delete this record?')) {
             try {
                 const res = await fetch(`/api/rawmateriallogs/${id}`, { method: 'DELETE' });
@@ -3719,6 +3750,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     window.deleteRawMaterial = async (id) => {
+        if (!checkAdminAccess()) return;
         if (confirm('Are you sure you want to delete this raw material?')) {
             try {
                 const res = await fetch(`/api/rawmaterials/${id}`, { method: 'DELETE' });
@@ -3996,6 +4028,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     window.deleteUser = async (id) => {
+        if (!checkAdminAccess()) return;
         if (confirm('Delete this user?')) {
             try {
                 const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
