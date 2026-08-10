@@ -5530,6 +5530,48 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { console.error('Error fetching insert specs for dropdown:', e); }
     }
 
+    async function generateNextBatchNo(dateStr) {
+        if (!dateStr) {
+            dateStr = new Date().toISOString().split('T')[0];
+        }
+        const parts = dateStr.split('-');
+        let month = parseInt(parts[1], 10);
+        let day = parseInt(parts[2], 10);
+        if (isNaN(month) || isNaN(day)) {
+            const d = new Date();
+            month = d.getMonth() + 1;
+            day = d.getDate();
+        }
+        const monthLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'];
+        const monthLetter = monthLetters[(month - 1) % 12] || 'a';
+        const prefix = `${monthLetter}${day}`;
+
+        try {
+            const res = await fetch('/api/insert_receipts');
+            const data = await res.json();
+            let maxSerial = 0;
+
+            if (Array.isArray(data)) {
+                data.forEach(item => {
+                    if (item.batch_no) {
+                        const b = item.batch_no.trim().toLowerCase();
+                        if (b.startsWith(prefix.toLowerCase())) {
+                            const rest = b.substring(prefix.length);
+                            const num = parseInt(rest, 10);
+                            if (!isNaN(num) && num > maxSerial) {
+                                maxSerial = num;
+                            }
+                        }
+                    }
+                });
+            }
+            return `${prefix}${maxSerial + 1}`;
+        } catch (err) {
+            console.error('Error generating batch no:', err);
+            return `${prefix}1`;
+        }
+    }
+
     async function openInsertReceiptModal(item = null) {
         if (!insertReceiptModal) return;
         await populateInsertSpecDropdown(item ? item.insert_spec : '');
@@ -5545,11 +5587,22 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('insertReceiptModalTitle').textContent = 'Add Insert Receipt';
             insertReceiptForm.reset();
             document.getElementById('insertReceiptId').value = '';
-            document.getElementById('receiptDateInput').valueAsDate = new Date();
+            const todayStr = new Date().toISOString().split('T')[0];
+            document.getElementById('receiptDateInput').value = todayStr;
+            const autoBatch = await generateNextBatchNo(todayStr);
+            document.getElementById('receiptBatchNoInput').value = autoBatch;
         }
         makeSearchableSelect('receiptInsertSpecSelect');
         insertReceiptModal.classList.add('show');
     }
+
+    document.getElementById('receiptDateInput')?.addEventListener('change', async (e) => {
+        const isEdit = !!document.getElementById('insertReceiptId').value;
+        if (!isEdit && e.target.value) {
+            const nextBatch = await generateNextBatchNo(e.target.value);
+            document.getElementById('receiptBatchNoInput').value = nextBatch;
+        }
+    });
 
     if (addInsertReceiptBtn) addInsertReceiptBtn.addEventListener('click', () => openInsertReceiptModal());
     if (cancelInsertReceiptBtn) cancelInsertReceiptBtn.addEventListener('click', () => insertReceiptModal.classList.remove('show'));
