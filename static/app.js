@@ -1649,8 +1649,15 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadSchedulePartNos() {
         const res = await fetch('/api/partmaster');
         allPartMasters = await res.json();
+        
+        // Restore saved schedule department from localStorage
+        const savedDept = localStorage.getItem('saved_schedule_dept');
+        if (savedDept && scheduleDept) {
+            scheduleDept.value = savedDept;
+        }
+        
         // Force trigger change to populate datalist if dept is already selected
-        scheduleDept.dispatchEvent(new Event('change'));
+        if (scheduleDept) scheduleDept.dispatchEvent(new Event('change'));
     }
 
     let schedulePartNoSelect = null;
@@ -1666,6 +1673,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     scheduleDept.addEventListener('change', (e) => {
         const selectedDept = e.target.value;
+        if (selectedDept) {
+            localStorage.setItem('saved_schedule_dept', selectedDept);
+        } else {
+            localStorage.removeItem('saved_schedule_dept');
+        }
         
         if (schedulePartNoSelect) {
             schedulePartNoSelect.clearOptions();
@@ -1736,11 +1748,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (response.ok) {
                     alert(editingScheduleId ? 'Schedule updated successfully!' : 'Schedule created successfully!');
                     const savedDate = document.getElementById('scheduleTargetDate').value;
+                    const savedDept = scheduleDept.value || localStorage.getItem('saved_schedule_dept') || '';
+
                     scheduleCreateForm.reset();
+
                     if (savedDate) document.getElementById('scheduleTargetDate').value = savedDate;
+                    if (savedDept) {
+                        scheduleDept.value = savedDept;
+                        localStorage.setItem('saved_schedule_dept', savedDept);
+                    }
                     editingScheduleId = null;
                     document.querySelector('#scheduleCreateForm button').textContent = 'Create Schedule';
-                    scheduleDept.value = ''; // Reset dept field
                     if (schedulePartNoSelect) schedulePartNoSelect.clear();
                     scheduleDept.dispatchEvent(new Event('change'));
                     fetchSchedulesForList();
@@ -1861,7 +1879,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let statusAllParts = [];
     let spiderStatusDataMap = {};
     
-    document.getElementById('statusDeptSelect').addEventListener('change', fetchScheduleStatus);
+    document.getElementById('statusDeptSelect').addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val) localStorage.setItem('saved_status_dept', val);
+        else localStorage.removeItem('saved_status_dept');
+        fetchScheduleStatus();
+    });
     document.getElementById('exportStatusBtn').addEventListener('click', () => {
         const table = document.getElementById('statusTable');
         if (!table) return;
@@ -1877,6 +1900,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             const deptSelect = document.getElementById('statusDeptSelect');
+            const savedDept = localStorage.getItem('saved_status_dept');
+            if (savedDept && deptSelect) {
+                deptSelect.value = savedDept;
+            }
             if (deptSelect.value) {
                 fetchScheduleStatus();
             }
