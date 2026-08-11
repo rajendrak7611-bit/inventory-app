@@ -1363,6 +1363,17 @@
                             <th>Stock</th>
                             <th class="action-col">Actions</th>
                         </tr>
+                        <tr id="rmStatusFilterRow" style="background: #f1f5f9;">
+                            <th style="position: sticky; top: 30px; z-index: 19; padding: 4px; border-bottom: 2px solid #cbd5e1;">
+                                <input type="text" id="rmForgePnFilter" placeholder="Filter Forge PN..." style="width: 100%; padding: 4px 8px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: var(--text-main);">
+                            </th>
+                            <th style="position: sticky; top: 30px; z-index: 19; padding: 4px; border-bottom: 2px solid #cbd5e1;"></th>
+                            <th style="position: sticky; top: 30px; z-index: 19; padding: 4px; border-bottom: 2px solid #cbd5e1;"></th>
+                            <th style="position: sticky; top: 30px; z-index: 19; padding: 4px; border-bottom: 2px solid #cbd5e1;"></th>
+                            <th style="position: sticky; top: 30px; z-index: 19; padding: 4px; border-bottom: 2px solid #cbd5e1; text-align: center;">
+                                <button type="button" id="clearRmForgeFilterBtn" class="btn btn-text" style="font-size: 0.75rem; color: #ef4444; padding: 2px 6px; font-weight: 600; cursor: pointer; display: none;">Clear</button>
+                            </th>
+                        </tr>
                     </thead>
                     <tbody id="rawMaterialsBody"></tbody>
                 </table>
@@ -2330,6 +2341,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=207"></script>
+    <script src="/static/app.js?v=208"></script>
 </body>
 </html>

@@ -3710,28 +3710,60 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch('/api/rawmaterials');
             allRawMaterials = await res.json();
-            const tbody = document.getElementById('rawMaterialsBody');
-            if (tbody) {
-                tbody.innerHTML = '';
-                allRawMaterials.forEach(rm => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${rm.forge_pn}</td>
-                        <td>${rm.receipt}</td>
-                        <td>${rm.despatch}</td>
-                        <td>${rm.stock}</td>
-                        <td class="action-col">
-                            <button class="btn btn-primary btn-sm" onclick="editRawMaterial(${rm.id})">Edit</button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteRawMaterial(${rm.id})">Delete</button>
-                        </td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-            }
+            renderRawMaterials();
         } catch (e) {
             console.error('Error fetching raw materials', e);
         }
     }
+
+    function renderRawMaterials() {
+        const tbody = document.getElementById('rawMaterialsBody');
+        if (!tbody) return;
+
+        const filterVal = (document.getElementById('rmForgePnFilter')?.value || '').trim().toUpperCase();
+        const clearBtn = document.getElementById('clearRmForgeFilterBtn');
+        if (clearBtn) {
+            clearBtn.style.display = filterVal ? 'inline-block' : 'none';
+        }
+
+        const filtered = (allRawMaterials || []).filter(rm => {
+            if (!filterVal) return true;
+            const fpn = (rm.forge_pn || '').trim().toUpperCase();
+            const normFilter = filterVal.replace(/[\s\-_#]/g, '');
+            const normFpn = fpn.replace(/[\s\-_#]/g, '');
+            return fpn.includes(filterVal) || normFpn.includes(normFilter);
+        });
+
+        tbody.innerHTML = '';
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 1rem;">No matching raw materials found</td></tr>';
+            return;
+        }
+
+        filtered.forEach(rm => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${rm.forge_pn}</td>
+                <td>${rm.receipt}</td>
+                <td>${rm.despatch}</td>
+                <td>${rm.stock}</td>
+                <td class="action-col">
+                    <button class="btn btn-primary btn-sm" onclick="editRawMaterial(${rm.id})">Edit</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteRawMaterial(${rm.id})">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    document.getElementById('rmForgePnFilter')?.addEventListener('input', renderRawMaterials);
+    document.getElementById('clearRmForgeFilterBtn')?.addEventListener('click', () => {
+        const filterInput = document.getElementById('rmForgePnFilter');
+        if (filterInput) {
+            filterInput.value = '';
+            renderRawMaterials();
+        }
+    });
 
     const rawMaterialModal = document.getElementById('rawMaterialModal');
     const rawMaterialForm = document.getElementById('rawMaterialForm');
