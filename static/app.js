@@ -2826,7 +2826,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tbody.innerHTML = '';
             
             if (inspLogs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted)">No inspection logs found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted)">No inspection logs found.</td></tr>';
                 currentInspExportData = [];
                 return;
             }
@@ -2837,6 +2837,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const date = log.date;
                 const op = log.operator || '';
                 const pno = log.partno;
+                const partObj = (statusAllParts || []).find(p => (p.partno || '').trim().toUpperCase() === (pno || '').trim().toUpperCase());
+                const dept = log.department || log.dept || (partObj ? partObj.department : '') || '';
                 
                 const rfdLogs = allLogs.filter(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'rfd' && Math.abs((l.id || 0) - (log.id || 0)) <= 15);
                 const rejLogs = allLogs.filter(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'rejection' && Math.abs((l.id || 0) - (log.id || 0)) <= 15);
@@ -2851,6 +2853,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 currentInspExportData.push({
                     "Date": date,
+                    "Dept": dept,
                     "Operator": op,
                     "Part No": pno,
                     "Hours": log.runtime || 0,
@@ -2870,6 +2873,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${log.date}</td>
+                    <td><strong>${dept}</strong></td>
                     <td>${log.operator || ''}</td>
                     <td>${log.partno}</td>
                     <td>${log.runtime || ''}</td>
@@ -2926,6 +2930,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const date = log.date;
                 const op = log.operator || '';
                 const pno = log.partno;
+                const partObj = (statusAllParts || []).find(p => (p.partno || '').trim().toUpperCase() === (pno || '').trim().toUpperCase());
+                const dept = log.department || log.dept || (partObj ? partObj.department : '') || '';
 
                 const rfdLogs = allLogs.filter(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'rfd' && Math.abs((l.id || 0) - (log.id || 0)) <= 15);
                 const rejLogs = allLogs.filter(l => l.partno === pno && l.date === date && l.operator === op && (l.opn_no || '').toLowerCase() === 'rejection' && Math.abs((l.id || 0) - (log.id || 0)) <= 15);
@@ -2938,6 +2944,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (let i = 0; i < maxRows; i++) {
                     exportRows.push({
                         "Date": i === 0 ? date : '',
+                        "Dept": i === 0 ? dept : '',
                         "Operator": i === 0 ? op : '',
                         "Part No": i === 0 ? pno : '',
                         "Hours": i === 0 ? (log.runtime || 0) : '',
