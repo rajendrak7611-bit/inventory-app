@@ -2039,31 +2039,33 @@ document.addEventListener('DOMContentLoaded', () => {
     function findRmStock(targetFpn, targetPartno, allRms) {
         if (!allRms || allRms.length === 0) return 0;
         
-        const norm = (s) => (s || '').toString().trim().toUpperCase().replace(/\s+/g, '');
+        const norm = (s) => (s || '').toString().trim().toUpperCase().replace(/[\s\-_#]/g, '');
         const normTargetFpn = norm(targetFpn);
         const normTargetPartno = norm(targetPartno);
 
         let match = null;
 
-        // 1. Match by targetFpn exact (ignoring spaces)
+        // 1. Exact match on normalized forge_pn (e.g. "A1106A" === "A1106A", "A106" === "A106")
         if (normTargetFpn) {
             match = allRms.find(r => norm(r.forge_pn) === normTargetFpn);
         }
 
-        // 2. Fuzzy match by alphanumeric characters only (e.g. A1#06 <-> A1#106 <-> A1#106A)
-        if (!match && normTargetFpn) {
-            const cleanTarget = normTargetFpn.replace(/[^A-Z0-9]/g, '');
-            if (cleanTarget) {
-                match = allRms.find(r => {
-                    const cleanR = norm(r.forge_pn).replace(/[^A-Z0-9]/g, '');
-                    return cleanTarget === cleanR || cleanR.includes(cleanTarget) || cleanTarget.includes(cleanR);
-                });
-            }
-        }
-
-        // 3. Fallback match by partno
+        // 2. Exact match on normalized partno
         if (!match && normTargetPartno) {
             match = allRms.find(r => norm(r.forge_pn) === normTargetPartno);
+        }
+
+        // 3. Match where one is a variant (e.g. A1#106A vs A1#06 vs A1#106)
+        if (!match && normTargetFpn) {
+            const cleanTarget = normTargetFpn.replace(/^A10*/, 'A1');
+            match = allRms.find(r => {
+                const cleanR = norm(r.forge_pn).replace(/^A10*/, 'A1');
+                return cleanR && cleanTarget && (
+                    cleanR === cleanTarget || 
+                    cleanR.startsWith(cleanTarget) || 
+                    cleanTarget.startsWith(cleanR)
+                );
+            });
         }
 
         if (match) {
