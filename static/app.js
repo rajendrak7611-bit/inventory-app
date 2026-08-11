@@ -2157,6 +2157,47 @@ document.addEventListener('DOMContentLoaded', () => {
                 tbody.appendChild(trHeader2);
             }
 
+            // Precalculate merged Group 2 metrics for QD & AMW if present
+            let group2MergedFAvail = 0;
+            let group2MergedWip = 0;
+            let group2MergedRmStatus = 0;
+            let isGroup2Merged = false;
+
+            if (group.name === 'Group 2' && group.parts.includes('QD') && group.parts.includes('AMW')) {
+                isGroup2Merged = true;
+                
+                // Helper to get WIP for a part
+                const getWip = (pKey) => {
+                    const sData = spiderStatusDataMap[pKey] || { opnBalances: [0,0,0,0,0,0,0,0,0,0], rfdBal: 0, forInsBal: 0 };
+                    const opn = sData.opnBalances || [0,0,0,0,0,0,0,0,0,0];
+                    return (opn[0]||0) + (opn[1]||0) + (opn[2]||0) + (opn[3]||0) + (sData.forInsBal||0) + (sData.rfdBal||0);
+                };
+
+                const qdWip = getWip('QD');
+                const amwWip = getWip('AMW');
+                group2MergedWip = qdWip + amwWip;
+
+                // Lookup common forge_pn for QD / AMW
+                const qdPartObj = statusAllParts.find(p => (p.partno || '').trim().toUpperCase() === 'QD');
+                const amwPartObj = statusAllParts.find(p => (p.partno || '').trim().toUpperCase() === 'AMW');
+                const sharedFpn = (qdPartObj ? qdPartObj.forge_pn : '') || (amwPartObj ? amwPartObj.forge_pn : '');
+                
+                let sharedRmObj = null;
+                if (sharedFpn) {
+                    sharedRmObj = (allRms || []).find(r => (r.forge_pn || '').trim().toUpperCase() === sharedFpn.trim().toUpperCase());
+                }
+                if (!sharedRmObj) {
+                    sharedRmObj = (allRms || []).find(r => ['QD', 'AMW'].includes((r.forge_pn || '').trim().toUpperCase()));
+                }
+
+                if (sharedRmObj) {
+                    group2MergedFAvail = (sharedRmObj.stock !== undefined && sharedRmObj.stock !== null && sharedRmObj.stock !== '') ? parseInt(sharedRmObj.stock) : ((parseInt(sharedRmObj.receipt) || 0) - (parseInt(sharedRmObj.despatch) || 0));
+                    if (isNaN(group2MergedFAvail)) group2MergedFAvail = 0;
+                }
+
+                group2MergedRmStatus = group2MergedFAvail - group2MergedWip;
+            }
+
             for (const pName of group.parts) {
                 const partKey = pName.trim().toUpperCase();
                 const partObj = statusAllParts.find(p => (p.partno || '').trim().toUpperCase() === partKey);
@@ -2165,15 +2206,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const fpn = partObj ? (partObj.forge_pn || '').trim().toUpperCase() : '';
                 
-                // Match RM stock by partno or by forge_pn
-                const rmObj = (allRms || []).find(r => {
-                    const rKey = (r.forge_pn || '').trim().toUpperCase();
-                    return rKey === partKey || (fpn && rKey === fpn);
-                });
+                // Match RM stock first by forge_pn, then fallback to partKey
+                let rmObj = null;
+                if (fpn) {
+                    rmObj = (allRms || []).find(r => (r.forge_pn || '').trim().toUpperCase() === fpn);
+                }
+                if (!rmObj) {
+                    rmObj = (allRms || []).find(r => (r.forge_pn || '').trim().toUpperCase() === partKey);
+                }
                 
                 let fAvail = 0;
                 if (rmObj) {
-                    fAvail = (rmObj.stock !== undefined && rmObj.stock !== null) ? parseInt(rmObj.stock) : ((parseInt(rmObj.receipt) || 0) - (parseInt(rmObj.despatch) || 0));
+                    fAvail = (rmObj.stock !== undefined && rmObj.stock !== null && rmObj.stock !== '') ? parseInt(rmObj.stock) : ((parseInt(rmObj.receipt) || 0) - (parseInt(rmObj.despatch) || 0));
                     if (isNaN(fAvail)) fAvail = 0;
                 }
 
@@ -2188,7 +2232,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const trRow = document.createElement('tr');
                 let rowContent = `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:bold;">${pName}</td>`;
                 rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${sData.schedQty || 0}</td>`;
-                rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${fAvail || 0}</td>`;
+
+                if (isGroup2Merged && (partKey === 'QD' || partKey === 'AMW')) {
+                    if (partKey === 'QD') {
+                        rowContent += `<td rowspan="2" style="border:1px solid #cbd5e1; padding:6px; vertical-align:middle; text-align:center; font-weight:bold;">${group2MergedFAvail}</td>`;
+                        rowContent += `<td rowspan="2" style="border:1px solid #cbd5e1; padding:6px; vertical-align:middle; text-align:center; font-weight:bold;">${group2MergedWip}</td>`;
+                        rowContent += `<td rowspan="2" style="border:1px solid #cbd5e1; padding:6px; vertical-align:middle; text-align:center; font-weight:bold; color: ${group2MergedRmStatus < 0 ? '#ef4444' : '#16a34a'};">${group2MergedRmStatus}</td>`;
+                    }
+                } else {
+                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${fAvail || 0}</td>`;
+                }
 
                 if (group.name === 'Group 1') {
                     const facCen = opn[1] || 0;
@@ -2219,8 +2272,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const wip = opn0 + opn1 + opn2 + opn3 + forInsBal + rfdVal;
                     const rmStatus = fAvail - wip;
 
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:600;">${wip}</td>`;
-                    rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:600; color: ${rmStatus < 0 ? '#ef4444' : '#16a34a'};">${rmStatus}</td>`;
+                    if (!isGroup2Merged || (partKey !== 'QD' && partKey !== 'AMW')) {
+                        rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:600;">${wip}</td>`;
+                        rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:600; color: ${rmStatus < 0 ? '#ef4444' : '#16a34a'};">${rmStatus}</td>`;
+                    }
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn0}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn1}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${opn2}</td>`;
