@@ -2036,6 +2036,44 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function findRmStock(targetFpn, targetPartno, allRms) {
+        if (!allRms || allRms.length === 0) return 0;
+        
+        const norm = (s) => (s || '').toString().trim().toUpperCase().replace(/\s+/g, '');
+        const normTargetFpn = norm(targetFpn);
+        const normTargetPartno = norm(targetPartno);
+
+        let match = null;
+
+        // 1. Match by targetFpn exact (ignoring spaces)
+        if (normTargetFpn) {
+            match = allRms.find(r => norm(r.forge_pn) === normTargetFpn);
+        }
+
+        // 2. Fuzzy match by alphanumeric characters only (e.g. A1#06 <-> A1#106 <-> A1#106A)
+        if (!match && normTargetFpn) {
+            const cleanTarget = normTargetFpn.replace(/[^A-Z0-9]/g, '');
+            if (cleanTarget) {
+                match = allRms.find(r => {
+                    const cleanR = norm(r.forge_pn).replace(/[^A-Z0-9]/g, '');
+                    return cleanTarget === cleanR || cleanR.includes(cleanTarget) || cleanTarget.includes(cleanR);
+                });
+            }
+        }
+
+        // 3. Fallback match by partno
+        if (!match && normTargetPartno) {
+            match = allRms.find(r => norm(r.forge_pn) === normTargetPartno);
+        }
+
+        if (match) {
+            let stk = (match.stock !== undefined && match.stock !== null && match.stock !== '') ? parseInt(match.stock) : ((parseInt(match.receipt) || 0) - (parseInt(match.despatch) || 0));
+            return isNaN(stk) ? 0 : stk;
+        }
+
+        return 0;
+    }
+
     async function renderSpiderReport(allSchedules, allLogs, allRmLogs, allHtLogs, allHtReceiptLogs, allRawMaterials = null) {
         const spiderContainer = document.getElementById('spiderReportContainer');
         const tbody = document.getElementById('spiderReportBody');
@@ -2180,20 +2218,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Lookup common forge_pn for QD / AMW
                 const qdPartObj = statusAllParts.find(p => (p.partno || '').trim().toUpperCase() === 'QD');
                 const amwPartObj = statusAllParts.find(p => (p.partno || '').trim().toUpperCase() === 'AMW');
-                const sharedFpn = (qdPartObj ? qdPartObj.forge_pn : '') || (amwPartObj ? amwPartObj.forge_pn : '');
-                
-                let sharedRmObj = null;
-                if (sharedFpn) {
-                    sharedRmObj = (allRms || []).find(r => (r.forge_pn || '').trim().toUpperCase() === sharedFpn.trim().toUpperCase());
-                }
-                if (!sharedRmObj) {
-                    sharedRmObj = (allRms || []).find(r => ['QD', 'AMW'].includes((r.forge_pn || '').trim().toUpperCase()));
-                }
+                const qdFpn = qdPartObj ? qdPartObj.forge_pn : '';
+                const amwFpn = amwPartObj ? amwPartObj.forge_pn : '';
+                const sharedFpn = qdFpn || amwFpn || 'A1#06';
 
-                if (sharedRmObj) {
-                    group2MergedFAvail = (sharedRmObj.stock !== undefined && sharedRmObj.stock !== null && sharedRmObj.stock !== '') ? parseInt(sharedRmObj.stock) : ((parseInt(sharedRmObj.receipt) || 0) - (parseInt(sharedRmObj.despatch) || 0));
-                    if (isNaN(group2MergedFAvail)) group2MergedFAvail = 0;
-                }
+                group2MergedFAvail = findRmStock(sharedFpn, 'QD', allRms) || findRmStock(sharedFpn, 'AMW', allRms) || findRmStock('A1#06', 'QD', allRms) || findRmStock('A1#106A', 'QD', allRms);
 
                 group2MergedRmStatus = group2MergedFAvail - group2MergedWip;
             }
@@ -2205,21 +2234,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const opn = sData.opnBalances || [0,0,0,0,0,0,0,0,0,0];
 
                 const fpn = partObj ? (partObj.forge_pn || '').trim().toUpperCase() : '';
-                
-                // Match RM stock first by forge_pn, then fallback to partKey
-                let rmObj = null;
-                if (fpn) {
-                    rmObj = (allRms || []).find(r => (r.forge_pn || '').trim().toUpperCase() === fpn);
-                }
-                if (!rmObj) {
-                    rmObj = (allRms || []).find(r => (r.forge_pn || '').trim().toUpperCase() === partKey);
-                }
-                
-                let fAvail = 0;
-                if (rmObj) {
-                    fAvail = (rmObj.stock !== undefined && rmObj.stock !== null && rmObj.stock !== '') ? parseInt(rmObj.stock) : ((parseInt(rmObj.receipt) || 0) - (parseInt(rmObj.despatch) || 0));
-                    if (isNaN(fAvail)) fAvail = 0;
-                }
+                let fAvail = findRmStock(fpn, partKey, allRms);
 
                 const sentAnusha = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === partKey && (l.vendor || '').toLowerCase().includes('anusha')).reduce((sum, l) => sum + (l.qty || 0), 0);
                 const recAnusha = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === partKey && (l.vendor || '').toLowerCase().includes('anusha')).reduce((sum, l) => sum + (l.qty || 0), 0);
