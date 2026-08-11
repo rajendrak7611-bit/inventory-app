@@ -239,29 +239,43 @@ header {
     background: var(--card-bg);
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.02);
-    overflow-x: auto;
+    overflow: auto;
+    max-height: calc(100vh - 115px);
     padding: 0.5rem;
     font-size: 0.85rem;
+    position: relative;
 }
 
 table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
 }
 
 th, td {
-    padding: 0.15rem 0.3rem;
+    padding: 0.3rem 0.5rem;
     text-align: left;
 }
 
+thead th,
 th {
-    background-color: rgba(0, 0, 0, 0.2);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background-color: #cbd5e1;
     font-weight: 600;
-    color: var(--text-muted);
+    color: #0f172a;
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 2px solid var(--border-color);
+}
+
+/* Multi-row header support */
+thead tr:nth-child(2) th {
+    top: 30px;
+    z-index: 19;
+    background-color: #e2e8f0;
 }
 
 td {
