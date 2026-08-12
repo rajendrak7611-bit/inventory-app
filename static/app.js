@@ -1753,8 +1753,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (scheduleCreateForm) {
         scheduleCreateForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const partVal = schedulePartNoSelect ? schedulePartNoSelect.getValue() : (document.getElementById('schedulePartNo')?.value || '');
+            if (!partVal) {
+                alert('Please select or type a Part No.');
+                return;
+            }
             const data = {
-                partno: schedulePartNo.value,
+                partno: partVal,
                 department: scheduleDept.value,
                 target_date: document.getElementById('scheduleTargetDate').value,
                 qty: parseInt(document.getElementById('scheduleQty').value)
@@ -1780,7 +1785,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         localStorage.setItem('saved_schedule_dept', savedDept);
                     }
                     editingScheduleId = null;
-                    document.querySelector('#scheduleCreateForm button').textContent = 'Create Schedule';
+                    const submitBtn = document.querySelector('#scheduleCreateForm button[type="submit"]');
+                    if (submitBtn) submitBtn.textContent = 'Create Schedule';
                     if (schedulePartNoSelect) schedulePartNoSelect.clear();
                     scheduleDept.dispatchEvent(new Event('change'));
                     fetchSchedulesForList();
@@ -1802,17 +1808,31 @@ document.addEventListener('DOMContentLoaded', () => {
             
             editingScheduleId = id;
             
-            document.getElementById('scheduleDept').value = s.department;
-            scheduleDept.dispatchEvent(new Event('change'));
+            const selectedDept = s.department || '';
+            document.getElementById('scheduleDept').value = selectedDept;
             
-            setTimeout(() => {
-                if (schedulePartNoSelect) schedulePartNoSelect.setValue(s.partno);
-            }, 100);
+            if (schedulePartNoSelect) {
+                schedulePartNoSelect.clearOptions();
+                schedulePartNoSelect.addOption({value: "", text: "Type or select a Part No"});
+                const selectedLower = selectedDept.trim().toLowerCase();
+                const filteredParts = (allPartMasters || []).filter(p => (p.department || '').trim().toLowerCase() === selectedLower);
+                filteredParts.forEach(p => {
+                    schedulePartNoSelect.addOption({value: p.partno, text: p.partno});
+                });
+                if (s.partno && !filteredParts.some(p => p.partno === s.partno)) {
+                    schedulePartNoSelect.addOption({value: s.partno, text: s.partno});
+                }
+                schedulePartNoSelect.refreshOptions(false);
+                schedulePartNoSelect.setValue(s.partno || '');
+            } else {
+                document.getElementById('schedulePartNo').value = s.partno || '';
+            }
             
-            document.getElementById('scheduleTargetDate').value = s.target_date;
-            document.getElementById('scheduleQty').value = s.qty;
+            document.getElementById('scheduleTargetDate').value = s.target_date || '';
+            document.getElementById('scheduleQty').value = s.qty || 0;
             
-            document.querySelector('#scheduleCreateForm button').textContent = 'Update Schedule';
+            const submitBtn = document.querySelector('#scheduleCreateForm button[type="submit"]');
+            if (submitBtn) submitBtn.textContent = 'Update Schedule';
         } catch (e) {
             console.error(e);
         }
