@@ -2368,6 +2368,223 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- SPIDER REPORT SHARING & RECIPIENTS LOGIC ---
+    const DEFAULT_SPIDER_CONTACTS = [
+        { id: 1, dept: 'ADMIN', name: 'Admin Office', phone: '', email: 'admin@grs.com' },
+        { id: 2, dept: 'QC', name: 'QC Department', phone: '', email: 'qc@grs.com' },
+        { id: 3, dept: 'SPIDER', name: 'Spider Supervisor', phone: '', email: 'spider@grs.com' },
+        { id: 4, dept: 'MAINT', name: 'Maintenance Lead', phone: '', email: 'maint@grs.com' },
+        { id: 5, dept: 'WIPRO', name: 'Wipro Coordinator', phone: '', email: 'wipro@grs.com' }
+    ];
+
+    function getSpiderContacts() {
+        try {
+            const saved = localStorage.getItem('spider_report_contacts');
+            if (saved) return JSON.parse(saved);
+        } catch (e) { console.error(e); }
+        return DEFAULT_SPIDER_CONTACTS;
+    }
+
+    function saveSpiderContacts(contacts) {
+        try {
+            localStorage.setItem('spider_report_contacts', JSON.stringify(contacts));
+        } catch (e) { console.error(e); }
+    }
+
+    function renderSpiderContactsTable() {
+        const tbody = document.getElementById('reportContactsBody');
+        if (!tbody) return;
+        const contacts = getSpiderContacts();
+        tbody.innerHTML = '';
+        if (contacts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 1rem; color: var(--text-muted);">No contacts saved. Add a recipient below.</td></tr>';
+            return;
+        }
+        contacts.forEach(c => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--border-color)';
+            tr.innerHTML = `
+                <td style="text-align: center; padding: 0.5rem;"><input type="checkbox" class="contact-select-cb" data-id="${c.id}" checked></td>
+                <td style="padding: 0.5rem;"><strong>${c.dept || '-'}</strong></td>
+                <td style="padding: 0.5rem;">${c.name || '-'}</td>
+                <td style="padding: 0.5rem; color: #16a34a;">${c.phone || '<span style="color:var(--text-muted)">-</span>'}</td>
+                <td style="padding: 0.5rem; color: #0284c7;">${c.email || '<span style="color:var(--text-muted)">-</span>'}</td>
+                <td style="text-align: center; padding: 0.5rem;">
+                    <button class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: #25D366; border-color: #25D366; margin-right: 4px;" onclick="sendSingleWhatsapp(${c.id})">WhatsApp</button>
+                    <button class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: #0284c7; border-color: #0284c7; margin-right: 4px;" onclick="sendSingleEmail(${c.id})">Email</button>
+                    <button class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: #ef4444; border-color: #ef4444;" onclick="deleteSpiderContact(${c.id})">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function generateSpiderReportSummaryText() {
+        let text = `📊 *GRS ENGINEERING - SPIDER DEPT REPORT*\nDate: ${new Date().toLocaleDateString('en-IN')}\n\n`;
+        text += `*SPIDER REPORT SUMMARY:*\n`;
+        text += `-----------------------------------------\n`;
+        text += `PART NO | SCH QTY | F AVAIL | WIP | RM STATUS\n`;
+        text += `-----------------------------------------\n`;
+
+        const table = document.getElementById('spiderReportTable');
+        if (table) {
+            const rows = table.querySelectorAll('tr');
+            rows.forEach(r => {
+                const cells = Array.from(r.querySelectorAll('td, th')).map(c => c.textContent.trim().replace(/\s+/g, ' '));
+                if (cells.length >= 5 && cells[0] && cells[0] !== 'PART NO' && !cells[0].includes('Grinding') && !cells[0].includes('Boring') && !cells[0].includes('Turning')) {
+                    text += `${cells[0]} | ${cells[1]} | ${cells[2]} | ${cells[3]} | ${cells[4]}\n`;
+                }
+            });
+        }
+        text += `-----------------------------------------\n`;
+        text += `Generated via GRS Inventory Management System.`;
+        return text;
+    }
+
+    function formatWhatsappPhone(phoneStr) {
+        if (!phoneStr) return '';
+        let cleaned = phoneStr.replace(/\D/g, '');
+        if (cleaned.length === 10) {
+            cleaned = '91' + cleaned;
+        }
+        return cleaned;
+    }
+
+    window.sendSingleWhatsapp = (contactId) => {
+        const contacts = getSpiderContacts();
+        const contact = contacts.find(c => c.id == contactId);
+        if (!contact || !contact.phone) {
+            alert('No valid phone number for this contact. Please edit or add a phone number.');
+            return;
+        }
+        const phone = formatWhatsappPhone(contact.phone);
+        const reportText = generateSpiderReportSummaryText();
+        const url = `https://wa.me/${phone}?text=${encodeURIComponent(reportText)}`;
+        window.open(url, '_blank');
+    };
+
+    window.sendSingleEmail = (contactId) => {
+        const contacts = getSpiderContacts();
+        const contact = contacts.find(c => c.id == contactId);
+        if (!contact || !contact.email) {
+            alert('No valid email ID for this contact. Please edit or add an email address.');
+            return;
+        }
+        const reportText = generateSpiderReportSummaryText();
+        const url = `mailto:${contact.email}?subject=${encodeURIComponent('SPIDER Department Detailed Report')}&body=${encodeURIComponent(reportText)}`;
+        window.open(url, '_blank');
+    };
+
+    window.deleteSpiderContact = (contactId) => {
+        let contacts = getSpiderContacts();
+        contacts = contacts.filter(c => c.id != contactId);
+        saveSpiderContacts(contacts);
+        renderSpiderContactsTable();
+    };
+
+    const sendSpiderBtn = document.getElementById('sendSpiderReportBtn');
+    const sendReportModal = document.getElementById('sendReportModal');
+    const closeSendReportModalBtn = document.getElementById('closeSendReportModalBtn');
+
+    if (sendSpiderBtn && sendReportModal) {
+        sendSpiderBtn.addEventListener('click', () => {
+            renderSpiderContactsTable();
+            sendReportModal.classList.add('show');
+        });
+    }
+
+    if (closeSendReportModalBtn && sendReportModal) {
+        closeSendReportModalBtn.addEventListener('click', () => {
+            sendReportModal.classList.remove('show');
+        });
+    }
+
+    document.getElementById('selectAllContactsCb')?.addEventListener('change', (e) => {
+        const checked = e.target.checked;
+        document.querySelectorAll('.contact-select-cb').forEach(cb => cb.checked = checked);
+    });
+
+    document.getElementById('addReportContactForm')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const dept = document.getElementById('newContactDept').value.trim();
+        const name = document.getElementById('newContactName').value.trim();
+        const phone = document.getElementById('newContactPhone').value.trim();
+        const email = document.getElementById('newContactEmail').value.trim();
+
+        if (!dept || !name) return;
+
+        const contacts = getSpiderContacts();
+        const newContact = {
+            id: Date.now(),
+            dept,
+            name,
+            phone,
+            email
+        };
+        contacts.push(newContact);
+        saveSpiderContacts(contacts);
+        renderSpiderContactsTable();
+
+        document.getElementById('addReportContactForm').reset();
+    });
+
+    document.getElementById('sendSelectedWhatsappBtn')?.addEventListener('click', () => {
+        const contacts = getSpiderContacts();
+        const selectedCbs = Array.from(document.querySelectorAll('.contact-select-cb:checked'));
+        if (selectedCbs.length === 0) {
+            alert('Please select at least one contact.');
+            return;
+        }
+        const reportText = generateSpiderReportSummaryText();
+        let sentCount = 0;
+        selectedCbs.forEach(cb => {
+            const id = cb.getAttribute('data-id');
+            const contact = contacts.find(c => c.id == id);
+            if (contact && contact.phone) {
+                const phone = formatWhatsappPhone(contact.phone);
+                const url = `https://wa.me/${phone}?text=${encodeURIComponent(reportText)}`;
+                window.open(url, '_blank');
+                sentCount++;
+            }
+        });
+        if (sentCount === 0) {
+            alert('None of the selected contacts have a valid phone number filled in.');
+        }
+    });
+
+    document.getElementById('sendSelectedEmailBtn')?.addEventListener('click', () => {
+        const contacts = getSpiderContacts();
+        const selectedCbs = Array.from(document.querySelectorAll('.contact-select-cb:checked'));
+        if (selectedCbs.length === 0) {
+            alert('Please select at least one contact.');
+            return;
+        }
+        const emails = [];
+        selectedCbs.forEach(cb => {
+            const id = cb.getAttribute('data-id');
+            const contact = contacts.find(c => c.id == id);
+            if (contact && contact.email && contact.email.includes('@')) {
+                emails.push(contact.email);
+            }
+        });
+        if (emails.length === 0) {
+            alert('None of the selected contacts have a valid email ID filled in.');
+            return;
+        }
+        const reportText = generateSpiderReportSummaryText();
+        const url = `mailto:${emails.join(',')}?subject=${encodeURIComponent('SPIDER Department Detailed Report')}&body=${encodeURIComponent(reportText)}`;
+        window.open(url, '_blank');
+    });
+
+    document.getElementById('copySpiderReportSummaryBtn')?.addEventListener('click', () => {
+        const reportText = generateSpiderReportSummaryText();
+        navigator.clipboard.writeText(reportText).then(() => {
+            alert('SPIDER Report summary copied to clipboard!');
+        }).catch(err => {
+            console.error('Failed to copy:', err);
+        });
+    });
+
     // --- DEBUR LOGIC ---
     let deburAllParts = [];
     let deburOperatorsLoaded = false;
