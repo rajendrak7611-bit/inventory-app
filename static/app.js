@@ -1705,16 +1705,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (e) {}
             }
 
+            const filterDeptSel = document.getElementById('scheduleFilterDept');
+            if (filterDeptSel) {
+                const currentFilter = filterDeptSel.value;
+                const uniqueDepts = Array.from(new Set(schedules.map(s => (s.department || '').trim()).filter(Boolean))).sort();
+                filterDeptSel.innerHTML = '<option value="">All Depts</option>' + uniqueDepts.map(d => `<option value="${d}">${d}</option>`).join('');
+                if (uniqueDepts.includes(currentFilter)) {
+                    filterDeptSel.value = currentFilter;
+                }
+            }
+
+            const selectedDept = filterDeptSel ? (filterDeptSel.value || '').trim().toLowerCase() : '';
+
+            let filteredSchedules = schedules;
+            if (selectedDept) {
+                filteredSchedules = schedules.filter(s => (s.department || '').trim().toLowerCase() === selectedDept);
+            }
+
             const tbody = document.getElementById('scheduleListBody');
             if (tbody) {
                 tbody.innerHTML = '';
-                if (schedules.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">No schedules found.</td></tr>';
+                if (filteredSchedules.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:1rem;">No schedules found.</td></tr>';
                     return;
                 }
                 // Sort by newest first assuming higher ID means newer
-                schedules.sort((a, b) => b.id - a.id);
-                schedules.forEach((s, idx) => {
+                filteredSchedules.sort((a, b) => b.id - a.id);
+                filteredSchedules.forEach((s, idx) => {
                     const partKey = (s.partno || '').trim().toUpperCase();
                     const partObj = (allPartMasters || []).find(p => (p.partno || '').trim().toUpperCase() === partKey);
                     
@@ -1747,6 +1764,10 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error fetching schedules:', e);
         }
     }
+
+    document.getElementById('scheduleFilterDept')?.addEventListener('change', () => {
+        fetchSchedulesForList();
+    });
 
     let editingScheduleId = null;
 

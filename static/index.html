@@ -588,7 +588,15 @@
                     </div>
                     
                     <div style="flex: 1.5; min-width: 550px; border-left: 1px solid var(--border-color); padding-left: 2rem;">
-                        <h2 style="margin-bottom: 20px;">Existing Schedules</h2>
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                            <h2 style="margin: 0;">Existing Schedules</h2>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label for="scheduleFilterDept" style="font-weight: 600; font-size: 0.85rem; margin: 0; color: var(--text-main);">Dept Filter:</label>
+                                <select id="scheduleFilterDept" style="padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; font-weight: 500; color: var(--text-main); background-color: var(--card-bg);">
+                                    <option value="">All Depts</option>
+                                </select>
+                            </div>
+                        </div>
                         <div style="max-height: 450px; overflow-y: auto; padding-right: 10px;">
                             <table id="scheduleListTable" style="width: 100%;">
                                 <thead>
@@ -2443,6 +2451,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=220"></script>
+    <script src="/static/app.js?v=221"></script>
 </body>
 </html>
