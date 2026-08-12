@@ -6724,8 +6724,12 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        const opSel = card.querySelector('.usage-operator-select');
         const partSel = card.querySelector('.usage-partno-select');
         const opnSel = card.querySelector('.usage-opnno-select');
+
+        if (opSel) makeSearchableSelect(opSel, '-- Select Operator --');
+        if (partSel) makeSearchableSelect(partSel, '-- Select Part No --');
 
         partSel.addEventListener('change', async (e) => {
             const selectedPart = e.target.value;
@@ -6790,6 +6794,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 opt.textContent = o.name;
                 opSel.appendChild(opt);
             });
+            makeSearchableSelect(opSel, '-- Select Operator --');
         }
 
         // 3. Filter Parts
@@ -6808,6 +6813,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     partSel.appendChild(opt);
                 }
             });
+            makeSearchableSelect(partSel, '-- Select Part No --');
         }
     }
 
