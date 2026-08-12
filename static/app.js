@@ -1760,9 +1760,98 @@ document.addEventListener('DOMContentLoaded', () => {
                     tbody.appendChild(tr);
                 });
             }
+
+            renderScheduleSummaryReport(filteredSchedules);
         } catch (e) {
             console.error('Error fetching schedules:', e);
         }
+    }
+
+    function renderScheduleSummaryReport(schedules) {
+        const tbody = document.getElementById('scheduleSummaryBody');
+        const tfoot = document.getElementById('scheduleSummaryFoot');
+        if (!tbody || !tfoot) return;
+
+        tbody.innerHTML = '';
+        tfoot.innerHTML = '';
+
+        if (!schedules || schedules.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding: 0.75rem;">No data available.</td></tr>';
+            return;
+        }
+
+        const deptCustMap = {};
+        let grandTotalQty = 0;
+        let grandTotalValue = 0;
+
+        schedules.forEach(s => {
+            const dept = (s.department || '').trim() || 'Unassigned';
+            const partKey = (s.partno || '').trim().toUpperCase();
+            const partObj = (allPartMasters || []).find(p => (p.partno || '').trim().toUpperCase() === partKey);
+
+            const cust = (partObj && partObj.customer && partObj.customer.trim()) ? partObj.customer.trim() : dept;
+            const rateNum = parseFloat(s.rate || (partObj ? (partObj.va || partObj.rate) : 0)) || 0;
+            const qtyNum = parseInt(s.qty) || 0;
+            const valNum = rateNum * qtyNum;
+
+            if (!deptCustMap[dept]) {
+                deptCustMap[dept] = {};
+            }
+            if (!deptCustMap[dept][cust]) {
+                deptCustMap[dept][cust] = { qty: 0, value: 0 };
+            }
+
+            deptCustMap[dept][cust].qty += qtyNum;
+            deptCustMap[dept][cust].value += valNum;
+
+            grandTotalQty += qtyNum;
+            grandTotalValue += valNum;
+        });
+
+        const depts = Object.keys(deptCustMap).sort();
+
+        depts.forEach(dept => {
+            const custs = Object.keys(deptCustMap[dept]).sort();
+            let deptTotalQty = 0;
+            let deptTotalValue = 0;
+
+            custs.forEach(cust => {
+                const item = deptCustMap[dept][cust];
+                deptTotalQty += item.qty;
+                deptTotalValue += item.value;
+
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid rgba(0,0,0,0.05)';
+                tr.innerHTML = `
+                    <td style="padding: 5px 8px;"><strong>${dept}</strong></td>
+                    <td style="padding: 5px 8px;">${cust}</td>
+                    <td style="padding: 5px 8px; text-align: right;">${item.qty.toLocaleString('en-IN')}</td>
+                    <td style="padding: 5px 8px; text-align: right;">₹${item.value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (custs.length > 1) {
+                const trDept = document.createElement('tr');
+                trDept.style.background = 'rgba(0,0,0,0.03)';
+                trDept.style.borderBottom = '1px solid var(--border-color)';
+                trDept.style.fontWeight = '600';
+                trDept.innerHTML = `
+                    <td colspan="2" style="padding: 5px 8px; font-style: italic;">Subtotal (${dept}):</td>
+                    <td style="padding: 5px 8px; text-align: right;">${deptTotalQty.toLocaleString('en-IN')}</td>
+                    <td style="padding: 5px 8px; text-align: right;">₹${deptTotalValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+                `;
+                tbody.appendChild(trDept);
+            }
+        });
+
+        const tfTr = document.createElement('tr');
+        tfTr.innerHTML = `
+            <td colspan="2" style="padding: 6px 8px; text-align: left; text-transform: uppercase;">Total (Dept Wise)</td>
+            <td style="padding: 6px 8px; text-align: right; color: var(--primary); font-size: 0.9rem;">${grandTotalQty.toLocaleString('en-IN')}</td>
+            <td style="padding: 6px 8px; text-align: right; color: var(--primary); font-size: 0.9rem;">₹${grandTotalValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+        `;
+        tfoot.appendChild(tfTr);
     }
 
     document.getElementById('scheduleFilterDept')?.addEventListener('change', () => {

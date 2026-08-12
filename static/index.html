@@ -585,6 +585,30 @@
                                 <button type="submit" class="btn btn-primary">Create Schedule</button>
                             </div>
                         </form>
+
+                        <div id="scheduleSummaryContainer" style="margin-top: 1.75rem; padding-top: 1.25rem; border-top: 1px dashed var(--border-color);">
+                            <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 0.95rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">
+                                Schedule Summary Report
+                            </h3>
+                            <div style="max-height: 280px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.01);">
+                                <table id="scheduleSummaryTable" style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+                                    <thead>
+                                        <tr style="background: rgba(0, 0, 0, 0.05); text-align: left; border-bottom: 1px solid var(--border-color);">
+                                            <th style="padding: 6px 8px; font-weight: 600;">Dept</th>
+                                            <th style="padding: 6px 8px; font-weight: 600;">Customer</th>
+                                            <th style="padding: 6px 8px; text-align: right; font-weight: 600;">Qty</th>
+                                            <th style="padding: 6px 8px; text-align: right; font-weight: 600;">Value (₹)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="scheduleSummaryBody">
+                                        <!-- Dynamically populated -->
+                                    </tbody>
+                                    <tfoot id="scheduleSummaryFoot" style="font-weight: bold; background: rgba(59, 130, 246, 0.08); border-top: 2px solid var(--border-color);">
+                                        <!-- Dynamic Totals -->
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                     
                     <div style="flex: 1.5; min-width: 550px; border-left: 1px solid var(--border-color); padding-left: 2rem;">
@@ -2451,6 +2475,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=221"></script>
+    <script src="/static/app.js?v=222"></script>
 </body>
 </html>
