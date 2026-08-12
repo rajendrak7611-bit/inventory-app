@@ -6406,9 +6406,28 @@ document.addEventListener('DOMContentLoaded', () => {
     let allMachinesCache = [];
     let allOperatorsCache = [];
 
-    async function populateIssueModalDropdowns(selectedDept = '', selectedSpec = '', selectedBatch = '', selectedPart = '', selectedOpn = '') {
+    async function populateIssueModalDropdowns(selectedDept = '', selectedSpec = '', selectedBatch = '', selectedPart = '', selectedOpn = '', selectedShift = '') {
         const deptSel = document.getElementById('issueDeptSelect');
         const specSel = document.getElementById('issueInsertSpecSelect');
+        const shiftSel = document.getElementById('issueShiftSelect');
+
+        // 0. Shifts
+        if (shiftSel) {
+            shiftSel.innerHTML = '<option value="">-- Select Shift --</option>';
+            try {
+                const sRes = await fetch('/api/shifts');
+                const shifts = await sRes.json();
+                shifts.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.name;
+                    opt.textContent = s.name;
+                    if (selectedShift && selectedShift.trim().toLowerCase() === s.name.trim().toLowerCase()) {
+                        opt.selected = true;
+                    }
+                    shiftSel.appendChild(opt);
+                });
+            } catch (e) { console.error(e); }
+        }
 
         // 1. Departments
         deptSel.innerHTML = '<option value="">-- Select Dept --</option>';
@@ -6909,7 +6928,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('insertIssueId').value = item.id;
             document.getElementById('issueDateInput').value = item.date || '';
             document.getElementById('issueQtyInput').value = item.qty_issued || 1;
-            await populateIssueModalDropdowns(item.department, item.insert_spec, item.batch_no, item.partno, item.opn_no);
+            await populateIssueModalDropdowns(item.department, item.insert_spec, item.batch_no, item.partno, item.opn_no, item.shift);
 
             let usages = [];
             if (item.usages) {
@@ -7073,6 +7092,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const payload = {
                 date: document.getElementById('issueDateInput').value,
+                shift: document.getElementById('issueShiftSelect')?.value || '',
                 department: document.getElementById('issueDeptSelect').value,
                 insert_spec: document.getElementById('issueInsertSpecSelect').value,
                 batch_no: batchSel.value,

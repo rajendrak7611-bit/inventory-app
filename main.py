@@ -110,6 +110,10 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         conn.execute(text("ALTER TABLE insert_issues ADD COLUMN usages VARCHAR;"))
     except Exception:
         pass
+    try:
+        conn.execute(text("ALTER TABLE insert_issues ADD COLUMN shift VARCHAR;"))
+    except Exception:
+        pass
 
 # Seed default admin user
 with Session(engine) as db:
@@ -1578,6 +1582,7 @@ def delete_insert_receipt(item_id: int, db: Session = Depends(get_db)):
 # --- Insert Issue Schemas & Endpoints ---
 class InsertIssueBase(BaseModel):
     date: str
+    shift: Optional[str] = ""
     department: Optional[str] = ""
     insert_spec: str
     batch_no: Optional[str] = ""
