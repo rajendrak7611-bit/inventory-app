@@ -3637,7 +3637,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/rawmateriallogs');
             const logs = await res.json();
             const filteredLogs = logs.filter(l => l.type === type);
-            filteredLogs.sort((a, b) => new Date(b.date) - new Date(a.date));
+            filteredLogs.sort((a, b) => {
+                const dateDiff = new Date(b.date || 0) - new Date(a.date || 0);
+                if (dateDiff !== 0) return dateDiff;
+
+                if (type === 'despatch') {
+                    const parseDc = (dc) => {
+                        if (!dc) return 0;
+                        const num = parseInt(String(dc).replace(/\D/g, ''), 10);
+                        return isNaN(num) ? 0 : num;
+                    };
+                    const dcDiff = parseDc(b.dc_no) - parseDc(a.dc_no);
+                    if (dcDiff !== 0) return dcDiff;
+                }
+
+                return (b.id || 0) - (a.id || 0);
+            });
             
             const tbodyId = type === 'receipt' ? 'rmReceiptBody' : 'rmDespatchBody';
             const tbody = document.getElementById(tbodyId);
