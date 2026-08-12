@@ -1445,6 +1445,12 @@ def bulk_import_insert_masters(payload: BulkImportInsertMasterPayload, db: Sessi
     db.commit()
     return {"message": f"Successfully imported {len(new_items)} insert master records"}
 
+@app.delete("/api/insert_masters/all")
+def delete_all_insert_masters(db: Session = Depends(get_db)):
+    db.query(InsertMaster).delete()
+    db.commit()
+    return {"message": "All insert master records deleted"}
+
 @app.delete("/api/insert_masters/{item_id}")
 def delete_insert_master(item_id: int, db: Session = Depends(get_db)):
     db_item = db.query(InsertMaster).filter(InsertMaster.id == item_id).first()
@@ -1509,6 +1515,12 @@ def bulk_import_drill_masters(payload: BulkImportDrillMasterPayload, db: Session
     db.commit()
     return {"message": f"Successfully imported {len(new_items)} drill master records"}
 
+@app.delete("/api/drill_masters/all")
+def delete_all_drill_masters(db: Session = Depends(get_db)):
+    db.query(DrillMaster).delete()
+    db.commit()
+    return {"message": "All drill master records deleted"}
+
 @app.delete("/api/drill_masters/{item_id}")
 def delete_drill_master(item_id: int, db: Session = Depends(get_db)):
     db_item = db.query(DrillMaster).filter(DrillMaster.id == item_id).first()
@@ -1569,6 +1581,12 @@ def bulk_import_insert_receipts(payload: BulkImportInsertReceiptPayload, db: Ses
     db.add_all(new_items)
     db.commit()
     return {"message": f"Successfully imported {len(new_items)} insert receipt records"}
+
+@app.delete("/api/insert_receipts/all")
+def delete_all_insert_receipts(db: Session = Depends(get_db)):
+    db.query(InsertReceipt).delete()
+    db.commit()
+    return {"message": "All insert receipt records deleted"}
 
 @app.delete("/api/insert_receipts/{item_id}")
 def delete_insert_receipt(item_id: int, db: Session = Depends(get_db)):
@@ -1695,6 +1713,12 @@ def bulk_import_insert_issues(payload: BulkImportInsertIssuePayload, db: Session
     db.add_all(new_items)
     db.commit()
     return {"message": f"Successfully imported {len(new_items)} insert issue records"}
+
+@app.delete("/api/insert_issues/all")
+def delete_all_insert_issues(db: Session = Depends(get_db)):
+    db.query(InsertIssue).delete()
+    db.commit()
+    return {"message": "All insert issue records deleted"}
 
 @app.delete("/api/insert_issues/{item_id}")
 def delete_insert_issue(item_id: int, db: Session = Depends(get_db)):

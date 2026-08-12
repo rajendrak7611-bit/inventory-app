@@ -5820,6 +5820,67 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Clear All / Bulk Delete event listeners for Tool Crib
+    document.getElementById('deleteAllInsertMastersBtn')?.addEventListener('click', async () => {
+        if (!checkAdminAccess()) return;
+        if (confirm('Are you sure you want to delete ALL insert master entries? This action cannot be undone!')) {
+            try {
+                const res = await fetch('/api/insert_masters/all', { method: 'DELETE' });
+                if (res.ok) {
+                    alert('All insert master entries deleted successfully.');
+                    fetchInsertMasters();
+                } else {
+                    alert('Error deleting insert master entries.');
+                }
+            } catch (e) { console.error(e); }
+        }
+    });
+
+    document.getElementById('deleteAllDrillMastersBtn')?.addEventListener('click', async () => {
+        if (!checkAdminAccess()) return;
+        if (confirm('Are you sure you want to delete ALL drill master entries? This action cannot be undone!')) {
+            try {
+                const res = await fetch('/api/drill_masters/all', { method: 'DELETE' });
+                if (res.ok) {
+                    alert('All drill master entries deleted successfully.');
+                    fetchDrillMasters();
+                } else {
+                    alert('Error deleting drill master entries.');
+                }
+            } catch (e) { console.error(e); }
+        }
+    });
+
+    document.getElementById('deleteAllInsertReceiptsBtn')?.addEventListener('click', async () => {
+        if (!checkAdminAccess()) return;
+        if (confirm('Are you sure you want to delete ALL insert receipt entries? This action cannot be undone!')) {
+            try {
+                const res = await fetch('/api/insert_receipts/all', { method: 'DELETE' });
+                if (res.ok) {
+                    alert('All insert receipt entries deleted successfully.');
+                    fetchInsertReceipts();
+                } else {
+                    alert('Error deleting insert receipt entries.');
+                }
+            } catch (e) { console.error(e); }
+        }
+    });
+
+    document.getElementById('deleteAllInsertIssuesBtn')?.addEventListener('click', async () => {
+        if (!checkAdminAccess()) return;
+        if (confirm('Are you sure you want to delete ALL insert issue entries? This action cannot be undone!')) {
+            try {
+                const res = await fetch('/api/insert_issues/all', { method: 'DELETE' });
+                if (res.ok) {
+                    alert('All insert issue entries deleted successfully.');
+                    fetchInsertIssues();
+                } else {
+                    alert('Error deleting insert issue entries.');
+                }
+            } catch (e) { console.error(e); }
+        }
+    });
+
     // Reusable Searchable Select helper using TomSelect
     const tomSelectCache = {};
 
