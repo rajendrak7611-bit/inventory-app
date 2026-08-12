@@ -2576,10 +2576,65 @@ document.addEventListener('DOMContentLoaded', () => {
         window.open(url, '_blank');
     });
 
+    document.getElementById('downloadReportImageBtn')?.addEventListener('click', async () => {
+        const container = document.getElementById('spiderReportContainer');
+        if (!container || typeof html2canvas === 'undefined') {
+            alert('Report element or image generator not available.');
+            return;
+        }
+        try {
+            const canvas = await html2canvas(container, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                useCORS: true
+            });
+            const link = document.createElement('a');
+            link.download = `SPIDER_Detailed_Report_${new Date().toISOString().slice(0, 10)}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        } catch (e) {
+            console.error('Error generating image:', e);
+            alert('Error generating report image.');
+        }
+    });
+
+    document.getElementById('copyReportImageBtn')?.addEventListener('click', async () => {
+        const container = document.getElementById('spiderReportContainer');
+        if (!container || typeof html2canvas === 'undefined') {
+            alert('Report element or image generator not available.');
+            return;
+        }
+        try {
+            const canvas = await html2canvas(container, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                useCORS: true
+            });
+            canvas.toBlob(async (blob) => {
+                if (!blob) {
+                    alert('Failed to generate image blob.');
+                    return;
+                }
+                try {
+                    await navigator.clipboard.write([
+                        new ClipboardItem({ 'image/png': blob })
+                    ]);
+                    alert('SPIDER Report HD Image copied to clipboard! You can paste (Ctrl+V) directly into WhatsApp or Email.');
+                } catch (err) {
+                    console.error('Clipboard error:', err);
+                    alert('Clipboard write failed. Please use "Download Report Image" instead.');
+                }
+            });
+        } catch (e) {
+            console.error('Error copying image:', e);
+            alert('Error rendering report image.');
+        }
+    });
+
     document.getElementById('copySpiderReportSummaryBtn')?.addEventListener('click', () => {
         const reportText = generateSpiderReportSummaryText();
         navigator.clipboard.writeText(reportText).then(() => {
-            alert('SPIDER Report summary copied to clipboard!');
+            alert('SPIDER Report text copied to clipboard!');
         }).catch(err => {
             console.error('Failed to copy:', err);
         });
