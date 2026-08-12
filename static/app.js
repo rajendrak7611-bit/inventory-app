@@ -6547,6 +6547,70 @@ document.addEventListener('DOMContentLoaded', () => {
         return result;
     }
 
+    function getInstEdgeObj(edgeData, instIdx) {
+        if (!edgeData) return {};
+        let parsed = edgeData;
+        if (typeof parsed === 'string') {
+            try { parsed = JSON.parse(parsed); } catch(e) { return {}; }
+        }
+        if (!parsed || typeof parsed !== 'object') return {};
+
+        if (parsed.instances && typeof parsed.instances === 'object') {
+            const instData = parsed.instances[String(instIdx)];
+            return normalizeEdgeObj(instData);
+        }
+        if (instIdx === 0) {
+            return normalizeEdgeObj(parsed);
+        }
+        return {};
+    }
+
+    function setInstEdgeObj(edgeData, instIdx, newInstObj) {
+        let parsed = edgeData;
+        if (typeof parsed === 'string') {
+            try { parsed = JSON.parse(parsed); } catch(e) { parsed = {}; }
+        }
+        if (!parsed || typeof parsed !== 'object') parsed = {};
+
+        if (!parsed.instances || typeof parsed.instances !== 'object') {
+            const legacyObj = normalizeEdgeObj(parsed);
+            parsed = {
+                instances: {
+                    "0": legacyObj
+                }
+            };
+        }
+        parsed.instances[String(instIdx)] = newInstObj;
+        return JSON.stringify(parsed);
+    }
+
+    function isInstComplete(item, instIdx, numEdges) {
+        const instObj = getInstEdgeObj(item.edge_data, instIdx);
+        let filledCount = 0;
+        for (let i = 1; i <= numEdges; i++) {
+            const info = instObj[String(i)];
+            if (info && info.qty > 0) filledCount++;
+        }
+        return filledCount >= numEdges && numEdges > 0;
+    }
+
+    function buildMonitorCellHtml(item, uIdx, numEdges) {
+        const qty = Math.max(1, parseInt(item.qty_issued) || 1);
+        let html = '<div style="display: flex; flex-direction: column; gap: 4px;">';
+        for (let iIdx = 0; iIdx < qty; iIdx++) {
+            const isDone = isInstComplete(item, iIdx, numEdges);
+            const btnLabel = qty > 1 ? `Insert #${iIdx + 1} Monitor` : `Insert Monitor`;
+            html += `
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <button class="btn btn-outline monitor-issue-btn" data-id="${item.id}" data-usage-idx="${uIdx}" data-inst-idx="${iIdx}" style="padding: 0.25rem 0.55rem; font-size: 0.82rem; color: #2563eb; border-color: #2563eb; font-weight: 600;">${btnLabel}</button>
+                    ${isDone ? '<span title="All edge details entered for Insert #' + (iIdx + 1) + '" style="display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; background-color: #22c55e; color: white; border-radius: 4px; font-size: 12px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">✓</span>' : ''}
+                </div>
+            `;
+        }
+        html += '</div>';
+        return html;
+    }
+
     function renderInsertIssues(issues) {
         const tbody = document.getElementById('insertIssueBody');
         if (!tbody) return;
@@ -6556,32 +6620,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Aggregate edge completion per group (insert_spec + batch_no)
-        const groupEdgeMap = {}; // key: "insert_spec|batch_no" -> Set of filled edge numbers
         issues.forEach(item => {
             let numEdges = 4;
             const specKey = (item.insert_spec || '').trim().toLowerCase();
             const master = allInsertMastersCache.find(s => (s.insert_spec || s.name || '').trim().toLowerCase() === specKey);
             if (master) {
                 numEdges = parseInt(master.no_of_edges) || parseInt(master.edges) || 4;
-            }
-
-            let isComplete = false;
-            let filledCount = 0;
-
-            if (item.edge_data) {
-                try {
-                    const normalized = normalizeEdgeObj(item.edge_data);
-                    for (let i = 1; i <= numEdges; i++) {
-                        const info = normalized[String(i)];
-                        if (info && info.qty > 0) {
-                            filledCount++;
-                        }
-                    }
-                    if (filledCount >= numEdges && numEdges > 0) {
-                        isComplete = true;
-                    }
-                } catch (e) { isComplete = false; }
             }
 
             let usages = [];
@@ -6611,6 +6655,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     tr.style.background = '#f9fafb';
                 }
 
+                const monitorCell = buildMonitorCellHtml(item, uIdx, numEdges);
+
                 if (uIdx === 0) {
                     tr.innerHTML = `
                         <td rowspan="${rowSpan}" style="vertical-align: middle; font-weight: bold;">${item.id}</td>
@@ -6623,12 +6669,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td>${u.operator || ''}</td>
                         <td>${u.partno || ''}</td>
                         <td>${u.opn_no || ''}</td>
-                        <td>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <button class="btn btn-outline monitor-issue-btn" data-id="${item.id}" data-usage-idx="${uIdx}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #2563eb; border-color: #2563eb; font-weight: 600;">Insert Monitor</button>
-                                ${isComplete ? '<span title="All edge details entered for this issue" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background-color: #22c55e; color: white; border-radius: 4px; font-size: 14px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">✓</span>' : ''}
-                            </div>
-                        </td>
+                        <td>${monitorCell}</td>
                         <td class="actions-cell">
                             <div style="display: flex; gap: 4px; flex-wrap: wrap;">
                                 <button class="btn btn-outline add-usage-btn" data-id="${item.id}" style="padding: 0.25rem 0.45rem; font-size: 0.78rem; color: #16a34a; border-color: #16a34a; font-weight: 600;" title="Add Usage Entry">+ Add Usage</button>
@@ -6643,12 +6684,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td>${u.operator || ''}</td>
                         <td>${u.partno || ''}</td>
                         <td>${u.opn_no || ''}</td>
-                        <td>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <button class="btn btn-outline monitor-issue-btn" data-id="${item.id}" data-usage-idx="${uIdx}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #2563eb; border-color: #2563eb; font-weight: 600;">Insert Monitor</button>
-                                ${isComplete ? '<span title="All edge details entered for this issue" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background-color: #22c55e; color: white; border-radius: 4px; font-size: 14px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">✓</span>' : ''}
-                            </div>
-                        </td>
+                        <td>${monitorCell}</td>
                         <td class="actions-cell">
                             <button class="btn btn-outline delete-subusage-btn" data-id="${item.id}" data-usage-idx="${uIdx}" style="padding: 0.25rem 0.45rem; font-size: 0.78rem; color: #ef4444; border-color: #ef4444;" title="Remove this usage entry">Delete Usage</button>
                         </td>
@@ -6721,10 +6757,11 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', async (e) => {
                 const id = btn.getAttribute('data-id');
                 const uIdx = parseInt(btn.getAttribute('data-usage-idx')) || 0;
+                const instIdx = parseInt(btn.getAttribute('data-inst-idx')) || 0;
                 const res = await fetch('/api/insert_issues');
                 const data = await res.json();
                 const item = data.find(x => x.id == id);
-                if (item) openInsertMonitorModal(item, uIdx);
+                if (item) openInsertMonitorModal(item, uIdx, instIdx);
             });
         });
 
@@ -7479,14 +7516,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveInsertMonitorBtn = document.getElementById('saveInsertMonitorBtn');
     let currentMonitorIssueItem = null;
     let currentMonitorUidx = 0;
+    let currentMonitorInstIdx = 0;
 
     if (closeInsertMonitorModalBtn) closeInsertMonitorModalBtn.addEventListener('click', () => insertMonitorModal.classList.remove('show'));
     if (cancelInsertMonitorBtn) cancelInsertMonitorBtn.addEventListener('click', () => insertMonitorModal.classList.remove('show'));
 
-    async function openInsertMonitorModal(item, targetUidx = 0) {
+    async function openInsertMonitorModal(item, targetUidx = 0, targetInstIdx = 0) {
         if (!insertMonitorModal || !item) return;
         currentMonitorIssueItem = item;
         currentMonitorUidx = targetUidx;
+        currentMonitorInstIdx = targetInstIdx;
 
         let usages = [];
         if (item.usages) {
@@ -7508,10 +7547,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const currentUsage = usages[targetUidx] || usages[0];
+        const totalQty = Math.max(1, parseInt(item.qty_issued) || 1);
+        const instTitle = totalQty > 1 ? ` [Insert #${targetInstIdx + 1} of ${totalQty}]` : '';
 
         const subtitleEl = document.getElementById('monitorSubtitle');
         if (subtitleEl) {
-            subtitleEl.textContent = `${item.insert_spec || ''} | Part: ${currentUsage.partno || item.partno || '-'} | Opn: ${currentUsage.opn_no || item.opn_no || '-'} | Batch: ${item.batch_no || '-'}`;
+            subtitleEl.textContent = `${item.insert_spec || ''}${instTitle} | Part: ${currentUsage.partno || item.partno || '-'} | Opn: ${currentUsage.opn_no || item.opn_no || '-'} | Batch: ${item.batch_no || '-'}`;
         }
 
         let numEdges = 4;
@@ -7524,7 +7565,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (e) { console.error(e); }
 
-        const edgeObjNormalized = normalizeEdgeObj(item.edge_data);
+        const edgeObjNormalized = getInstEdgeObj(item.edge_data, targetInstIdx);
 
         const tbody = document.getElementById('insertMonitorTableBody');
         tbody.innerHTML = '';
@@ -7616,24 +7657,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 const currentUsage = usages[currentMonitorUidx] || usages[0];
                 const activePartno = currentUsage.partno || freshItem.partno || '';
 
-                const normalized = normalizeEdgeObj(freshItem.edge_data);
+                const currentInstObj = getInstEdgeObj(freshItem.edge_data, currentMonitorInstIdx);
 
                 inputs.forEach(inp => {
                     if (inp.disabled) return;
                     const edgeNo = inp.getAttribute('data-edge');
                     const val = parseInt(inp.value) || 0;
                     if (val > 0) {
-                        normalized[edgeNo] = {
+                        currentInstObj[edgeNo] = {
                             qty: val,
                             uIdx: currentMonitorUidx,
                             partno: activePartno
                         };
                     } else {
-                        if (normalized[edgeNo] && normalized[edgeNo].uIdx === currentMonitorUidx) {
-                            delete normalized[edgeNo];
+                        if (currentInstObj[edgeNo] && currentInstObj[edgeNo].uIdx === currentMonitorUidx) {
+                            delete currentInstObj[edgeNo];
                         }
                     }
                 });
+
+                const newEdgeData = setInstEdgeObj(freshItem.edge_data, currentMonitorInstIdx, currentInstObj);
 
                 const payload = {
                     date: freshItem.date || '',
@@ -7647,7 +7690,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     opn_no: freshItem.opn_no || '',
                     usages: freshItem.usages || '',
                     receipt_id: freshItem.receipt_id || null,
-                    edge_data: JSON.stringify(normalized)
+                    edge_data: newEdgeData
                 };
 
                 const res = await fetch(`/api/insert_issues/${currentMonitorIssueItem.id}`, {
@@ -7659,9 +7702,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     insertMonitorModal.classList.remove('show');
                     fetchInsertIssues();
                 } else {
-                    alert('Error saving Edge Qty');
+                    alert('Error saving monitor details.');
                 }
-            } catch (err) { console.error(err); alert('Error saving Edge Qty'); }
+            } catch (e) {
+                console.error(e);
+                alert('Error updating insert issue monitor.');
+            }
         });
     }
 
