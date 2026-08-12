@@ -1181,10 +1181,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 operatorsBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">No operators found.</td></tr>';
                 return;
             }
-            operators.forEach(o => {
+            operators.forEach((o, idx) => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${o.id}</td><td>${o.department}</td><td>${o.name}</td><td>${o.designation || 'Operator'}</td>
+                    <td>${idx + 1}</td><td>${o.department}</td><td>${o.name}</td><td>${o.designation || 'Operator'}</td>
                     <td class="actions">
                         <button class="btn btn-edit" onclick="editOperator(${o.id})">Edit</button>
                         <button class="btn btn-danger" onclick="deleteOperator(${o.id})">Delete</button>
