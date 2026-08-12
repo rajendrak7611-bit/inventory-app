@@ -1709,12 +1709,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (tbody) {
                 tbody.innerHTML = '';
                 if (schedules.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">No schedules found.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">No schedules found.</td></tr>';
                     return;
                 }
                 // Sort by newest first assuming higher ID means newer
                 schedules.sort((a, b) => b.id - a.id);
-                schedules.forEach(s => {
+                schedules.forEach((s, idx) => {
                     const partKey = (s.partno || '').trim().toUpperCase();
                     const partObj = (allPartMasters || []).find(p => (p.partno || '').trim().toUpperCase() === partKey);
                     
@@ -1727,6 +1727,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
+                        <td>${idx + 1}</td>
                         <td><strong>${s.department || ''}</strong></td>
                         <td>${s.partno}</td>
                         <td>${s.target_date}</td>
