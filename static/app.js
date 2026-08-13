@@ -617,6 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('rmLogModalTitle').innerText = isReceipt ? 'Add Receipt' : 'Add Despatch';
             const savedDate = document.getElementById('rmLogDate').value;
             document.getElementById('rmLogForm').reset();
+            document.getElementById('rmLogId').value = '';
             if (savedDate) document.getElementById('rmLogDate').value = savedDate;
             else document.getElementById('rmLogDate').valueAsDate = new Date();
             document.getElementById('rmLogType').value = isReceipt ? 'receipt' : 'despatch';
@@ -4130,7 +4131,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 filteredLogs.forEach(log => {
                     const tr = document.createElement('tr');
                     let extraCols = '';
+                    const encodedLog = encodeURIComponent(JSON.stringify(log));
                     let actionBtns = `
+                        <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.8rem; margin-right: 4px;" onclick="editRmLog(JSON.parse(decodeURIComponent('${encodedLog}')))">Edit</button>
                         <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.8rem; color: #ef4444; border-color: #ef4444;" onclick="deleteRmLog(${log.id}, '${type}')">Delete</button>
                     `;
                     if (type === 'despatch') {
@@ -4138,7 +4141,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             <td>${log.finish_part_no || '-'}</td>
                             <td>${log.dc_no || '-'}</td>
                         `;
-                        const encodedLog = encodeURIComponent(JSON.stringify(log));
                         actionBtns += `
                             <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.8rem; color: #0284c7; border-color: #0284c7; margin-left: 4px;" onclick="exportDeliveryChallanToExcel(JSON.parse(decodeURIComponent('${encodedLog}')))">Print</button>
                         `;
@@ -4159,6 +4161,116 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error(e);
         }
     }
+
+    window.editRmLog = async (log) => {
+        if (!log) return;
+        const isReceipt = log.type === 'receipt';
+        document.getElementById('rmLogModalTitle').innerText = isReceipt ? 'Edit Receipt' : 'Edit Despatch';
+        document.getElementById('rmLogId').value = log.id;
+        document.getElementById('rmLogType').value = log.type;
+        document.getElementById('rmLogDate').value = log.date || '';
+        document.getElementById('rmLogQty').value = log.qty || 1;
+
+        if (allRawMaterials.length === 0) {
+            try {
+                const rRes = await fetch('/api/rawmaterials');
+                allRawMaterials = await rRes.json();
+            } catch(e) {}
+        }
+
+        const selectEl = document.getElementById('rmLogForgePn');
+        selectEl.innerHTML = '<option value="">-- Select Forge PN --</option>';
+        const forgePnSet = new Set(allRawMaterials.map(rm => rm.forge_pn));
+        if (log.forge_pn) forgePnSet.add(log.forge_pn);
+
+        Array.from(forgePnSet).sort().forEach(fpn => {
+            const opt = document.createElement('option');
+            opt.value = fpn;
+            opt.textContent = fpn;
+            if (log.forge_pn && log.forge_pn.trim().toLowerCase() === fpn.trim().toLowerCase()) {
+                opt.selected = true;
+            }
+            selectEl.appendChild(opt);
+        });
+
+        if (rmLogForgePnSelect) {
+            rmLogForgePnSelect.destroy();
+        }
+        rmLogForgePnSelect = new TomSelect(selectEl, {
+            create: true,
+            sortField: { field: "text", direction: "asc" }
+        });
+        if (log.forge_pn) {
+            rmLogForgePnSelect.setValue(log.forge_pn);
+        }
+
+        if (isReceipt) {
+            document.getElementById('rmLogDcNoGroup').style.display = 'none';
+            document.getElementById('rmLogFinishPartNoGroup').style.display = 'none';
+        } else {
+            document.getElementById('rmLogDcNoGroup').style.display = 'block';
+            document.getElementById('rmLogFinishPartNoGroup').style.display = 'block';
+            document.getElementById('rmLogDcNo').value = log.dc_no || '';
+
+            if (globalPartMasters.length === 0) {
+                try {
+                    const pmRes = await fetch('/api/partmaster');
+                    globalPartMasters = await pmRes.json();
+                } catch(e) {}
+            }
+
+            const fpSelectEl = document.getElementById('rmLogFinishPartNo');
+            fpSelectEl.innerHTML = '<option value="">-- Select Finish Part No --</option>';
+            const partSet = new Set(globalPartMasters.map(pm => pm.partno));
+            if (log.finish_part_no) partSet.add(log.finish_part_no);
+
+            Array.from(partSet).sort().forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.textContent = p;
+                if (log.finish_part_no && log.finish_part_no.trim().toLowerCase() === p.trim().toLowerCase()) {
+                    opt.selected = true;
+                }
+                fpSelectEl.appendChild(opt);
+            });
+
+            if (rmLogFinishPartNoSelect) {
+                rmLogFinishPartNoSelect.destroy();
+            }
+            rmLogFinishPartNoSelect = new TomSelect(fpSelectEl, {
+                create: false,
+                sortField: { field: "text", direction: "asc" }
+            });
+            if (log.finish_part_no) {
+                rmLogFinishPartNoSelect.setValue(log.finish_part_no);
+            }
+
+            rmLogFinishPartNoSelect.on('change', (val) => {
+                if (!val) return;
+                const cleanVal = val.trim().toLowerCase();
+                const selected = globalPartMasters.find(p => (p.partno || '').trim().toLowerCase() === cleanVal);
+                if (selected && selected.forge_pn) {
+                    const targetForgePn = selected.forge_pn.trim();
+                    if (rmLogForgePnSelect) {
+                        let matchKey = Object.keys(rmLogForgePnSelect.options).find(k => k.trim().toLowerCase() === targetForgePn.toLowerCase());
+                        if (!matchKey) {
+                            const normTarget = targetForgePn.replace(/[\s\-_#]/g, '').toLowerCase();
+                            matchKey = Object.keys(rmLogForgePnSelect.options).find(k => k.replace(/[\s\-_#]/g, '').toLowerCase() === normTarget);
+                        }
+
+                        if (matchKey) {
+                            rmLogForgePnSelect.setValue(matchKey);
+                        } else {
+                            rmLogForgePnSelect.addOption({ value: targetForgePn, text: targetForgePn });
+                            rmLogForgePnSelect.setValue(targetForgePn);
+                        }
+                    }
+                }
+            });
+        }
+
+        document.getElementById('rmLogModal').classList.add('show');
+    };
 
     function getFinYear(dateStr) {
         if (!dateStr) return '2026-27';
@@ -4347,6 +4459,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (rmLogForm) {
         rmLogForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const id = document.getElementById('rmLogId').value;
             const type = document.getElementById('rmLogType').value;
             const date = document.getElementById('rmLogDate').value;
             const forge_pn = document.getElementById('rmLogForgePn').value;
@@ -4355,16 +4468,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const qty = parseInt(document.getElementById('rmLogQty').value) || 0;
             
             const payload = { type, date, forge_pn, dc_no, finish_part_no, qty };
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/rawmateriallogs/${id}` : '/api/rawmateriallogs';
             
             try {
-                const res = await fetch('/api/rawmateriallogs', {
-                    method: 'POST',
+                const res = await fetch(url, {
+                    method: method,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
                 if (res.ok) {
                     rmLogModal.classList.remove('show');
                     fetchRmLogs(type);
+                    if (typeof fetchRawMaterials === 'function') fetchRawMaterials();
                 } else {
                     alert('Failed to save log');
                 }

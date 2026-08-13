@@ -1237,6 +1237,38 @@ def create_raw_material_log(log: RawMaterialLogCreate, db: Session = Depends(get
     db.refresh(db_log)
     return db_log
 
+@app.put("/api/rawmateriallogs/{log_id}", response_model=RawMaterialLogResponse)
+def update_raw_material_log(log_id: int, log: RawMaterialLogCreate, db: Session = Depends(get_db)):
+    db_log = db.query(RawMaterialLog).filter(RawMaterialLog.id == log_id).first()
+    if not db_log:
+        raise HTTPException(status_code=404, detail="Log record not found")
+    
+    old_master = db.query(RawMaterial).filter(RawMaterial.forge_pn == db_log.forge_pn).first()
+    if old_master:
+        if db_log.type == 'receipt':
+            old_master.receipt = max(0, old_master.receipt - db_log.qty)
+        elif db_log.type == 'despatch':
+            old_master.despatch = max(0, old_master.despatch - db_log.qty)
+        old_master.stock = old_master.receipt - old_master.despatch
+
+    for key, value in log.model_dump().items():
+        setattr(db_log, key, value)
+
+    new_master = db.query(RawMaterial).filter(RawMaterial.forge_pn == log.forge_pn).first()
+    if not new_master:
+        new_master = RawMaterial(forge_pn=log.forge_pn, receipt=0, despatch=0, stock=0)
+        db.add(new_master)
+
+    if log.type == 'receipt':
+        new_master.receipt += log.qty
+    elif log.type == 'despatch':
+        new_master.despatch += log.qty
+    new_master.stock = new_master.receipt - new_master.despatch
+
+    db.commit()
+    db.refresh(db_log)
+    return db_log
+
 @app.delete("/api/rawmateriallogs/{log_id}")
 def delete_raw_material_log(log_id: int, db: Session = Depends(get_db)):
     db_log = db.query(RawMaterialLog).filter(RawMaterialLog.id == log_id).first()
