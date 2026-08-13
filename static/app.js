@@ -8595,8 +8595,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchInsertCpcReport() {
         try {
-            const [issueRes, masterRes, prodRes, partRes, deptRes] = await Promise.all([
+            const [issueRes, receiptRes, masterRes, prodRes, partRes, deptRes] = await Promise.all([
                 fetch('/api/insert_issues'),
+                fetch('/api/insert_receipts'),
                 fetch('/api/insert_masters'),
                 fetch('/api/prodlog'),
                 fetch('/api/partmaster'),
@@ -8604,6 +8605,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ]);
 
             const issues = await issueRes.json();
+            const receipts = await receiptRes.json();
             const masters = await masterRes.json();
             const prodLogs = await prodRes.json();
             const parts = await partRes.json();
@@ -8619,13 +8621,50 @@ document.addEventListener('DOMContentLoaded', () => {
             const filterDept = document.getElementById('insertCpcFilterDept')?.value || '';
             const filterPart = document.getElementById('insertCpcFilterPart')?.value || '';
 
-            const rateMap = {};
-            masters.forEach(m => {
-                const sKey = (m.insert_spec || m.name || '').trim().toLowerCase();
-                if (sKey) {
-                    rateMap[sKey] = parseFloat(m.rate || m.cost || m.price || 0) || 0;
+            // Build Rate Maps from Insert Receipts & Insert Masters
+            const receiptIdRateMap = {};
+            const batchSpecRateMap = {};
+            const specRateMap = {};
+
+            // 1. Process Insert Receipts
+            receipts.forEach(r => {
+                const rate = parseFloat(r.rate) || 0;
+                if (r.id) receiptIdRateMap[String(r.id)] = rate;
+
+                const cleanSpec = (r.insert_spec || '').replace(/\s+/g, '').toLowerCase();
+                const cleanBatch = (r.batch_no || '').replace(/\s+/g, '').toLowerCase();
+
+                if (cleanBatch && cleanSpec && rate > 0) {
+                    batchSpecRateMap[`${cleanBatch}_${cleanSpec}`] = rate;
+                }
+                if (cleanSpec && rate > 0) {
+                    specRateMap[cleanSpec] = rate;
                 }
             });
+
+            // 2. Fallback to Insert Masters
+            masters.forEach(m => {
+                const cleanSpec = (m.insert_spec || m.name || '').replace(/\s+/g, '').toLowerCase();
+                const rate = parseFloat(m.rate || m.cost || m.price || 0) || 0;
+                if (cleanSpec && rate > 0 && !specRateMap[cleanSpec]) {
+                    specRateMap[cleanSpec] = rate;
+                }
+            });
+
+            const getRateForInsert = (item, rawSpec) => {
+                if (item.receipt_id && receiptIdRateMap[String(item.receipt_id)] > 0) {
+                    return receiptIdRateMap[String(item.receipt_id)];
+                }
+                const cleanBatch = (item.batch_no || '').replace(/\s+/g, '').toLowerCase();
+                const cleanSpec = (rawSpec || item.insert_spec || '').replace(/\s+/g, '').toLowerCase();
+                if (cleanBatch && cleanSpec && batchSpecRateMap[`${cleanBatch}_${cleanSpec}`] > 0) {
+                    return batchSpecRateMap[`${cleanBatch}_${cleanSpec}`];
+                }
+                if (cleanSpec && specRateMap[cleanSpec] > 0) {
+                    return specRateMap[cleanSpec];
+                }
+                return 0;
+            };
 
             const vaMap = {};
             parts.forEach(p => {
@@ -8694,7 +8733,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     if (!partMap[pKey].opns[oKey].specs[sKey]) {
-                        const rate = rateMap[sKey] || 0;
+                        const rate = getRateForInsert(item, rawSpec);
                         partMap[pKey].opns[oKey].specs[sKey] = {
                             spec: rawSpec,
                             qty_issued: 0,
