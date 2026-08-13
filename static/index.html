@@ -88,6 +88,7 @@
                 <button class="sub-tab" id="sidebarDrillMaster" data-screen="drillmaster">Drill Master</button>
                 <button class="sub-tab" id="sidebarInsertReceipt" data-screen="insertreceipt">Insert Receipt</button>
                 <button class="sub-tab" id="sidebarInsertIssue" data-screen="insertissue">Insert Issue</button>
+                <button class="sub-tab" id="sidebarInsertCpc" data-screen="insertcpc">Insert CPC</button>
             </div>
             <div class="sub-group" id="submenuReports" style="display: none;">
                 <button class="sub-tab" id="sidebarRmRequirement" data-screen="reports">RM Requirement</button>
@@ -239,6 +240,58 @@
                 </thead>
                 <tbody id="insertIssueBody"></tbody>
             </table>
+        </div>
+
+        <!-- Insert CPC Section -->
+        <div class="table-container" id="insertCpcSection" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <h2>Insert CPC (Cost Per Component) Report</h2>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: 600; margin-right: 4px;">From:</label>
+                        <input type="date" id="insertCpcFromDate" style="padding: 0.35rem 0.5rem; font-size: 0.82rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: 600; margin-right: 4px;">To:</label>
+                        <input type="date" id="insertCpcToDate" style="padding: 0.35rem 0.5rem; font-size: 0.82rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: 600; margin-right: 4px;">Dept:</label>
+                        <select id="insertCpcFilterDept" style="padding: 0.35rem 0.5rem; font-size: 0.82rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card); color: var(--text-main);">
+                            <option value="">All Depts</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: 600; margin-right: 4px;">Part:</label>
+                        <select id="insertCpcFilterPart" style="padding: 0.35rem 0.5rem; font-size: 0.82rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card); color: var(--text-main);">
+                            <option value="">All Parts</option>
+                        </select>
+                    </div>
+                    <button id="filterInsertCpcBtn" class="btn btn-primary" style="padding: 0.35rem 0.8rem; font-size: 0.82rem;">Filter</button>
+                    <button id="resetInsertCpcBtn" class="btn btn-outline" style="padding: 0.35rem 0.8rem; font-size: 0.82rem;">Reset</button>
+                    <button id="exportInsertCpcBtn" class="btn btn-outline" style="padding: 0.35rem 0.8rem; font-size: 0.82rem; display: flex; align-items: center; gap: 4px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Export Excel
+                    </button>
+                </div>
+            </div>
+            <div style="overflow-x: auto;">
+                <table id="insertCpcTable" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background-color: var(--table-header-bg, #f8fafc);">
+                            <th style="border: 1px solid #cbd5e1; padding: 8px;">Part No</th>
+                            <th style="border: 1px solid #cbd5e1; padding: 8px;">Opn No</th>
+                            <th style="border: 1px solid #cbd5e1; padding: 8px;">Qty Prod</th>
+                            <th style="border: 1px solid #cbd5e1; padding: 8px;">Insert Spec</th>
+                            <th style="border: 1px solid #cbd5e1; padding: 8px;">Qty Issued</th>
+                            <th style="border: 1px solid #cbd5e1; padding: 8px;">Value (₹)</th>
+                            <th style="border: 1px solid #cbd5e1; padding: 8px;">CPC-Opn (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="insertCpcBody">
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Breakdown Slip Section -->
@@ -2491,6 +2544,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=226"></script>
+    <script src="/static/app.js?v=227"></script>
 </body>
 </html>

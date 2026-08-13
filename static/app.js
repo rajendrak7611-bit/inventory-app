@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         allTabs.forEach(tab => {
             const screen = tab.getAttribute('data-screen');
-            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || ((screen === 'rawmaterial' || screen === 'ht') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) || (screen === 'attendance' && accessibleScreens.includes('hr')) || ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'insertreceipt' || screen === 'insertissue') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib')));
+            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || ((screen === 'rawmaterial' || screen === 'ht') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) || (screen === 'attendance' && accessibleScreens.includes('hr')) || ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'insertreceipt' || screen === 'insertissue' || screen === 'insertcpc') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib')));
             if (isAllowed) {
                 tab.style.display = 'inline-block';
                 if (!firstAvailableTab) firstAvailableTab = tab;
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'master': ['partmaster', 'machines', 'operators', 'dept', 'shift', 'vendors', 'setters', 'suppliers'],
                     'inventory': ['inventory', 'rawmaterial', 'ht'],
                     'production': ['schedule', 'status', 'prodlog', 'debur'],
-                    'toolcrib': ['insertmaster', 'drillmaster', 'products', 'insertreceipt', 'insertissue'],
+                    'toolcrib': ['insertmaster', 'drillmaster', 'products', 'insertreceipt', 'insertissue', 'insertcpc'],
                     'reports': ['reports'],
                     'maintenance': ['maintenance', 'bdslip'],
                     'hr': ['hr', 'attendance']
@@ -517,6 +517,13 @@ document.addEventListener('DOMContentLoaded', () => {
             importBtn.style.display = 'inline-block';
             addBtn.style.display = 'none';
             fetchInsertIssues();
+        }},
+        'sidebarInsertCpc': { tab: 'insertcpc', action: () => {
+            const sec = document.getElementById('insertCpcSection');
+            if (sec) sec.style.display = 'block';
+            importBtn.style.display = 'none';
+            addBtn.style.display = 'none';
+            fetchInsertCpcReport();
         }},
         'sidebarOperEff': { tab: 'oper_eff', action: () => {
             const operEffSec = document.getElementById('operEffSection');
@@ -8582,4 +8589,299 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } catch (err) { console.error(err); }
     }
+
+    // --- Insert CPC Report Implementation ---
+    let insertCpcDataCache = null;
+
+    async function fetchInsertCpcReport() {
+        try {
+            const [issueRes, masterRes, prodRes, partRes, deptRes] = await Promise.all([
+                fetch('/api/insert_issues'),
+                fetch('/api/insert_masters'),
+                fetch('/api/prodlog'),
+                fetch('/api/partmaster'),
+                fetch('/api/departments').catch(() => null)
+            ]);
+
+            const issues = await issueRes.json();
+            const masters = await masterRes.json();
+            const prodLogs = await prodRes.json();
+            const parts = await partRes.json();
+            let depts = [];
+            if (deptRes && deptRes.ok) {
+                try { depts = await deptRes.json(); } catch(e) {}
+            }
+
+            populateInsertCpcFilterDropdowns(issues, parts, depts);
+
+            const fromDate = document.getElementById('insertCpcFromDate')?.value || '';
+            const toDate = document.getElementById('insertCpcToDate')?.value || '';
+            const filterDept = document.getElementById('insertCpcFilterDept')?.value || '';
+            const filterPart = document.getElementById('insertCpcFilterPart')?.value || '';
+
+            const rateMap = {};
+            masters.forEach(m => {
+                const sKey = (m.insert_spec || m.name || '').trim().toLowerCase();
+                if (sKey) {
+                    rateMap[sKey] = parseFloat(m.rate || m.cost || m.price || 0) || 0;
+                }
+            });
+
+            const vaMap = {};
+            parts.forEach(p => {
+                const pKey = (p.partno || '').trim().toLowerCase();
+                if (pKey) {
+                    vaMap[pKey] = {
+                        partno: p.partno,
+                        va: parseFloat(p.va || 0) || 0
+                    };
+                }
+            });
+
+            const filteredIssues = issues.filter(item => {
+                const d = formatExcelDate(item.date);
+                if (fromDate && d < fromDate) return false;
+                if (toDate && d > toDate) return false;
+                if (filterDept && (item.department || '').trim().toLowerCase() !== filterDept.trim().toLowerCase()) return false;
+                return true;
+            });
+
+            const partMap = {};
+
+            filteredIssues.forEach(item => {
+                let usages = [];
+                if (item.usages) {
+                    try {
+                        let parsed = item.usages;
+                        while (typeof parsed === 'string') parsed = JSON.parse(parsed);
+                        if (Array.isArray(parsed)) usages = parsed;
+                    } catch(e) {}
+                }
+                if (!usages || !Array.isArray(usages) || usages.length === 0) {
+                    usages = [{
+                        partno: item.partno || '',
+                        opn_no: item.opn_no || ''
+                    }];
+                }
+
+                const totalIssued = parseInt(item.qty_issued) || 1;
+                const qtyPerUsage = totalIssued / usages.length;
+
+                usages.forEach(u => {
+                    const rawPart = (u.partno || item.partno || '').trim();
+                    const rawOpn = String(u.opn_no || item.opn_no || '').trim();
+                    const rawSpec = (item.insert_spec || '').trim();
+
+                    if (!rawPart) return;
+                    if (filterPart && rawPart.toLowerCase() !== filterPart.trim().toLowerCase()) return;
+
+                    const pKey = rawPart.toLowerCase();
+                    const oKey = rawOpn.toLowerCase() || 'unspecified';
+                    const sKey = rawSpec.toLowerCase() || 'unspecified';
+
+                    if (!partMap[pKey]) {
+                        partMap[pKey] = {
+                            partno: rawPart,
+                            opns: {}
+                        };
+                    }
+
+                    if (!partMap[pKey].opns[oKey]) {
+                        partMap[pKey].opns[oKey] = {
+                            opn_no: rawOpn,
+                            specs: {}
+                        };
+                    }
+
+                    if (!partMap[pKey].opns[oKey].specs[sKey]) {
+                        const rate = rateMap[sKey] || 0;
+                        partMap[pKey].opns[oKey].specs[sKey] = {
+                            spec: rawSpec,
+                            qty_issued: 0,
+                            rate: rate,
+                            value: 0
+                        };
+                    }
+
+                    partMap[pKey].opns[oKey].specs[sKey].qty_issued += qtyPerUsage;
+                    partMap[pKey].opns[oKey].specs[sKey].value = partMap[pKey].opns[oKey].specs[sKey].qty_issued * partMap[pKey].opns[oKey].specs[sKey].rate;
+                });
+            });
+
+            const filteredProdLogs = prodLogs.filter(p => {
+                const d = formatExcelDate(p.date);
+                if (fromDate && d < fromDate) return false;
+                if (toDate && d > toDate) return false;
+                if (filterDept && (p.dept || '').trim().toLowerCase() !== filterDept.trim().toLowerCase()) return false;
+                return true;
+            });
+
+            const prodQtyMap = {};
+            filteredProdLogs.forEach(p => {
+                const pKey = (p.partno || '').trim().toLowerCase();
+                const oKey = String(p.opn_no || '').trim().toLowerCase();
+                const key = `${pKey}_${oKey}`;
+                const qty = parseInt(p.prod_qty || p.ok_qty) || 0;
+                prodQtyMap[key] = (prodQtyMap[key] || 0) + qty;
+            });
+
+            renderInsertCpcReport(partMap, prodQtyMap, vaMap);
+        } catch (err) {
+            console.error('Error in fetchInsertCpcReport:', err);
+        }
+    }
+
+    function populateInsertCpcFilterDropdowns(issues, parts, depts) {
+        const deptSelect = document.getElementById('insertCpcFilterDept');
+        const partSelect = document.getElementById('insertCpcFilterPart');
+        if (!deptSelect || !partSelect) return;
+
+        if (deptSelect.options.length <= 1) {
+            const deptSet = new Set();
+            issues.forEach(i => { if (i.department) deptSet.add(i.department.trim()); });
+            if (Array.isArray(depts)) depts.forEach(d => { if (d.name) deptSet.add(d.name.trim()); });
+            deptSet.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d;
+                opt.textContent = d;
+                deptSelect.appendChild(opt);
+            });
+        }
+
+        if (partSelect.options.length <= 1) {
+            const partSet = new Set();
+            issues.forEach(i => {
+                if (i.partno) partSet.add(i.partno.trim());
+                if (i.usages) {
+                    try {
+                        let parsed = i.usages;
+                        while (typeof parsed === 'string') parsed = JSON.parse(parsed);
+                        if (Array.isArray(parsed)) {
+                            parsed.forEach(u => { if (u.partno) partSet.add(u.partno.trim()); });
+                        }
+                    } catch(e) {}
+                }
+            });
+            parts.forEach(p => { if (p.partno) partSet.add(p.partno.trim()); });
+            Array.from(partSet).sort().forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.textContent = p;
+                partSelect.appendChild(opt);
+            });
+        }
+    }
+
+    function renderInsertCpcReport(partMap, prodQtyMap, vaMap) {
+        const tbody = document.getElementById('insertCpcBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        const partKeys = Object.keys(partMap).sort();
+
+        if (partKeys.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 20px; color: var(--text-muted);">No insert issue data found for the selected filters.</td></tr>`;
+            return;
+        }
+
+        partKeys.forEach(pKey => {
+            const partObj = partMap[pKey];
+            const partno = partObj.partno;
+            const partVa = vaMap[pKey] ? vaMap[pKey].va : 0;
+            const opnKeys = Object.keys(partObj.opns).sort((a,b) => (parseInt(a)||0) - (parseInt(b)||0));
+
+            let partTotalSpecRows = 0;
+            opnKeys.forEach(oKey => {
+                const specKeys = Object.keys(partObj.opns[oKey].specs);
+                partTotalSpecRows += specKeys.length;
+            });
+
+            const totalPartRowSpan = partTotalSpecRows + 2;
+
+            let totalPartCpc = 0;
+            let totalPartValue = 0;
+            let isFirstPartRow = true;
+
+            opnKeys.forEach(oKey => {
+                const opnObj = partObj.opns[oKey];
+                const opn_no = opnObj.opn_no;
+                const qtyProd = prodQtyMap[`${pKey}_${oKey}`] || 0;
+                const specKeys = Object.keys(opnObj.specs);
+
+                let opnTotalValue = 0;
+                specKeys.forEach(sKey => {
+                    opnTotalValue += opnObj.specs[sKey].value;
+                });
+
+                const cpcOpn = qtyProd > 0 ? (opnTotalValue / qtyProd) : 0;
+                totalPartCpc += cpcOpn;
+
+                const opnRowSpan = specKeys.length;
+                let isFirstOpnRow = true;
+
+                specKeys.forEach(sKey => {
+                    const specObj = opnObj.specs[sKey];
+                    totalPartValue += specObj.value;
+
+                    const tr = document.createElement('tr');
+                    let html = '';
+
+                    if (isFirstPartRow) {
+                        html += `<td rowspan="${totalPartRowSpan}" style="border: 1px solid #cbd5e1; padding: 8px; vertical-align: top; font-weight: bold; background: #fafafa;">${partno}</td>`;
+                        isFirstPartRow = false;
+                    }
+
+                    if (isFirstOpnRow) {
+                        html += `<td rowspan="${opnRowSpan}" style="border: 1px solid #cbd5e1; padding: 8px; vertical-align: middle; font-weight: 600; text-align: center;">${opn_no}</td>`;
+                        html += `<td rowspan="${opnRowSpan}" style="border: 1px solid #cbd5e1; padding: 8px; vertical-align: middle; text-align: center; font-weight: 500;">${qtyProd}</td>`;
+                    }
+
+                    const qtyIssuedFormatted = Number.isInteger(specObj.qty_issued) ? specObj.qty_issued : specObj.qty_issued.toFixed(2);
+                    html += `<td style="border: 1px solid #cbd5e1; padding: 8px; font-weight: 500;">${specObj.spec}</td>`;
+                    html += `<td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center; font-weight: 600;">${qtyIssuedFormatted}</td>`;
+                    html += `<td style="border: 1px solid #cbd5e1; padding: 8px; text-align: right; font-weight: 500;">₹${specObj.value.toFixed(2)}</td>`;
+
+                    if (isFirstOpnRow) {
+                        html += `<td rowspan="${opnRowSpan}" style="border: 1px solid #cbd5e1; padding: 8px; vertical-align: middle; text-align: right; font-weight: 600; color: #0284c7;">₹${cpcOpn.toFixed(2)}</td>`;
+                        isFirstOpnRow = false;
+                    }
+
+                    tr.innerHTML = html;
+                    tbody.appendChild(tr);
+                });
+            });
+
+            const trTotalCpc = document.createElement('tr');
+            trTotalCpc.style.background = '#f1f5f9';
+            trTotalCpc.innerHTML = `
+                <td colspan="5" style="border: 1px solid #cbd5e1; padding: 6px 12px; text-align: right; font-weight: bold; color: var(--text-main);">total part cpc</td>
+                <td style="border: 1px solid #cbd5e1; padding: 6px 12px; text-align: right; font-weight: bold; color: var(--primary-color);">₹${totalPartCpc.toFixed(2)}</td>
+            `;
+            tbody.appendChild(trTotalCpc);
+
+            const trPartVa = document.createElement('tr');
+            trPartVa.style.background = '#f8fafc';
+            trPartVa.innerHTML = `
+                <td colspan="5" style="border: 1px solid #cbd5e1; padding: 6px 12px; text-align: right; font-weight: bold; color: var(--text-main);">Part VA</td>
+                <td style="border: 1px solid #cbd5e1; padding: 6px 12px; text-align: right; font-weight: bold; color: #0284c7;">₹${partVa.toFixed(2)}</td>
+            `;
+            tbody.appendChild(trPartVa);
+        });
+    }
+
+    document.getElementById('filterInsertCpcBtn')?.addEventListener('click', fetchInsertCpcReport);
+    document.getElementById('resetInsertCpcBtn')?.addEventListener('click', () => {
+        if (document.getElementById('insertCpcFromDate')) document.getElementById('insertCpcFromDate').value = '';
+        if (document.getElementById('insertCpcToDate')) document.getElementById('insertCpcToDate').value = '';
+        if (document.getElementById('insertCpcFilterDept')) document.getElementById('insertCpcFilterDept').value = '';
+        if (document.getElementById('insertCpcFilterPart')) document.getElementById('insertCpcFilterPart').value = '';
+        fetchInsertCpcReport();
+    });
+
+    document.getElementById('exportInsertCpcBtn')?.addEventListener('click', () => {
+        const table = document.getElementById('insertCpcTable');
+        if (!table) return;
+        const wb = XLSX.utils.table_to_book(table, { sheet: "Insert_CPC_Report" });
+        XLSX.writeFile(wb, `Insert_CPC_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    });
 });
