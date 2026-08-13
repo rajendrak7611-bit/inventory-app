@@ -6232,13 +6232,53 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelInsertReceiptBtn = document.getElementById('cancelInsertReceiptBtn');
     const closeInsertReceiptModalBtn = document.getElementById('closeInsertReceiptModalBtn');
 
+    let allInsertReceiptsCache = [];
+
     async function fetchInsertReceipts() {
         try {
             const res = await fetch('/api/insert_receipts');
-            const data = await res.json();
-            renderInsertReceipts(data);
+            allInsertReceiptsCache = await res.json();
+            applyInsertReceiptFilters();
         } catch (err) { console.error(err); }
     }
+
+    function applyInsertReceiptFilters() {
+        if (!allInsertReceiptsCache) return;
+        const inputs = document.querySelectorAll('.insert-receipt-col-filter');
+        const filters = {};
+        inputs.forEach(inp => {
+            const key = inp.getAttribute('data-key');
+            const val = inp.value.trim().toLowerCase();
+            if (val) filters[key] = val;
+        });
+
+        let filtered = allInsertReceiptsCache;
+        if (Object.keys(filters).length > 0) {
+            filtered = allInsertReceiptsCache.filter(item => {
+                if (filters.id && !String(item.id).toLowerCase().includes(filters.id)) return false;
+                if (filters.date && !(item.date || '').toLowerCase().includes(filters.date) && !formatExcelDate(item.date).toLowerCase().includes(filters.date)) return false;
+                if (filters.supplier && !(item.supplier || '').toLowerCase().includes(filters.supplier)) return false;
+                if (filters.insert_spec && !(item.insert_spec || '').toLowerCase().includes(filters.insert_spec)) return false;
+                if (filters.batch_no && !(item.batch_no || '').toLowerCase().includes(filters.batch_no)) return false;
+                if (filters.qty && !String(item.qty || 0).toLowerCase().includes(filters.qty)) return false;
+                if (filters.rate && !String(item.rate || 0).toLowerCase().includes(filters.rate)) return false;
+                return true;
+            });
+        }
+
+        renderInsertReceipts(filtered);
+    }
+
+    document.addEventListener('input', (e) => {
+        if (e.target && e.target.classList.contains('insert-receipt-col-filter')) {
+            applyInsertReceiptFilters();
+        }
+    });
+
+    document.getElementById('clearInsertReceiptFiltersBtn')?.addEventListener('click', () => {
+        document.querySelectorAll('.insert-receipt-col-filter').forEach(inp => inp.value = '');
+        applyInsertReceiptFilters();
+    });
 
     function renderInsertReceipts(receipts) {
         const tbody = document.getElementById('insertReceiptBody');

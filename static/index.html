@@ -186,6 +186,16 @@
                         <th>Rate (Rs)</th>
                         <th>Actions</th>
                     </tr>
+                    <tr style="background-color: var(--table-header-bg, #f8fafc);">
+                        <th><input type="text" class="insert-receipt-col-filter" data-key="id" placeholder="Filter ID..." style="width: 100%; min-width: 40px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="insert-receipt-col-filter" data-key="date" placeholder="Filter Date..." style="width: 100%; min-width: 65px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="insert-receipt-col-filter" data-key="supplier" placeholder="Filter Supplier..." style="width: 100%; min-width: 80px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="insert-receipt-col-filter" data-key="insert_spec" placeholder="Filter Spec..." style="width: 100%; min-width: 80px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="insert-receipt-col-filter" data-key="batch_no" placeholder="Filter Batch..." style="width: 100%; min-width: 55px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="insert-receipt-col-filter" data-key="qty" placeholder="Filter Qty..." style="width: 100%; min-width: 45px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="insert-receipt-col-filter" data-key="rate" placeholder="Filter Rate..." style="width: 100%; min-width: 55px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th style="text-align: center;"><button id="clearInsertReceiptFiltersBtn" class="btn btn-outline" style="padding: 0.15rem 0.4rem; font-size: 0.7rem; color: #ef4444; border-color: #ef4444; white-space: nowrap;" title="Clear all column filters">Clear</button></th>
+                    </tr>
                 </thead>
                 <tbody id="insertReceiptBody"></tbody>
             </table>
@@ -2544,6 +2554,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=228"></script>
+    <script src="/static/app.js?v=229"></script>
 </body>
 </html>
