@@ -6964,6 +6964,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             usages.splice(uIdx, 1);
                             const payload = {
                                 date: item.date || '',
+                                shift: item.shift || '',
                                 department: item.department || '',
                                 insert_spec: item.insert_spec || '',
                                 batch_no: item.batch_no || '',
@@ -7246,6 +7247,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const payload = {
                     date: currentItem.date || '',
+                    shift: currentItem.shift || '',
                     department: currentItem.department || '',
                     insert_spec: currentItem.insert_spec || '',
                     batch_no: currentItem.batch_no || '',
@@ -7918,6 +7920,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const payload = {
                     date: freshItem.date || '',
+                    shift: freshItem.shift || '',
                     department: freshItem.department || '',
                     insert_spec: freshItem.insert_spec || '',
                     batch_no: freshItem.batch_no || '',
