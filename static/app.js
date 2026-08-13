@@ -18,7 +18,52 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return true;
     }
-    window.checkAdminAccess = checkAdminAccess;
+    function formatExcelDate(val) {
+        if (!val) return new Date().toISOString().slice(0, 10);
+        const str = String(val).trim();
+        if (!str) return new Date().toISOString().slice(0, 10);
+
+        if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+            return str.slice(0, 10);
+        }
+
+        const num = Number(str);
+        if (!isNaN(num) && num > 20000 && num < 70000) {
+            const dateObj = new Date(Math.round((num - 25569) * 86400 * 1000));
+            if (!isNaN(dateObj.getTime())) {
+                const yyyy = dateObj.getUTCFullYear();
+                const mm = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+                const dd = String(dateObj.getUTCDate()).padStart(2, '0');
+                return `${yyyy}-${mm}-${dd}`;
+            }
+        }
+
+        if (str.includes('/')) {
+            const parts = str.split('/');
+            if (parts.length === 3) {
+                if (parts[0].length === 4) {
+                    return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+                } else if (parts[2].length === 4) {
+                    const d = parts[0].padStart(2, '0');
+                    const m = parts[1].padStart(2, '0');
+                    const y = parts[2];
+                    return `${y}-${m}-${d}`;
+                }
+            }
+        }
+        if (str.includes('-')) {
+            const parts = str.split('-');
+            if (parts.length === 3 && parts[2].length === 4) {
+                const d = parts[0].padStart(2, '0');
+                const m = parts[1].padStart(2, '0');
+                const y = parts[2];
+                return `${y}-${m}-${d}`;
+            }
+        }
+
+        return str.slice(0, 10);
+    }
+    window.formatExcelDate = formatExcelDate;
 
     if (!userObj) {
         appContainer.style.display = 'none';
@@ -6788,9 +6833,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const monitorCell = buildMonitorCellHtml(item, uIdx, numEdges);
 
                 if (uIdx === 0) {
+                    const formattedDate = formatExcelDate(item.date);
                     tr.innerHTML = `
                         <td rowspan="${rowSpan}" style="vertical-align: middle; font-weight: bold;">${item.id}</td>
-                        <td rowspan="${rowSpan}" style="vertical-align: middle;"><span style="font-weight: 500;">${item.date || ''}</span></td>
+                        <td rowspan="${rowSpan}" style="vertical-align: middle;"><span style="font-weight: 500;">${formattedDate}</span></td>
                         <td rowspan="${rowSpan}" style="vertical-align: middle;"><strong>${item.shift || ''}</strong></td>
                         <td rowspan="${rowSpan}" style="vertical-align: middle;">${item.department || ''}</td>
                         <td rowspan="${rowSpan}" style="vertical-align: middle;"><strong>${item.insert_spec || ''}</strong></td>
@@ -7533,7 +7579,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         if (specVal) {
                             issues.push({
-                                date: dateVal || todayStr,
+                                date: formatExcelDate(dateVal),
                                 shift: shiftVal,
                                 insert_spec: specVal,
                                 batch_no: batchVal,
