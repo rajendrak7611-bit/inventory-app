@@ -6746,7 +6746,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!tbody) return;
         tbody.innerHTML = '';
         if (!issues || issues.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No insert issue records found. Click "+ Issue Insert" or "Import Excel" to add records.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No insert issue records found. Click "+ Issue Insert" or "Import Excel" to add records.</td></tr>';
             return;
         }
 
@@ -6791,6 +6791,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     tr.innerHTML = `
                         <td rowspan="${rowSpan}" style="vertical-align: middle; font-weight: bold;">${item.id}</td>
                         <td rowspan="${rowSpan}" style="vertical-align: middle;"><span style="font-weight: 500;">${item.date || ''}</span></td>
+                        <td rowspan="${rowSpan}" style="vertical-align: middle;"><strong>${item.shift || ''}</strong></td>
                         <td rowspan="${rowSpan}" style="vertical-align: middle;">${item.department || ''}</td>
                         <td rowspan="${rowSpan}" style="vertical-align: middle;"><strong>${item.insert_spec || ''}</strong></td>
                         <td rowspan="${rowSpan}" style="vertical-align: middle;">${item.batch_no || ''}</td>
@@ -7511,6 +7512,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         let specVal = '';
                         let batchVal = '';
                         let qtyVal = 1;
+                        let shiftVal = '';
                         let machineVal = '';
                         let opVal = '';
                         let partVal = '';
@@ -7519,6 +7521,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         for (const key of Object.keys(row)) {
                             const k = key.trim().toLowerCase();
                             if (['date', 'issue date', 'issue_date'].includes(k)) dateVal = String(row[key] || '').trim();
+                            if (['shift', 'shift name', 'shift_name'].includes(k)) shiftVal = String(row[key] || '').trim();
                             if (['insert spec', 'insert_spec', 'spec'].includes(k)) specVal = String(row[key] || '').trim();
                             if (['batch no', 'batch_no', 'batch'].includes(k)) batchVal = String(row[key] || '').trim();
                             if (['qty issued', 'qty_issued', 'qty', 'issued qty'].includes(k)) qtyVal = parseInt(row[key]) || 1;
@@ -7531,6 +7534,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (specVal) {
                             issues.push({
                                 date: dateVal || todayStr,
+                                shift: shiftVal,
                                 insert_spec: specVal,
                                 batch_no: batchVal,
                                 qty_issued: qtyVal,
