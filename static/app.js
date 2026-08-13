@@ -304,7 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const sections = [
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection',
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
-            'productsSection', 'insertMasterSection', 'drillMasterSection', 'insertReceiptSection', 'insertIssueSection', 'partMasterSection', 'machinesSection',
+            'productsSection', 'insertMasterSection', 'drillMasterSection', 'insertReceiptSection', 'insertIssueSection', 'insertCpcSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'htSection', 'scheduleCreateSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
             'inspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'hrSection', 'attendanceSection'
