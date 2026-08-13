@@ -6444,7 +6444,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     sel.appendChild(opt);
                 }
             });
+            if (selectedSpec && !data.some(item => (item.insert_spec || item.name || '').trim().toLowerCase() === selectedSpec.trim().toLowerCase())) {
+                const customOpt = document.createElement('option');
+                customOpt.value = selectedSpec;
+                customOpt.textContent = selectedSpec;
+                customOpt.selected = true;
+                sel.appendChild(customOpt);
+            }
             makeSearchableSelect('receiptInsertSpecSelect');
+            if (selectedSpec && tomSelectCache['receiptInsertSpecSelect']) {
+                tomSelectCache['receiptInsertSpecSelect'].setValue(selectedSpec);
+            }
         } catch (e) { console.error('Error fetching insert specs for dropdown:', e); }
     }
 
@@ -6507,7 +6517,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/suppliers');
             const suppliers = await res.json();
             
-            // Sort suppliers A-Z
             suppliers.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
 
             suppliers.forEach(s => {
@@ -6520,7 +6529,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 sel.appendChild(opt);
             });
 
-            // If selectedSupplier exists but is not yet in suppliers list, add it dynamically
             if (selectedSupplier && !suppliers.some(s => s.name.trim().toLowerCase() === selectedSupplier.trim().toLowerCase())) {
                 const customOpt = document.createElement('option');
                 customOpt.value = selectedSupplier;
@@ -6559,8 +6567,8 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('insertReceiptId').value = item.id;
             document.getElementById('receiptDateInput').value = item.date || '';
             document.getElementById('receiptBatchNoInput').value = item.batch_no || '';
-            document.getElementById('receiptQtyInput').value = item.qty || 1;
-            document.getElementById('receiptRateInput').value = item.rate || 0.00;
+            document.getElementById('receiptQtyInput').value = (item.qty !== undefined && item.qty !== null) ? item.qty : 1;
+            document.getElementById('receiptRateInput').value = (item.rate !== undefined && item.rate !== null) ? item.rate : 0.00;
         } else {
             document.getElementById('insertReceiptModalTitle').textContent = 'Add Insert Receipt';
             insertReceiptForm.reset();
@@ -6571,6 +6579,12 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('receiptBatchNoInput').value = autoBatch;
         }
         makeSearchableSelect('receiptInsertSpecSelect');
+        if (item && item.insert_spec && tomSelectCache['receiptInsertSpecSelect']) {
+            tomSelectCache['receiptInsertSpecSelect'].setValue(item.insert_spec);
+        }
+        if (item && item.supplier && receiptSupplierTomSelect) {
+            receiptSupplierTomSelect.setValue(item.supplier);
+        }
         insertReceiptModal.classList.add('show');
     }
 
