@@ -693,9 +693,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 rmLogFinishPartNoSelect.on('change', (val) => {
                     if (!val) return;
-                    const selected = globalPartMasters.find(p => p.partno === val);
-                    if (selected && selected.forge_pn && rmLogForgePnSelect) {
-                        rmLogForgePnSelect.setValue(selected.forge_pn);
+                    const cleanVal = val.trim().toLowerCase();
+                    const selected = globalPartMasters.find(p => (p.partno || '').trim().toLowerCase() === cleanVal);
+                    if (selected && selected.forge_pn) {
+                        const targetForgePn = selected.forge_pn.trim();
+                        if (rmLogForgePnSelect) {
+                            let matchKey = Object.keys(rmLogForgePnSelect.options).find(k => k.trim().toLowerCase() === targetForgePn.toLowerCase());
+                            if (!matchKey) {
+                                const normTarget = targetForgePn.replace(/[\s\-_#]/g, '').toLowerCase();
+                                matchKey = Object.keys(rmLogForgePnSelect.options).find(k => k.replace(/[\s\-_#]/g, '').toLowerCase() === normTarget);
+                            }
+
+                            if (matchKey) {
+                                rmLogForgePnSelect.setValue(matchKey);
+                            } else {
+                                rmLogForgePnSelect.addOption({ value: targetForgePn, text: targetForgePn });
+                                rmLogForgePnSelect.setValue(targetForgePn);
+                            }
+                        }
                     }
                 });
             }
