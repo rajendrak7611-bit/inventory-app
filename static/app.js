@@ -6678,17 +6678,75 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let allInsertMastersCache = [];
 
+    let allInsertIssuesCache = [];
+
     async function fetchInsertIssues() {
         try {
             const [issueRes, masterRes] = await Promise.all([
                 fetch('/api/insert_issues'),
                 fetch('/api/insert_masters')
             ]);
-            const data = await issueRes.json();
+            allInsertIssuesCache = await issueRes.json();
             allInsertMastersCache = await masterRes.json();
-            renderInsertIssues(data);
+            applyInsertIssueFilters();
         } catch (err) { console.error(err); }
     }
+
+    function applyInsertIssueFilters() {
+        if (!allInsertIssuesCache) return;
+        const inputs = document.querySelectorAll('.insert-issue-col-filter');
+        const filters = {};
+        inputs.forEach(inp => {
+            const key = inp.getAttribute('data-key');
+            const val = inp.value.trim().toLowerCase();
+            if (val) filters[key] = val;
+        });
+
+        let filtered = allInsertIssuesCache;
+        if (Object.keys(filters).length > 0) {
+            filtered = allInsertIssuesCache.filter(item => {
+                if (filters.id && !String(item.id).toLowerCase().includes(filters.id)) return false;
+                if (filters.date && !formatExcelDate(item.date).toLowerCase().includes(filters.date)) return false;
+                if (filters.shift && !(item.shift || '').toLowerCase().includes(filters.shift)) return false;
+                if (filters.dept && !(item.department || '').toLowerCase().includes(filters.dept)) return false;
+                if (filters.insert_spec && !(item.insert_spec || '').toLowerCase().includes(filters.insert_spec)) return false;
+                if (filters.batch_no && !(item.batch_no || '').toLowerCase().includes(filters.batch_no)) return false;
+                if (filters.qty_issued && !String(item.qty_issued || '').toLowerCase().includes(filters.qty_issued)) return false;
+
+                let usages = [];
+                if (item.usages) {
+                    try {
+                        let parsed = item.usages;
+                        while (typeof parsed === 'string') parsed = JSON.parse(parsed);
+                        if (Array.isArray(parsed)) usages = parsed;
+                    } catch(e) {}
+                }
+                if (!usages || usages.length === 0) {
+                    usages = [{ machine: item.machine || '', operator: item.operator || '', partno: item.partno || '', opn_no: item.opn_no || '' }];
+                }
+
+                if (filters.machine && !usages.some(u => (u.machine || '').toLowerCase().includes(filters.machine))) return false;
+                if (filters.operator && !usages.some(u => (u.operator || '').toLowerCase().includes(filters.operator))) return false;
+                if (filters.partno && !usages.some(u => (u.partno || '').toLowerCase().includes(filters.partno))) return false;
+                if (filters.opn_no && !usages.some(u => (u.opn_no || '').toLowerCase().includes(filters.opn_no))) return false;
+
+                return true;
+            });
+        }
+
+        renderInsertIssues(filtered);
+    }
+
+    document.addEventListener('input', (e) => {
+        if (e.target && e.target.classList.contains('insert-issue-col-filter')) {
+            applyInsertIssueFilters();
+        }
+    });
+
+    document.getElementById('clearInsertIssueFiltersBtn')?.addEventListener('click', () => {
+        document.querySelectorAll('.insert-issue-col-filter').forEach(inp => inp.value = '');
+        applyInsertIssueFilters();
+    });
 
     function normalizeEdgeObj(rawEdgeData) {
         const result = {};

@@ -221,6 +221,21 @@
                         <th>Insert Monitor</th>
                         <th>Actions</th>
                     </tr>
+                    <tr style="background-color: var(--table-header-bg, #f8fafc);">
+                        <th><input type="text" class="insert-issue-col-filter" data-key="id" placeholder="Filter ID..." style="width: 100%; min-width: 40px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="insert-issue-col-filter" data-key="date" placeholder="Filter Date..." style="width: 100%; min-width: 65px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="insert-issue-col-filter" data-key="shift" placeholder="Filter Shift..." style="width: 100%; min-width: 50px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="insert-issue-col-filter" data-key="dept" placeholder="Filter Dept..." style="width: 100%; min-width: 50px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="insert-issue-col-filter" data-key="insert_spec" placeholder="Filter Spec..." style="width: 100%; min-width: 70px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="insert-issue-col-filter" data-key="batch_no" placeholder="Filter Batch..." style="width: 100%; min-width: 55px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="insert-issue-col-filter" data-key="qty_issued" placeholder="Filter Qty..." style="width: 100%; min-width: 45px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="insert-issue-col-filter" data-key="machine" placeholder="Filter M/C..." style="width: 100%; min-width: 60px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="insert-issue-col-filter" data-key="operator" placeholder="Filter Operator..." style="width: 100%; min-width: 65px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="insert-issue-col-filter" data-key="partno" placeholder="Filter Part..." style="width: 100%; min-width: 55px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="insert-issue-col-filter" data-key="opn_no" placeholder="Filter Opn..." style="width: 100%; min-width: 45px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th></th>
+                        <th style="text-align: center;"><button id="clearInsertIssueFiltersBtn" class="btn btn-outline" style="padding: 0.15rem 0.4rem; font-size: 0.7rem; color: #ef4444; border-color: #ef4444; white-space: nowrap;" title="Clear all column filters">Clear</button></th>
+                    </tr>
                 </thead>
                 <tbody id="insertIssueBody"></tbody>
             </table>
@@ -2476,6 +2491,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=224"></script>
+    <script src="/static/app.js?v=225"></script>
 </body>
 </html>
