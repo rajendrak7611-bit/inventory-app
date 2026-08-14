@@ -4336,12 +4336,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const forgePn = item.forge_pn || '';
         const finishPartNo = item.finish_part_no || '';
+        let partPrefix = item.part_prefix || '';
+        if (!partPrefix && finishPartNo) {
+            if (globalPartMasters.length === 0) {
+                try {
+                    const pmRes = await fetch('/api/partmaster');
+                    globalPartMasters = await pmRes.json();
+                } catch(e) {}
+            }
+            const matchedPm = globalPartMasters.find(pm => (pm.partno || '').trim().toLowerCase() === finishPartNo.trim().toLowerCase());
+            if (matchedPm) partPrefix = matchedPm.part_prefix || '';
+        }
         const qty = item.qty || 0;
 
         // 10 empty lines for rows 1 to 10
         let txtContent = '\r\n'.repeat(10);
-        // Row 11: Date, DC No, Forge Part No, Finish Part No, Qty (Tab separated)
-        txtContent += `${dateFormatted}\t${dcNo}\t${forgePn}\t${finishPartNo}\t${qty}\r\n`;
+        // Row 11: Date, DC No, Forge Part No, Finish Part No, Part Prefix, Qty (Tab separated)
+        txtContent += `${dateFormatted}\t${dcNo}\t${forgePn}\t${finishPartNo}\t${partPrefix}\t${qty}\r\n`;
 
         // Modern File System Access API allows selecting & overwriting dc.txt directly
         if ('showSaveFilePicker' in window) {
