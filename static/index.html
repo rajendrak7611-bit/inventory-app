@@ -1532,6 +1532,7 @@
                             <th>Date</th>
                             <th>Forge PN</th>
                             <th>Finish Part No</th>
+                            <th>Part Prefix</th>
                             <th>DC No</th>
                             <th>Despatch Qty</th>
                             <th>Actions</th>
@@ -2025,6 +2026,10 @@
                 <div class="form-group">
                     <label for="rmLogForgePn">Forge PN</label>
                     <select id="rmLogForgePn" required style="width: 100%;"></select>
+                </div>
+                <div class="form-group" id="rmLogPartPrefixGroup" style="display: none;">
+                    <label for="rmLogPartPrefix">Part Prefix</label>
+                    <input type="text" id="rmLogPartPrefix" placeholder="Part Prefix from Part Master">
                 </div>
                 <div class="form-group">
                     <label for="rmLogQty">Qty</label>
@@ -2564,6 +2569,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=234"></script>
+    <script src="/static/app.js?v=235"></script>
 </body>
 </html>

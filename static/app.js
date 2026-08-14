@@ -649,9 +649,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isReceipt) {
                 document.getElementById('rmLogDcNoGroup').style.display = 'none';
                 document.getElementById('rmLogFinishPartNoGroup').style.display = 'none';
+                if (document.getElementById('rmLogPartPrefixGroup')) document.getElementById('rmLogPartPrefixGroup').style.display = 'none';
             } else {
                 document.getElementById('rmLogDcNoGroup').style.display = 'block';
                 document.getElementById('rmLogFinishPartNoGroup').style.display = 'block';
+                if (document.getElementById('rmLogPartPrefixGroup')) document.getElementById('rmLogPartPrefixGroup').style.display = 'block';
+                if (document.getElementById('rmLogPartPrefix')) document.getElementById('rmLogPartPrefix').value = '';
 
                 // Autofill next continuous DC No starting from 1353
                 try {
@@ -696,20 +699,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!val) return;
                     const cleanVal = val.trim().toLowerCase();
                     const selected = globalPartMasters.find(p => (p.partno || '').trim().toLowerCase() === cleanVal);
-                    if (selected && selected.forge_pn) {
-                        const targetForgePn = selected.forge_pn.trim();
-                        if (rmLogForgePnSelect) {
-                            let matchKey = Object.keys(rmLogForgePnSelect.options).find(k => k.trim().toLowerCase() === targetForgePn.toLowerCase());
-                            if (!matchKey) {
-                                const normTarget = targetForgePn.replace(/[\s\-_#]/g, '').toLowerCase();
-                                matchKey = Object.keys(rmLogForgePnSelect.options).find(k => k.replace(/[\s\-_#]/g, '').toLowerCase() === normTarget);
-                            }
+                    if (selected) {
+                        if (selected.part_prefix && document.getElementById('rmLogPartPrefix')) {
+                            document.getElementById('rmLogPartPrefix').value = selected.part_prefix;
+                        }
+                        if (selected.forge_pn) {
+                            const targetForgePn = selected.forge_pn.trim();
+                            if (rmLogForgePnSelect) {
+                                let matchKey = Object.keys(rmLogForgePnSelect.options).find(k => k.trim().toLowerCase() === targetForgePn.toLowerCase());
+                                if (!matchKey) {
+                                    const normTarget = targetForgePn.replace(/[\s\-_#]/g, '').toLowerCase();
+                                    matchKey = Object.keys(rmLogForgePnSelect.options).find(k => k.replace(/[\s\-_#]/g, '').toLowerCase() === normTarget);
+                                }
 
-                            if (matchKey) {
-                                rmLogForgePnSelect.setValue(matchKey);
-                            } else {
-                                rmLogForgePnSelect.addOption({ value: targetForgePn, text: targetForgePn });
-                                rmLogForgePnSelect.setValue(targetForgePn);
+                                if (matchKey) {
+                                    rmLogForgePnSelect.setValue(matchKey);
+                                } else {
+                                    rmLogForgePnSelect.addOption({ value: targetForgePn, text: targetForgePn });
+                                    rmLogForgePnSelect.setValue(targetForgePn);
+                                }
                             }
                         }
                     }
@@ -4150,8 +4158,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.8rem; color: #ef4444; border-color: #ef4444;" onclick="deleteRmLog(${log.id}, '${type}')">Delete</button>
                     `;
                     if (type === 'despatch') {
+                        let prefixVal = log.part_prefix || '';
+                        if (!prefixVal && globalPartMasters.length > 0 && log.finish_part_no) {
+                            const matchedPm = globalPartMasters.find(pm => (pm.partno || '').trim().toLowerCase() === (log.finish_part_no || '').trim().toLowerCase());
+                            if (matchedPm) prefixVal = matchedPm.part_prefix || '';
+                        }
                         extraCols = `
                             <td>${log.finish_part_no || '-'}</td>
+                            <td>${prefixVal || '-'}</td>
                             <td>${log.dc_no || '-'}</td>
                         `;
                         actionBtns += `
@@ -4220,9 +4234,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isReceipt) {
             document.getElementById('rmLogDcNoGroup').style.display = 'none';
             document.getElementById('rmLogFinishPartNoGroup').style.display = 'none';
+            if (document.getElementById('rmLogPartPrefixGroup')) document.getElementById('rmLogPartPrefixGroup').style.display = 'none';
         } else {
             document.getElementById('rmLogDcNoGroup').style.display = 'block';
             document.getElementById('rmLogFinishPartNoGroup').style.display = 'block';
+            if (document.getElementById('rmLogPartPrefixGroup')) document.getElementById('rmLogPartPrefixGroup').style.display = 'block';
             document.getElementById('rmLogDcNo').value = log.dc_no || '';
 
             if (globalPartMasters.length === 0) {
@@ -4231,6 +4247,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     globalPartMasters = await pmRes.json();
                 } catch(e) {}
             }
+
+            let initialPrefix = log.part_prefix || '';
+            if (!initialPrefix && log.finish_part_no) {
+                const matchedPm = globalPartMasters.find(pm => (pm.partno || '').trim().toLowerCase() === (log.finish_part_no || '').trim().toLowerCase());
+                if (matchedPm) initialPrefix = matchedPm.part_prefix || '';
+            }
+            if (document.getElementById('rmLogPartPrefix')) document.getElementById('rmLogPartPrefix').value = initialPrefix;
 
             const fpSelectEl = document.getElementById('rmLogFinishPartNo');
             fpSelectEl.innerHTML = '<option value="">-- Select Finish Part No --</option>';
@@ -4262,20 +4285,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!val) return;
                 const cleanVal = val.trim().toLowerCase();
                 const selected = globalPartMasters.find(p => (p.partno || '').trim().toLowerCase() === cleanVal);
-                if (selected && selected.forge_pn) {
-                    const targetForgePn = selected.forge_pn.trim();
-                    if (rmLogForgePnSelect) {
-                        let matchKey = Object.keys(rmLogForgePnSelect.options).find(k => k.trim().toLowerCase() === targetForgePn.toLowerCase());
-                        if (!matchKey) {
-                            const normTarget = targetForgePn.replace(/[\s\-_#]/g, '').toLowerCase();
-                            matchKey = Object.keys(rmLogForgePnSelect.options).find(k => k.replace(/[\s\-_#]/g, '').toLowerCase() === normTarget);
-                        }
+                if (selected) {
+                    if (selected.part_prefix && document.getElementById('rmLogPartPrefix')) {
+                        document.getElementById('rmLogPartPrefix').value = selected.part_prefix;
+                    }
+                    if (selected.forge_pn) {
+                        const targetForgePn = selected.forge_pn.trim();
+                        if (rmLogForgePnSelect) {
+                            let matchKey = Object.keys(rmLogForgePnSelect.options).find(k => k.trim().toLowerCase() === targetForgePn.toLowerCase());
+                            if (!matchKey) {
+                                const normTarget = targetForgePn.replace(/[\s\-_#]/g, '').toLowerCase();
+                                matchKey = Object.keys(rmLogForgePnSelect.options).find(k => k.replace(/[\s\-_#]/g, '').toLowerCase() === normTarget);
+                            }
 
-                        if (matchKey) {
-                            rmLogForgePnSelect.setValue(matchKey);
-                        } else {
-                            rmLogForgePnSelect.addOption({ value: targetForgePn, text: targetForgePn });
-                            rmLogForgePnSelect.setValue(targetForgePn);
+                            if (matchKey) {
+                                rmLogForgePnSelect.setValue(matchKey);
+                            } else {
+                                rmLogForgePnSelect.addOption({ value: targetForgePn, text: targetForgePn });
+                                rmLogForgePnSelect.setValue(targetForgePn);
+                            }
                         }
                     }
                 }
@@ -4478,9 +4506,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const forge_pn = document.getElementById('rmLogForgePn').value;
             const dc_no = type === 'despatch' ? document.getElementById('rmLogDcNo').value : null;
             const finish_part_no = type === 'despatch' ? document.getElementById('rmLogFinishPartNo').value : null;
+            const part_prefix = type === 'despatch' ? (document.getElementById('rmLogPartPrefix') ? document.getElementById('rmLogPartPrefix').value : '') : null;
             const qty = parseInt(document.getElementById('rmLogQty').value) || 0;
             
-            const payload = { type, date, forge_pn, dc_no, finish_part_no, qty };
+            const payload = { type, date, forge_pn, dc_no, finish_part_no, part_prefix, qty };
             const method = id ? 'PUT' : 'POST';
             const url = id ? `/api/rawmateriallogs/${id}` : '/api/rawmateriallogs';
             

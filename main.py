@@ -35,6 +35,10 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
     except Exception:
         pass
     try:
+        conn.execute(text("ALTER TABLE raw_material_logs ADD COLUMN part_prefix VARCHAR;"))
+    except Exception:
+        pass
+    try:
         conn.execute(text("ALTER TABLE users ADD COLUMN accessible_screens VARCHAR DEFAULT '';"))
     except Exception:
         pass
@@ -173,6 +177,7 @@ class RawMaterialLogBase(BaseModel):
     forge_pn: str
     dc_no: Optional[str] = None
     finish_part_no: Optional[str] = None
+    part_prefix: Optional[str] = None
     qty: int
 
 class RawMaterialLogCreate(RawMaterialLogBase):
