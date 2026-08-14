@@ -8,7 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, Supplier, HTLog, HTReceiptLog, Attendance, InsertMaster, DrillMaster, InsertReceipt, InsertIssue, BreakdownSlip, ServiceDetail
+from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, Supplier, HTLog, HTReceiptLog, PcLog, PcReceiptLog, Attendance, InsertMaster, DrillMaster, InsertReceipt, InsertIssue, BreakdownSlip, ServiceDetail
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -408,6 +408,37 @@ class HTReceiptLogCreate(HTReceiptLogBase):
     pass
 
 class HTReceiptLogResponse(HTReceiptLogBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+class PcLogBase(BaseModel):
+    date: str
+    dc_no: Optional[str] = ""
+    vendor: str
+    partno: str
+    qty: int
+
+class PcLogCreate(PcLogBase):
+    pass
+
+class PcLogResponse(PcLogBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+class PcReceiptLogBase(BaseModel):
+    date: str
+    vendor: str
+    partno: str
+    qty: int
+
+class PcReceiptLogCreate(PcReceiptLogBase):
+    pass
+
+class PcReceiptLogResponse(PcReceiptLogBase):
     id: int
 
     class Config:
@@ -907,6 +938,145 @@ def get_vendor_pending_parts(db: Session = Depends(get_db)):
         sent_qty = int(sum((l.qty or 0) for l in sent_logs))
         
         rec_logs = db.query(HTReceiptLog).filter(HTReceiptLog.vendor == vendor, HTReceiptLog.partno == partno).all()
+        rec_qty = int(sum((l.qty or 0) for l in rec_logs))
+        
+        pending_qty = max(0, sent_qty - rec_qty)
+        
+        result.append({
+            "vendor": vendor,
+            "partno": partno,
+            "sent_qty": sent_qty,
+            "received_qty": rec_qty,
+            "pending_qty": pending_qty
+        })
+    return result
+
+# --- PC LOG & RECEIPT ENDPOINTS ---
+@app.get("/api/pc_logs", response_model=List[PcLogResponse])
+def get_pc_logs(skip: int = 0, limit: int = 200, db: Session = Depends(get_db)):
+    return db.query(PcLog).order_by(PcLog.id.desc()).offset(skip).limit(limit).all()
+
+@app.post("/api/pc_logs", response_model=PcLogResponse)
+def create_pc_log(log: PcLogCreate, db: Session = Depends(get_db)):
+    db_log = PcLog(**log.model_dump())
+    db.add(db_log)
+    db.commit()
+    db.refresh(db_log)
+    return db_log
+
+@app.delete("/api/pc_logs/{log_id}")
+def delete_pc_log(log_id: int, db: Session = Depends(get_db)):
+    db_log = db.query(PcLog).filter(PcLog.id == log_id).first()
+    if not db_log:
+        raise HTTPException(status_code=404, detail="PC log not found")
+    db.delete(db_log)
+    db.commit()
+    return {"message": "PC log deleted"}
+
+@app.get("/api/pc_receipt_logs", response_model=List[PcReceiptLogResponse])
+def get_pc_receipt_logs(skip: int = 0, limit: int = 200, db: Session = Depends(get_db)):
+    return db.query(PcReceiptLog).order_by(PcReceiptLog.id.desc()).offset(skip).limit(limit).all()
+
+@app.post("/api/pc_receipt_logs", response_model=PcReceiptLogResponse)
+def create_pc_receipt_log(log: PcReceiptLogCreate, db: Session = Depends(get_db)):
+    db_log = PcReceiptLog(**log.model_dump())
+    db.add(db_log)
+    db.commit()
+    db.refresh(db_log)
+    return db_log
+
+@app.delete("/api/pc_receipt_logs/{log_id}")
+def delete_pc_receipt_log(log_id: int, db: Session = Depends(get_db)):
+    db_log = db.query(PcReceiptLog).filter(PcReceiptLog.id == log_id).first()
+    if not db_log:
+        raise HTTPException(status_code=404, detail="PC Receipt log not found")
+    db.delete(db_log)
+    db.commit()
+    return {"message": "PC receipt log deleted"}
+
+@app.get("/api/pc/available_parts")
+def get_pc_available_parts(db: Session = Depends(get_db)):
+    parts = db.query(PartMaster).all()
+    result = []
+    
+    for part in parts:
+        ops = db.query(PartOperation).filter(PartOperation.part_id == part.id).all()
+        def op_key(o):
+            try:
+                import re
+                nums = re.findall(r'\d+', o.opn_no or '')
+                return (0, int(nums[0])) if nums else (1, o.id)
+            except Exception:
+                return (1, o.id)
+        ops.sort(key=op_key)
+
+        pc_index = -1
+        for idx, o in enumerate(ops):
+            clean_desc = (o.description or '').strip().lower()
+            clean_opn = (o.opn_no or '').strip().lower()
+            clean_mach = (o.machine or '').strip().lower()
+            if clean_desc == 'pc' or 'powder coat' in clean_desc or clean_opn == 'pc' or 'pc' in clean_opn.split() or clean_mach == 'pc':
+                pc_index = idx
+                break
+
+        if pc_index == -1:
+            continue
+
+        pc_op = ops[pc_index]
+        
+        prev_produced_qty = 0
+        prev_opn_no = "-"
+        prev_opn_desc = "-"
+        
+        if pc_index > 0:
+            prev_op = ops[pc_index - 1]
+            prev_opn_no = prev_op.opn_no or "-"
+            prev_opn_desc = prev_op.description or "-"
+            
+            clean_prev_opn = (prev_op.opn_no or '').strip().lower()
+            prod_logs = db.query(ProductionLog).filter(
+                ProductionLog.partno == part.partno,
+                func.lower(func.trim(ProductionLog.opn_no)) == clean_prev_opn
+            ).all()
+            prev_produced_qty = int(sum((l.prod_qty or 0) for l in prod_logs))
+        else:
+            clean_pc_opn = (pc_op.opn_no or '').strip().lower()
+            prod_logs = db.query(ProductionLog).filter(
+                ProductionLog.partno == part.partno,
+                func.lower(func.trim(ProductionLog.opn_no)) == clean_pc_opn
+            ).all()
+            prev_produced_qty = int(sum((l.prod_qty or 0) for l in prod_logs))
+
+        pc_logs = db.query(PcLog).filter(PcLog.partno == part.partno).all()
+        pc_sent_qty = int(sum((p.qty or 0) for p in pc_logs))
+        
+        available_qty = max(0, prev_produced_qty - pc_sent_qty)
+
+        result.append({
+            "partno": part.partno,
+            "department": part.department or "",
+            "pc_opn_no": pc_op.opn_no,
+            "prev_opn_no": prev_opn_no,
+            "prev_opn_desc": prev_opn_desc,
+            "produced_qty": prev_produced_qty,
+            "pc_sent_qty": pc_sent_qty,
+            "available_qty": available_qty
+        })
+
+    return result
+
+@app.get("/api/pc/vendor_pending_parts")
+def get_pc_vendor_pending_parts(db: Session = Depends(get_db)):
+    dispatches = db.query(PcLog.vendor, PcLog.partno).distinct().all()
+    result = []
+    for vendor, partno in dispatches:
+        if not vendor or not partno:
+            continue
+        
+        sent_logs = db.query(PcLog).filter(PcLog.vendor == vendor, PcLog.partno == partno).all()
+        sent_qty = int(sum((l.qty or 0) for l in sent_logs))
+        
+        rec_logs = db.query(PcReceiptLog).filter(PcReceiptLog.vendor == vendor, PcReceiptLog.partno == partno).all()
         rec_qty = int(sum((l.qty or 0) for l in rec_logs))
         
         pending_qty = max(0, sent_qty - rec_qty)

@@ -75,6 +75,7 @@
                 <button class="sub-tab" id="sidebarRmDespatch" data-screen="rawmaterial">Despatch</button>
                 <button class="sub-tab" id="sidebarRmMaster" data-screen="rawmaterial">RM Status</button>
                 <button class="sub-tab" id="sidebarHt" data-screen="ht">HT</button>
+                <button class="sub-tab" id="sidebarPc" data-screen="pc">PC</button>
             </div>
             <div class="sub-group" id="submenuProduction" style="display: none;">
                 <button class="sub-tab" id="sidebarScheduleCreate" data-screen="schedule">Schedule Create</button>
@@ -1612,6 +1613,77 @@
                     </table>
                 </div>
             </div>
+
+            <div class="table-container" id="pcSection" style="display: none;">
+                <div style="margin-bottom: 1.5rem;">
+                    <h3 style="margin-bottom: 0.5rem; color: var(--text-main); font-size: 1.05rem; font-weight: 600;">Parts Available for Powder Coating (PC Operation)</h3>
+                    <table id="pcAvailablePartsTable">
+                        <thead>
+                            <tr>
+                                <th>Part No</th>
+                                <th>Department</th>
+                                <th>Prev Opn Produced</th>
+                                <th>Sent to PC</th>
+                                <th>Available Qty</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pcAvailablePartsBody"></tbody>
+                    </table>
+                </div>
+
+                <div style="margin-bottom: 1.5rem;">
+                    <h3 style="margin-bottom: 0.5rem; color: var(--text-main); font-size: 1.05rem; font-weight: 600;">PC Dispatch Log (Parts Sent to Vendors)</h3>
+                    <table id="pcTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Date</th>
+                                <th>DC No</th>
+                                <th>Vendor</th>
+                                <th>Part No</th>
+                                <th>Qty Sent</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pcBody"></tbody>
+                    </table>
+                </div>
+
+                <div style="margin-bottom: 1.5rem;">
+                    <h3 style="margin-bottom: 0.5rem; color: var(--text-main); font-size: 1.05rem; font-weight: 600;">Parts Pending at PC Vendors (Awaiting Receipt)</h3>
+                    <table id="pcVendorPendingTable">
+                        <thead>
+                            <tr>
+                                <th>Vendor</th>
+                                <th>Part No</th>
+                                <th>Total Sent</th>
+                                <th>Total Received</th>
+                                <th>Pending at Vendor</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pcVendorPendingBody"></tbody>
+                    </table>
+                </div>
+
+                <div>
+                    <h3 style="margin-bottom: 0.5rem; color: var(--text-main); font-size: 1.05rem; font-weight: 600;">PC Receipt Log (Received from Vendors)</h3>
+                    <table id="pcReceiptTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Date</th>
+                                <th>Vendor</th>
+                                <th>Part No</th>
+                                <th>Qty Received</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pcReceiptBody"></tbody>
+                    </table>
+                </div>
+            </div>
         </main>
         </div>
     </div>
@@ -1916,6 +1988,90 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" id="cancelHtReceiptBtn">Cancel</button>
                     <button type="submit" class="btn btn-primary">Receive from HT</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for PC Entry -->
+    <div id="pcModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="pcModalTitle">Send Parts for Powder Coating (PC)</h2>
+                <button class="close-btn" id="closePcModalBtn">&times;</button>
+            </div>
+            <form id="pcForm">
+                <div class="form-group">
+                    <label for="pcDate">Date</label>
+                    <input type="date" id="pcDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="pcDcNo">DC No</label>
+                    <input type="text" id="pcDcNo" placeholder="Delivery Challan No">
+                </div>
+                <div class="form-group">
+                    <label for="pcVendor">Vendor</label>
+                    <select id="pcVendor" required>
+                        <option value="">-- Select Vendor --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="pcPartNo">Part No (PC Opn)</label>
+                    <select id="pcPartNo" required>
+                        <option value="">-- Select Part --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="pcAvailableQty">Available Qty</label>
+                    <input type="text" id="pcAvailableQty" readonly placeholder="0" style="background-color: rgba(0,0,0,0.05); font-weight: bold; color: var(--primary-color, #2563eb);">
+                </div>
+                <div class="form-group">
+                    <label for="pcQty">Qty to Send</label>
+                    <input type="number" id="pcQty" required min="1" placeholder="e.g. 50">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="cancelPcBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Send to PC</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for PC Receipt -->
+    <div id="pcReceiptModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="pcReceiptModalTitle">Receive Parts from PC Vendor</h2>
+                <button class="close-btn" id="closePcReceiptModalBtn">&times;</button>
+            </div>
+            <form id="pcReceiptForm">
+                <div class="form-group">
+                    <label for="pcReceiptDate">Date</label>
+                    <input type="date" id="pcReceiptDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="pcReceiptVendor">Vendor</label>
+                    <select id="pcReceiptVendor" required>
+                        <option value="">-- Select Vendor --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="pcReceiptPartNo">Part No</label>
+                    <select id="pcReceiptPartNo" required>
+                        <option value="">-- Select Part --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="pcReceiptPendingQty">Pending at Vendor</label>
+                    <input type="text" id="pcReceiptPendingQty" readonly placeholder="0" style="background-color: rgba(0,0,0,0.05); font-weight: bold; color: var(--primary-color, #2563eb);">
+                </div>
+                <div class="form-group">
+                    <label for="pcReceiptQty">Received Qty</label>
+                    <input type="number" id="pcReceiptQty" required min="1" placeholder="e.g. 50">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="cancelPcReceiptBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Receive from PC</button>
                 </div>
             </form>
         </div>
@@ -2569,6 +2725,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=236"></script>
+    <script src="/static/app.js?v=237"></script>
 </body>
 </html>

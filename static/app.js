@@ -305,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection',
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
             'productsSection', 'insertMasterSection', 'drillMasterSection', 'insertReceiptSection', 'insertIssueSection', 'insertCpcSection', 'partMasterSection', 'machinesSection',
-            'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'htSection', 'scheduleCreateSection', 'scheduleRunSection',
+            'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
             'inspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'hrSection', 'attendanceSection'
         ];
@@ -449,6 +449,14 @@ document.addEventListener('DOMContentLoaded', () => {
             addBtn.style.display = 'inline-flex';
             addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Send to HT';
             fetchHtData();
+        }},
+        'sidebarPc': { tab: 'pc', action: () => {
+            const pcSection = document.getElementById('pcSection');
+            if (pcSection) pcSection.style.display = 'block';
+            importBtn.style.display = 'none';
+            addBtn.style.display = 'inline-flex';
+            addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Send to PC';
+            fetchPcData();
         }},
         'sidebarRmReceipt': { tab: 'rm_receipt', action: () => { 
             if (rmReceiptSection) rmReceiptSection.style.display = 'block';
@@ -606,6 +614,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (currentTab === 'setters') openSetterModal(false);
         else if (currentTab === 'suppliers') openSupplierModal();
         else if (currentTab === 'ht') openHtModal();
+        else if (currentTab === 'pc') openPcModal();
         else if (currentTab === 'rawmaterial') {
             document.getElementById('rmModalTitle').innerText = 'Add Raw Material';
             document.getElementById('rawMaterialForm').reset();
@@ -2160,12 +2169,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!dept) return;
 
         try {
-            const [schedRes, logRes, rmLogRes, htLogRes, htReceiptLogRes, rmRes] = await Promise.all([
+            const [schedRes, logRes, rmLogRes, htLogRes, htReceiptLogRes, pcLogRes, pcReceiptLogRes, rmRes] = await Promise.all([
                 fetch('/api/schedule'),
                 fetch('/api/prodlog'),
                 fetch('/api/rawmateriallogs'),
                 fetch('/api/ht_logs'),
                 fetch('/api/ht_receipt_logs'),
+                fetch('/api/pc_logs'),
+                fetch('/api/pc_receipt_logs'),
                 fetch('/api/rawmaterials')
             ]);
             
@@ -2174,6 +2185,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const allRmLogs = await rmLogRes.json();
             const allHtLogs = await htLogRes.json();
             const allHtReceiptLogs = await htReceiptLogRes.json();
+            const allPcLogs = await pcLogRes.json();
+            const allPcReceiptLogs = await pcReceiptLogRes.json();
             const allRawMaterials = await rmRes.json();
 
             const deptSchedules = allSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase() && (s.status === 'Pending' || !s.status));
@@ -2209,10 +2222,21 @@ document.addEventListener('DOMContentLoaded', () => {
                         const nextOp = operations[i + 1];
                         
                         const opnClean = (currentOp.opn_no || '').trim().toLowerCase();
+                        const descClean = (currentOp.description || '').trim().toLowerCase();
+                        const machClean = (currentOp.machine || '').trim().toLowerCase();
+                        const isPcOpn = opnClean === 'pc' || descClean === 'pc' || descClean.includes('powder coat') || machClean === 'pc';
                         
                         // Total produced for current op from logs
                         let currentProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === opnClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                         
+                        // If opn is PC, set currentProd to PC Received total
+                        if (isPcOpn) {
+                            const pcRec = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                            if (pcRec > 0 || currentProd === 0) {
+                                currentProd = pcRec;
+                            }
+                        }
+
                         // Deduct HT sent for Turning (Opn 40 / OPN 3) for Group 1 HT parts
                         if (isGroup1HT && (opnClean === '40' || opnClean === 'opn 40' || opnClean === 'opn40')) {
                             const htSent = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
@@ -2223,6 +2247,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (isGroup1HT && (opnClean === '50' || opnClean === 'opn 50' || opnClean === 'opn50')) {
                             const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                             currentProd = htRec;
+                        }
+
+                        // Check if nextOp is PC operation; if so, deduct PC sent from current operation
+                        if (nextOp) {
+                            const nextOpnClean = (nextOp.opn_no || '').trim().toLowerCase();
+                            const nextDescClean = (nextOp.description || '').trim().toLowerCase();
+                            const nextMachClean = (nextOp.machine || '').trim().toLowerCase();
+                            const isNextPcOpn = nextOpnClean === 'pc' || nextDescClean === 'pc' || nextDescClean.includes('powder coat') || nextMachClean === 'pc';
+                            
+                            if (isNextPcOpn) {
+                                const pcSent = allPcLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                                currentProd = Math.max(0, currentProd - pcSent);
+                            }
                         }
                         
                         // Total produced for next op
@@ -5787,6 +5824,420 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 console.error(err);
                 alert('Error saving HT receipt record');
+            }
+        });
+    }
+
+    // ====== POWDER COATING (PC) LOGIC ======
+    let currentPcAvailableParts = [];
+    let currentPcVendorPending = [];
+
+    async function fetchPcData() {
+        await Promise.all([
+            fetchAvailablePcParts(),
+            fetchPcLogs(),
+            fetchPcVendorPendingParts(),
+            fetchPcReceiptLogs()
+        ]);
+    }
+
+    async function fetchAvailablePcParts() {
+        try {
+            const res = await fetch('/api/pc/available_parts');
+            const data = await res.json();
+            currentPcAvailableParts = data;
+            renderAvailablePcParts(data);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderAvailablePcParts(parts) {
+        const tbody = document.getElementById('pcAvailablePartsBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        
+        const availableParts = (parts || []).filter(p => (p.available_qty || 0) > 0);
+
+        if (!availableParts || availableParts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No parts with available PC quantity found</td></tr>';
+            return;
+        }
+        availableParts.forEach(p => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${p.partno}</strong></td>
+                <td>${p.department || '-'}</td>
+                <td>${p.produced_qty} (${p.prev_opn_no}: ${p.prev_opn_desc})</td>
+                <td>${p.pc_sent_qty}</td>
+                <td><span style="font-weight: bold; color: #16a34a;">${p.available_qty}</span></td>
+                <td>
+                    <button class="btn btn-primary send-part-pc-btn" data-partno="${p.partno}" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">
+                        Send to PC
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.querySelectorAll('.send-part-pc-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const partno = e.currentTarget.getAttribute('data-partno');
+                openPcModal(partno);
+            });
+        });
+    }
+
+    async function fetchPcLogs() {
+        try {
+            const res = await fetch('/api/pc_logs');
+            const data = await res.json();
+            renderPcLogs(data);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderPcLogs(logs) {
+        const tbody = document.getElementById('pcBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!logs || logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No PC dispatch records found</td></tr>';
+            return;
+        }
+        logs.forEach(l => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${l.id}</td>
+                <td>${l.date}</td>
+                <td>${l.dc_no || ''}</td>
+                <td>${l.vendor}</td>
+                <td>${l.partno}</td>
+                <td>${l.qty}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-outline delete-pc-btn" data-id="${l.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.querySelectorAll('.delete-pc-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (confirm('Delete this PC dispatch record?')) {
+                    const id = e.target.getAttribute('data-id');
+                    try {
+                        const res = await fetch(`/api/pc_logs/${id}`, { method: 'DELETE' });
+                        if (res.ok) fetchPcData();
+                        else alert('Error deleting PC record');
+                    } catch (err) { console.error(err); }
+                }
+            });
+        });
+    }
+
+    // Modal elements for PC
+    const pcModal = document.getElementById('pcModal');
+    const pcForm = document.getElementById('pcForm');
+    const pcDateInput = document.getElementById('pcDate');
+    const pcDcNoInput = document.getElementById('pcDcNo');
+    const pcVendorSelect = document.getElementById('pcVendor');
+    const pcPartNoSelect = document.getElementById('pcPartNo');
+    const pcAvailableQtyInput = document.getElementById('pcAvailableQty');
+    const pcQtyInput = document.getElementById('pcQty');
+    const cancelPcBtn = document.getElementById('cancelPcBtn');
+    const closePcModalBtn = document.getElementById('closePcModalBtn');
+
+    async function openPcModal(preselectedPartNo = null) {
+        if (!pcModal) return;
+        pcForm.reset();
+        pcAvailableQtyInput.value = '0';
+        
+        if (!pcDateInput.value) {
+            pcDateInput.valueAsDate = new Date();
+        }
+
+        try {
+            const vRes = await fetch('/api/vendors');
+            const vendors = await vRes.json();
+            let vHtml = '<option value="">-- Select Vendor --</option>';
+            vendors.forEach(v => {
+                vHtml += `<option value="${v.name}">${v.name}</option>`;
+            });
+            pcVendorSelect.innerHTML = vHtml;
+        } catch (err) { console.error(err); }
+
+        try {
+            const pRes = await fetch('/api/pc/available_parts');
+            const allParts = await pRes.json();
+            currentPcAvailableParts = allParts;
+            const filteredParts = allParts.filter(p => (p.available_qty || 0) > 0 || p.partno === preselectedPartNo);
+            let pHtml = '<option value="">-- Select Part --</option>';
+            filteredParts.forEach(p => {
+                pHtml += `<option value="${p.partno}">${p.partno} (Avail: ${p.available_qty})</option>`;
+            });
+            pcPartNoSelect.innerHTML = pHtml;
+
+            if (preselectedPartNo) {
+                pcPartNoSelect.value = preselectedPartNo;
+                const found = allParts.find(p => p.partno === preselectedPartNo);
+                pcAvailableQtyInput.value = found ? found.available_qty : 0;
+            }
+        } catch (err) { console.error(err); }
+
+        pcModal.classList.add('show');
+    }
+
+    if (pcPartNoSelect) {
+        pcPartNoSelect.addEventListener('change', (e) => {
+            const partno = e.target.value;
+            const found = currentPcAvailableParts.find(p => p.partno === partno);
+            pcAvailableQtyInput.value = found ? found.available_qty : 0;
+        });
+    }
+
+    if (cancelPcBtn) cancelPcBtn.addEventListener('click', () => pcModal.classList.remove('show'));
+    if (closePcModalBtn) closePcModalBtn.addEventListener('click', () => pcModal.classList.remove('show'));
+
+    if (pcForm) {
+        pcForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const partno = pcPartNoSelect.value;
+            const qty = parseInt(pcQtyInput.value) || 0;
+            const avail = parseInt(pcAvailableQtyInput.value) || 0;
+
+            if (qty > avail) {
+                if (!confirm(`Warning: Entered quantity (${qty}) is greater than available quantity (${avail}). Do you still want to proceed?`)) {
+                    return;
+                }
+            }
+
+            const payload = {
+                date: pcDateInput.value,
+                dc_no: pcDcNoInput.value,
+                vendor: pcVendorSelect.value,
+                partno: partno,
+                qty: qty
+            };
+
+            try {
+                const res = await fetch('/api/pc_logs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    pcModal.classList.remove('show');
+                    fetchPcData();
+                } else {
+                    alert('Error saving PC dispatch record');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error saving PC dispatch record');
+            }
+        });
+    }
+
+    // ====== PC RECEIPT LOG CRUD ======
+    const pcReceiptModal = document.getElementById('pcReceiptModal');
+    const pcReceiptForm = document.getElementById('pcReceiptForm');
+    const pcReceiptDateInput = document.getElementById('pcReceiptDate');
+    const pcReceiptVendorSelect = document.getElementById('pcReceiptVendor');
+    const pcReceiptPartNoSelect = document.getElementById('pcReceiptPartNo');
+    const pcReceiptPendingQtyInput = document.getElementById('pcReceiptPendingQty');
+    const pcReceiptQtyInput = document.getElementById('pcReceiptQty');
+    const cancelPcReceiptBtn = document.getElementById('cancelPcReceiptBtn');
+    const closePcReceiptModalBtn = document.getElementById('closePcReceiptModalBtn');
+
+    async function fetchPcVendorPendingParts() {
+        try {
+            const res = await fetch('/api/pc/vendor_pending_parts');
+            const data = await res.json();
+            currentPcVendorPending = data;
+            renderPcVendorPendingParts(data);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderPcVendorPendingParts(pendingList) {
+        const tbody = document.getElementById('pcVendorPendingBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const activePending = (pendingList || []).filter(p => p.pending_qty > 0);
+        
+        if (activePending.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No parts currently pending at PC vendors</td></tr>';
+            return;
+        }
+
+        activePending.forEach(p => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${p.vendor}</strong></td>
+                <td>${p.partno}</td>
+                <td>${p.sent_qty}</td>
+                <td>${p.received_qty}</td>
+                <td><span style="font-weight: bold; color: #d97706;">${p.pending_qty}</span></td>
+                <td>
+                    <button class="btn btn-primary receive-part-pc-btn" data-vendor="${p.vendor}" data-partno="${p.partno}" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background-color: #059669; border-color: #059669;">
+                        Receive from PC
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.querySelectorAll('.receive-part-pc-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const vendor = e.currentTarget.getAttribute('data-vendor');
+                const partno = e.currentTarget.getAttribute('data-partno');
+                openPcReceiptModal(vendor, partno);
+            });
+        });
+    }
+
+    async function fetchPcReceiptLogs() {
+        try {
+            const res = await fetch('/api/pc_receipt_logs');
+            const data = await res.json();
+            renderPcReceiptLogs(data);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderPcReceiptLogs(logs) {
+        const tbody = document.getElementById('pcReceiptBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!logs || logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No PC receipt records found</td></tr>';
+            return;
+        }
+        logs.forEach(l => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${l.id}</td>
+                <td>${l.date}</td>
+                <td>${l.vendor}</td>
+                <td>${l.partno}</td>
+                <td><span style="font-weight: bold; color: #059669;">+${l.qty}</span></td>
+                <td class="actions-cell">
+                    <button class="btn btn-outline delete-pc-receipt-btn" data-id="${l.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.querySelectorAll('.delete-pc-receipt-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (confirm('Delete this PC receipt record?')) {
+                    const id = e.target.getAttribute('data-id');
+                    try {
+                        const res = await fetch(`/api/pc_receipt_logs/${id}`, { method: 'DELETE' });
+                        if (res.ok) fetchPcData();
+                        else alert('Error deleting PC receipt record');
+                    } catch (err) { console.error(err); }
+                }
+            });
+        });
+    }
+
+    async function openPcReceiptModal(vendor = null, partno = null) {
+        if (!pcReceiptModal) return;
+        pcReceiptForm.reset();
+        pcReceiptPendingQtyInput.value = '0';
+        
+        if (!pcReceiptDateInput.value) {
+            pcReceiptDateInput.valueAsDate = new Date();
+        }
+
+        try {
+            const pendingRes = await fetch('/api/pc/vendor_pending_parts');
+            const pendingList = await pendingRes.json();
+            currentPcVendorPending = pendingList;
+
+            const vendorsWithPending = [...new Set(pendingList.filter(p => p.pending_qty > 0).map(p => p.vendor))];
+            let vHtml = '<option value="">-- Select Vendor --</option>';
+            vendorsWithPending.forEach(v => {
+                vHtml += `<option value="${v}">${v}</option>`;
+            });
+            pcReceiptVendorSelect.innerHTML = vHtml;
+
+            if (vendor) {
+                pcReceiptVendorSelect.value = vendor;
+                populatePcReceiptParts(vendor, partno);
+            }
+        } catch (err) { console.error(err); }
+
+        pcReceiptModal.classList.add('show');
+    }
+
+    function populatePcReceiptParts(vendor, preselectedPartNo = null) {
+        const partsForVendor = currentPcVendorPending.filter(p => p.vendor === vendor && p.pending_qty > 0);
+        let pHtml = '<option value="">-- Select Part --</option>';
+        partsForVendor.forEach(p => {
+            pHtml += `<option value="${p.partno}">${p.partno} (Pending: ${p.pending_qty})</option>`;
+        });
+        pcReceiptPartNoSelect.innerHTML = pHtml;
+
+        if (preselectedPartNo) {
+            pcReceiptPartNoSelect.value = preselectedPartNo;
+            const found = partsForVendor.find(p => p.partno === preselectedPartNo);
+            pcReceiptPendingQtyInput.value = found ? found.pending_qty : 0;
+        } else {
+            pcReceiptPendingQtyInput.value = 0;
+        }
+    }
+
+    if (pcReceiptVendorSelect) {
+        pcReceiptVendorSelect.addEventListener('change', (e) => {
+            populatePcReceiptParts(e.target.value);
+        });
+    }
+
+    if (pcReceiptPartNoSelect) {
+        pcReceiptPartNoSelect.addEventListener('change', (e) => {
+            const vendor = pcReceiptVendorSelect.value;
+            const partno = e.target.value;
+            const found = currentPcVendorPending.find(p => p.vendor === vendor && p.partno === partno);
+            pcReceiptPendingQtyInput.value = found ? found.pending_qty : 0;
+        });
+    }
+
+    if (cancelPcReceiptBtn) cancelPcReceiptBtn.addEventListener('click', () => pcReceiptModal.classList.remove('show'));
+    if (closePcReceiptModalBtn) closePcReceiptModalBtn.addEventListener('click', () => pcReceiptModal.classList.remove('show'));
+
+    if (pcReceiptForm) {
+        pcReceiptForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const vendor = pcReceiptVendorSelect.value;
+            const partno = pcReceiptPartNoSelect.value;
+            const qty = parseInt(pcReceiptQtyInput.value) || 0;
+            const pending = parseInt(pcReceiptPendingQtyInput.value) || 0;
+
+            if (qty > pending) {
+                if (!confirm(`Warning: Received quantity (${qty}) exceeds pending quantity at vendor (${pending}). Proceed anyway?`)) {
+                    return;
+                }
+            }
+
+            const payload = {
+                date: pcReceiptDateInput.value,
+                vendor: vendor,
+                partno: partno,
+                qty: qty
+            };
+
+            try {
+                const res = await fetch('/api/pc_receipt_logs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    pcReceiptModal.classList.remove('show');
+                    fetchPcData();
+                } else {
+                    alert('Error saving PC receipt record');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error saving PC receipt record');
             }
         });
     }
