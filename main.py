@@ -30,6 +30,11 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
     except Exception:
         pass
     try:
+        conn.execute(text("ALTER TABLE part_masters ADD COLUMN part_prefix VARCHAR;"))
+        conn.execute(text("CREATE INDEX ix_part_masters_part_prefix ON part_masters (part_prefix);"))
+    except Exception:
+        pass
+    try:
         conn.execute(text("ALTER TABLE users ADD COLUMN accessible_screens VARCHAR DEFAULT '';"))
     except Exception:
         pass
@@ -204,6 +209,7 @@ class ProductResponse(ProductBase):
 class PartMasterBase(BaseModel):
     family: Optional[str] = ""
     forge_pn: Optional[str] = ""
+    part_prefix: Optional[str] = ""
     partno: Optional[str] = ""
     customer: Optional[str] = ""
     department: Optional[str] = ""
@@ -237,6 +243,7 @@ class PartOperationResponse(PartOperationBase):
 class BulkImportPart(BaseModel):
     family: Optional[str] = ""
     forge_pn: Optional[str] = ""
+    part_prefix: Optional[str] = ""
     partno: Optional[str] = ""
     department: Optional[str] = ""
     va: Optional[str] = ""
@@ -521,13 +528,14 @@ def bulk_import_partmaster(payload: BulkImportPayload, db: Session = Depends(get
         if existing_part:
             existing_part.family = part_data.family
             existing_part.forge_pn = part_data.forge_pn
+            existing_part.part_prefix = part_data.part_prefix
             existing_part.department = part_data.department
             existing_part.va = part_data.va
             db.query(PartOperation).filter(PartOperation.part_id == existing_part.id).delete()
             db.commit()
             part_id = existing_part.id
         else:
-            new_part = PartMaster(family=part_data.family, forge_pn=part_data.forge_pn, partno=part_data.partno, department=part_data.department, va=part_data.va)
+            new_part = PartMaster(family=part_data.family, forge_pn=part_data.forge_pn, part_prefix=part_data.part_prefix, partno=part_data.partno, department=part_data.department, va=part_data.va)
             db.add(new_part)
             db.commit()
             db.refresh(new_part)

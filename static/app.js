@@ -746,7 +746,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (currentTab === 'partmaster') {
                     const partsMap = {};
                     json.forEach(row => {
-                        let partno = '', family = '', forge_pn = '', department = '', va = '';
+                        let partno = '', family = '', forge_pn = '', part_prefix = '', department = '', va = '';
                         let opn_no = '', description = '', machine = '', cycle_time = 0;
                         for (let k in row) {
                             let key = k.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -754,6 +754,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (key === 'partno') partno = val;
                             else if (key === 'family') family = val;
                             else if (key === 'forgepn') forge_pn = val;
+                            else if (key === 'partprefix' || key === 'prefix') part_prefix = val;
                             else if (key === 'dept' || key === 'department') department = val;
                             else if (key === 'va') va = val;
                             else if (key === 'opnno') opn_no = val;
@@ -765,7 +766,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         if (!partsMap[partno]) {
                             partsMap[partno] = {
-                                family, forge_pn, partno, department, va, operations: []
+                                family, forge_pn, part_prefix, partno, department, va, operations: []
                             };
                         }
 
@@ -982,13 +983,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const parts = await response.json();
             partMasterBody.innerHTML = '';
             if (parts.length === 0) {
-                partMasterBody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted)">No part masters found.</td></tr>';
+                partMasterBody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">No part masters found.</td></tr>';
                 return;
             }
             parts.forEach(p => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${p.id}</td><td>${p.customer || ''}</td><td>${p.department || ''}</td><td>${p.family}</td><td>${p.forge_pn}</td><td>${p.partno}</td><td>${p.va || ''}</td>
+                    <td>${p.id}</td><td>${p.customer || ''}</td><td>${p.department || ''}</td><td>${p.family}</td><td>${p.forge_pn}</td><td>${p.part_prefix || ''}</td><td>${p.partno}</td><td>${p.va || ''}</td>
                     <td class="actions">
                         <button class="btn btn-outline" style="margin-right: 5px;" onclick="openOperations(${p.id})">Operations</button>
                         <button class="btn btn-edit" onclick="editPartMaster(${p.id})">Edit</button>
@@ -1042,15 +1043,24 @@ document.addEventListener('DOMContentLoaded', () => {
         partModal.classList.add('show');
         partModalTitle.textContent = isEdit ? 'Edit Part' : 'Add Part';
     }
-    function closePartModal() { partModal.classList.remove('show'); partForm.reset(); document.getElementById('partId').value = ''; }
+    function closePartModal() {
+        partModal.classList.remove('show');
+        partForm.reset();
+        document.getElementById('partId').value = '';
+        const prefixEl = document.getElementById('partPrefix');
+        if (prefixEl) prefixEl.value = '';
+    }
     closePartBtn.addEventListener('click', closePartModal); cancelPartBtn.addEventListener('click', closePartModal);
 
     partForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('partId').value;
         const data = {
-            family: document.getElementById('partFamily').value, forge_pn: document.getElementById('forgePn').value,
-            partno: document.getElementById('partno').value, department: document.getElementById('partDept').value,
+            family: document.getElementById('partFamily').value,
+            forge_pn: document.getElementById('forgePn').value,
+            part_prefix: document.getElementById('partPrefix') ? document.getElementById('partPrefix').value.trim() : '',
+            partno: document.getElementById('partno').value,
+            department: document.getElementById('partDept').value,
             customer: document.getElementById('partCustomer').value,
             va: document.getElementById('partVa').value
         };
@@ -1070,8 +1080,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await fetch('/api/partmaster'); const data = await res.json();
         const p = data.find(x => x.id === id);
         if (p) {
-            document.getElementById('partId').value = p.id; document.getElementById('partFamily').value = p.family;
-            document.getElementById('forgePn').value = p.forge_pn; document.getElementById('partno').value = p.partno;
+            document.getElementById('partId').value = p.id;
+            document.getElementById('partFamily').value = p.family;
+            document.getElementById('forgePn').value = p.forge_pn;
+            if (document.getElementById('partPrefix')) document.getElementById('partPrefix').value = p.part_prefix || '';
+            document.getElementById('partno').value = p.partno;
             document.getElementById('partCustomer').value = p.customer || '';
             document.getElementById('partDept').value = p.department || '';
             document.getElementById('partVa').value = p.va || '';

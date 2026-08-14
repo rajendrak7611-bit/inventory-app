@@ -28,6 +28,7 @@ class PartMaster(Base):
     id = Column(Integer, primary_key=True, index=True)
     family = Column(String, index=True)
     forge_pn = Column(String, index=True)
+    part_prefix = Column(String, index=True, nullable=True, default="")
     partno = Column(String, index=True)
     customer = Column(String, index=True)
     department = Column(String, index=True)

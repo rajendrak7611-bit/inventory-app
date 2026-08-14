@@ -464,6 +464,7 @@
                             <th style="position: sticky; top: 0; z-index: 25; background: #cbd5e1; color: #0f172a; padding: 8px 6px; border-bottom: 1px solid #94a3b8; font-weight: 600;">Dept</th>
                             <th style="position: sticky; top: 0; z-index: 25; background: #cbd5e1; color: #0f172a; padding: 8px 6px; border-bottom: 1px solid #94a3b8; font-weight: 600;">Family</th>
                             <th style="position: sticky; top: 0; z-index: 25; background: #cbd5e1; color: #0f172a; padding: 8px 6px; border-bottom: 1px solid #94a3b8; font-weight: 600;">Forge PN</th>
+                            <th style="position: sticky; top: 0; z-index: 25; background: #cbd5e1; color: #0f172a; padding: 8px 6px; border-bottom: 1px solid #94a3b8; font-weight: 600;">Part Prefix</th>
                             <th style="position: sticky; top: 0; z-index: 25; background: #cbd5e1; color: #0f172a; padding: 8px 6px; border-bottom: 1px solid #94a3b8; font-weight: 600;">Part No</th>
                             <th style="position: sticky; top: 0; z-index: 25; background: #cbd5e1; color: #0f172a; padding: 8px 6px; border-bottom: 1px solid #94a3b8; font-weight: 600;">VA</th>
                             <th style="position: sticky; top: 0; z-index: 25; background: #cbd5e1; color: #0f172a; padding: 8px 6px; border-bottom: 1px solid #94a3b8; font-weight: 600;">Actions</th>
@@ -483,7 +484,10 @@
                                 <input type="text" class="part-master-col-filter" data-col="4" placeholder="Filter Forge PN..." style="width: 100%; padding: 4px 6px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: var(--text-main);">
                             </th>
                             <th style="position: sticky; top: 33px; z-index: 24; background: #f1f5f9; padding: 4px; border-bottom: 2px solid #cbd5e1;">
-                                <input type="text" class="part-master-col-filter" data-col="5" placeholder="Filter Part No..." style="width: 100%; padding: 4px 6px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: var(--text-main);">
+                                <input type="text" class="part-master-col-filter" data-col="5" placeholder="Filter Prefix..." style="width: 100%; padding: 4px 6px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: var(--text-main);">
+                            </th>
+                            <th style="position: sticky; top: 33px; z-index: 24; background: #f1f5f9; padding: 4px; border-bottom: 2px solid #cbd5e1;">
+                                <input type="text" class="part-master-col-filter" data-col="6" placeholder="Filter Part No..." style="width: 100%; padding: 4px 6px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: var(--text-main);">
                             </th>
                             <th style="position: sticky; top: 33px; z-index: 24; background: #f1f5f9; padding: 4px; border-bottom: 2px solid #cbd5e1;"></th>
                             <th style="position: sticky; top: 33px; z-index: 24; background: #f1f5f9; padding: 4px; border-bottom: 2px solid #cbd5e1; text-align: center;">
@@ -1680,6 +1684,11 @@
                     <label for="forgePn">Forge PN</label>
                     <input type="text" id="forgePn" required placeholder="e.g. FG-100">
                 </div>
+
+                <div class="form-group">
+                    <label for="partPrefix">Part Prefix</label>
+                    <input type="text" id="partPrefix" placeholder="e.g. W1, A1, etc.">
+                </div>
                 
                 <div class="form-group">
                     <label for="partno">Part No</label>
@@ -2555,6 +2564,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=233"></script>
+    <script src="/static/app.js?v=234"></script>
 </body>
 </html>
