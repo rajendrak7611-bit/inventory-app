@@ -2604,6 +2604,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 let wip = 0;
+                let rmStatus = 0;
                 if (group.name === 'Group 1') {
                     const facCen = opn[1] || 0;
                     const forHt = opn[2] || 0;
@@ -2612,7 +2613,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const rfdVal = sData.rfdBal || 0;
 
                     wip = facCen + forHt + pendingAnusha + pendingJMS + forGrind + forIns + rfdVal;
-                    const rmStatus = fAvail - wip;
+                    rmStatus = fAvail - wip;
 
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:600;">${wip}</td>`;
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:600; color: ${rmStatus < 0 ? '#ef4444' : '#16a34a'};">${rmStatus}</td>`;
@@ -2631,7 +2632,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const rfdVal = sData.rfdBal || 0;
 
                     wip = opn0 + opn1 + opn2 + opn3 + forInsBal + rfdVal;
-                    const rmStatus = fAvail - wip;
+                    rmStatus = fAvail - wip;
 
                     if (!isGroup2Merged || (partKey !== 'QD' && partKey !== 'AMW')) {
                         rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:600;">${wip}</td>`;
