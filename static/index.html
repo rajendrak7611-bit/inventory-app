@@ -850,6 +850,35 @@
                               <tbody id="spiderReportBody"></tbody>
                           </table>
                       </div>
+
+                      <!-- Spider Forging Requirement Section -->
+                      <div id="spiderForgingReqContainer" style="margin-top: 2rem; border-top: 2px solid var(--border-color); padding-top: 1.5rem;">
+                          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                              <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main); font-weight: 600;">Spider Forging Requirement</h3>
+                              <button id="exportSpiderForgingReqBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                  Export Forging Requirement Excel
+                              </button>
+                          </div>
+                          <div style="overflow-x: auto;">
+                              <table id="spiderForgingReqTable" class="styled-table compact-table" style="width: 100%; white-space: nowrap; border-collapse: collapse;">
+                                  <thead>
+                                      <tr style="background-color: #f1f5f9; font-weight: bold; text-align: left;">
+                                          <th style="border: 1px solid #cbd5e1; padding: 8px;">Forge pn</th>
+                                          <th style="border: 1px solid #cbd5e1; padding: 8px;">Fin pn</th>
+                                          <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: right;">Schedule</th>
+                                          <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: right;">Despatch</th>
+                                          <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: right;">Bal to Desp</th>
+                                          <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: right;">Wip</th>
+                                          <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: right;">Wip-Bal</th>
+                                          <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: right;">Buffer</th>
+                                          <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: right;">Forge reqd</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody id="spiderForgingReqBody"></tbody>
+                              </table>
+                          </div>
+                      </div>
                   </div>
               </div>
             
@@ -2852,6 +2881,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=240"></script>
+    <script src="/static/app.js?v=241"></script>
 </body>
 </html>

@@ -2412,6 +2412,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         spiderContainer.style.display = 'block';
         tbody.innerHTML = '';
+        const spiderForgingList = [];
 
         let allRms = allRawMaterials;
         if (!allRms) {
@@ -2632,10 +2633,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${sData.rfdBal || 0}</td>`;
                 rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${sData.despProd || 0}</td>`;
 
+                spiderForgingList.push({
+                    forgePn: fpn || (partObj ? partObj.forge_pn : ''),
+                    finPn: pName,
+                    schedule: sData.schedQty || 0,
+                    despatch: sData.despProd || 0,
+                    wip: wip
+                });
+
                 trRow.innerHTML = rowContent;
                 tbody.appendChild(trRow);
             }
         }
+
+        renderSpiderForgingRequirementTable(spiderForgingList);
     }
 
     const exportSpiderBtn = document.getElementById('exportSpiderReportBtn');
@@ -2645,6 +2656,103 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!table) return;
             const wb = XLSX.utils.table_to_book(table, {sheet: "SPIDER Report"});
             XLSX.writeFile(wb, `SPIDER_Detailed_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+        });
+    }
+
+    const SPIDER_DEFAULT_BUFFERS = {
+        'C100': 500,
+        'RS120': 1000,
+        'RVI': 2000,
+        'Q109': 4000,
+        'R149': 2000,
+        'RS160': 4000,
+        'AMW': 1000,
+        'QD': 0,
+        '15I': 2000,
+        '15 I': 2000
+    };
+
+    function getSpiderBuffers() {
+        try {
+            const saved = localStorage.getItem('spider_forging_buffers');
+            if (saved) return JSON.parse(saved);
+        } catch (e) { console.error(e); }
+        return { ...SPIDER_DEFAULT_BUFFERS };
+    }
+
+    function saveSpiderBuffer(partKey, val) {
+        const buffers = getSpiderBuffers();
+        buffers[partKey] = parseInt(val, 10) || 0;
+        try {
+            localStorage.setItem('spider_forging_buffers', JSON.stringify(buffers));
+        } catch (e) { console.error(e); }
+    }
+
+    function renderSpiderForgingRequirementTable(forgingList) {
+        const tbody = document.getElementById('spiderForgingReqBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        const buffers = getSpiderBuffers();
+
+        forgingList.forEach(item => {
+            const partKey = (item.finPn || '').trim().toUpperCase();
+            const forgePn = item.forgePn || '-';
+            const schedule = item.schedule || 0;
+            const despatch = item.despatch || 0;
+            const balToDesp = schedule - despatch;
+            const wip = item.wip || 0;
+            const wipBal = wip - balToDesp;
+            
+            const defaultBuf = SPIDER_DEFAULT_BUFFERS[partKey] !== undefined ? SPIDER_DEFAULT_BUFFERS[partKey] : (SPIDER_DEFAULT_BUFFERS[partKey.replace(/\s+/g, '')] !== undefined ? SPIDER_DEFAULT_BUFFERS[partKey.replace(/\s+/g, '')] : 0);
+            const bufferVal = buffers[partKey] !== undefined ? buffers[partKey] : defaultBuf;
+
+            const forgeReqdCalculated = wipBal + bufferVal;
+            const forgeReqd = forgeReqdCalculated < 0 ? 0 : forgeReqdCalculated;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: 500;">${forgePn}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">${item.finPn}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right;">${schedule}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right;">${despatch}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: 600; color: ${balToDesp < 0 ? '#ef4444' : '#1e293b'};">${balToDesp}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: 600;">${wip}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: 600; color: ${wipBal < 0 ? '#ef4444' : '#16a34a'};">${wipBal}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 4px; text-align: right;">
+                    <input type="number" class="spider-buffer-input" data-part="${partKey}" value="${bufferVal}" style="width: 85px; padding: 3px 6px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px; text-align: right; font-weight: 500;">
+                </td>
+                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: bold; color: ${forgeReqd > 0 ? '#d97706' : '#64748b'};">${forgeReqd}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.spider-buffer-input').forEach(input => {
+            input.addEventListener('change', (e) => {
+                const part = e.target.getAttribute('data-part');
+                const val = e.target.value;
+                saveSpiderBuffer(part, val);
+                renderSpiderForgingRequirementTable(forgingList);
+            });
+        });
+    }
+
+    const exportSpiderForgingBtn = document.getElementById('exportSpiderForgingReqBtn');
+    if (exportSpiderForgingBtn) {
+        exportSpiderForgingBtn.addEventListener('click', () => {
+            const table = document.getElementById('spiderForgingReqTable');
+            if (!table) return;
+            const clone = table.cloneNode(true);
+            const inputs = table.querySelectorAll('input');
+            const cloneInputs = clone.querySelectorAll('input');
+            inputs.forEach((inp, idx) => {
+                if (cloneInputs[idx]) {
+                    const parent = cloneInputs[idx].parentNode;
+                    parent.textContent = inp.value;
+                }
+            });
+            const wb = XLSX.utils.table_to_book(clone, {sheet: "Forging Requirement"});
+            XLSX.writeFile(wb, `Spider_Forging_Requirement_${new Date().toISOString().slice(0,10)}.xlsx`);
         });
     }
 
