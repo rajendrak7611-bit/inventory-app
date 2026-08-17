@@ -155,6 +155,7 @@ class RawMaterialLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     type = Column(String) # 'receipt' or 'despatch'
     date = Column(String)
+    dc_type = Column(String, nullable=True) # 'Mfg-spider', 'AAL-Labour', 'Labour-jobs', 'sub-con'
     forge_pn = Column(String)
     dc_no = Column(String, nullable=True)
     finish_part_no = Column(String, nullable=True)

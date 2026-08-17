@@ -68,6 +68,10 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
     except:
         pass
     try:
+        conn.execute(text("ALTER TABLE raw_material_logs ADD COLUMN dc_type VARCHAR;"))
+    except:
+        pass
+    try:
         conn.execute(text("UPDATE schedules SET status = 'Pending';"))
         conn.execute(text("UPDATE schedules SET status = 'Completed' WHERE qty <= (SELECT COALESCE(SUM(prod_qty), 0) FROM production_logs WHERE production_logs.partno = schedules.partno AND opn_no = 'rfd');"))
     except Exception:
@@ -171,6 +175,7 @@ class RawMaterialResponse(RawMaterialBase):
 class RawMaterialLogBase(BaseModel):
     type: str
     date: str
+    dc_type: Optional[str] = None
     forge_pn: str
     dc_no: Optional[str] = None
     finish_part_no: Optional[str] = None

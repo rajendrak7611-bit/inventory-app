@@ -656,31 +656,19 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             
             if (isReceipt) {
+                if (document.getElementById('rmLogDcTypeGroup')) document.getElementById('rmLogDcTypeGroup').style.display = 'none';
                 document.getElementById('rmLogDcNoGroup').style.display = 'none';
                 document.getElementById('rmLogFinishPartNoGroup').style.display = 'none';
                 if (document.getElementById('rmLogPartPrefixGroup')) document.getElementById('rmLogPartPrefixGroup').style.display = 'none';
             } else {
+                if (document.getElementById('rmLogDcTypeGroup')) document.getElementById('rmLogDcTypeGroup').style.display = 'block';
                 document.getElementById('rmLogDcNoGroup').style.display = 'block';
                 document.getElementById('rmLogFinishPartNoGroup').style.display = 'block';
                 if (document.getElementById('rmLogPartPrefixGroup')) document.getElementById('rmLogPartPrefixGroup').style.display = 'block';
                 if (document.getElementById('rmLogPartPrefix')) document.getElementById('rmLogPartPrefix').value = '';
 
-                // Autofill next continuous DC No starting from 1353
-                try {
-                    const res = await fetch('/api/rawmateriallogs');
-                    const logs = await res.json();
-                    const despatchLogs = logs.filter(l => l.type === 'despatch' && l.dc_no);
-                    let maxDc = 1352;
-                    despatchLogs.forEach(l => {
-                        const num = parseInt(l.dc_no, 10);
-                        if (!isNaN(num) && num > maxDc) {
-                            maxDc = num;
-                        }
-                    });
-                    document.getElementById('rmLogDcNo').value = (maxDc + 1).toString();
-                } catch(e) {
-                    document.getElementById('rmLogDcNo').value = '1353';
-                }
+                // Auto-generate DC No for selected DC Type
+                await autoGenerateRmDcNo();
                 
                 if (globalPartMasters.length === 0) {
                     const pmRes = await fetch('/api/partmaster');
@@ -4237,6 +4225,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (matchedPm) prefixVal = matchedPm.part_prefix || '';
                         }
                         extraCols = `
+                            <td>${log.dc_type || '-'}</td>
+                            <td>${log.forge_pn}</td>
                             <td>${log.finish_part_no || '-'}</td>
                             <td>${prefixVal || '-'}</td>
                             <td>${log.dc_no || '-'}</td>
@@ -4247,8 +4237,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     tr.innerHTML = `
                         <td>${log.date}</td>
-                        <td>${log.forge_pn}</td>
-                        ${extraCols}
+                        ${type === 'receipt' ? `<td>${log.forge_pn}</td>` : extraCols}
                         <td>${log.qty}</td>
                         <td>
                             ${actionBtns}
@@ -4305,10 +4294,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (isReceipt) {
+            if (document.getElementById('rmLogDcTypeGroup')) document.getElementById('rmLogDcTypeGroup').style.display = 'none';
             document.getElementById('rmLogDcNoGroup').style.display = 'none';
             document.getElementById('rmLogFinishPartNoGroup').style.display = 'none';
             if (document.getElementById('rmLogPartPrefixGroup')) document.getElementById('rmLogPartPrefixGroup').style.display = 'none';
         } else {
+            if (document.getElementById('rmLogDcTypeGroup')) document.getElementById('rmLogDcTypeGroup').style.display = 'block';
+            if (document.getElementById('rmLogDcType')) document.getElementById('rmLogDcType').value = log.dc_type || 'Mfg-spider';
             document.getElementById('rmLogDcNoGroup').style.display = 'block';
             document.getElementById('rmLogFinishPartNoGroup').style.display = 'block';
             if (document.getElementById('rmLogPartPrefixGroup')) document.getElementById('rmLogPartPrefixGroup').style.display = 'block';
@@ -4385,6 +4377,89 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('rmLogModal').classList.add('show');
     };
+
+    async function autoGenerateRmDcNo() {
+        const type = document.getElementById('rmLogType')?.value;
+        if (type !== 'despatch') return;
+        const isEdit = !!document.getElementById('rmLogId')?.value;
+        if (isEdit) return;
+
+        const dcType = document.getElementById('rmLogDcType')?.value || 'Mfg-spider';
+        const dateVal = document.getElementById('rmLogDate')?.value || new Date().toISOString().split('T')[0];
+
+        try {
+            const res = await fetch('/api/rawmateriallogs');
+            const logs = await res.json();
+            const despatchLogs = logs.filter(l => l.type === 'despatch');
+
+            let maxSeq = 0;
+            despatchLogs.forEach(l => {
+                const lDcType = l.dc_type;
+                const dcStr = String(l.dc_no || '').trim();
+                if (!dcStr) return;
+
+                let isMatch = false;
+                if (lDcType) {
+                    isMatch = (lDcType === dcType);
+                } else {
+                    if (dcType === 'Mfg-spider' && /^\d{4}-\d+$/.test(dcStr)) isMatch = true;
+                    else if (dcType === 'AAL-Labour' && /^\d+\/\d{2}-\d{2}$/.test(dcStr)) isMatch = true;
+                    else if (dcType === 'sub-con' && /^MD\d+-\d+$/i.test(dcStr)) isMatch = true;
+                    else if (dcType === 'Labour-jobs' && /^\d+$/.test(dcStr)) isMatch = true;
+                }
+
+                if (isMatch) {
+                    let seq = 0;
+                    if (dcType === 'Mfg-spider') {
+                        const m = dcStr.match(/(\d+)$/);
+                        if (m) seq = parseInt(m[1], 10);
+                    } else if (dcType === 'AAL-Labour') {
+                        const m = dcStr.match(/^(\d+)\//);
+                        if (m) seq = parseInt(m[1], 10);
+                    } else if (dcType === 'sub-con') {
+                        const m = dcStr.match(/(\d+)$/);
+                        if (m) seq = parseInt(m[1], 10);
+                    } else if (dcType === 'Labour-jobs') {
+                        const m = dcStr.match(/^(\d+)$/);
+                        if (m) seq = parseInt(m[1], 10);
+                    }
+                    if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+                }
+            });
+
+            const nextSeq = maxSeq + 1;
+            const paddedSeq = String(nextSeq).padStart(3, '0');
+
+            const dObj = new Date(dateVal);
+            const fullYear = isNaN(dObj.getFullYear()) ? new Date().getFullYear() : dObj.getFullYear();
+            const month = isNaN(dObj.getMonth()) ? (new Date().getMonth() + 1) : (dObj.getMonth() + 1);
+
+            let fyStart = month >= 4 ? fullYear : fullYear - 1;
+            let fyCode = String(fyStart).slice(-2) + '-' + String((fyStart + 1) % 100).padStart(2, '0');
+            let fyCodeNoDash = 'MD' + String(fyStart).slice(-2) + String((fyStart + 1) % 100).padStart(2, '0');
+
+            let generatedDcNo = '';
+            if (dcType === 'Mfg-spider') {
+                generatedDcNo = `${fullYear}-${paddedSeq}`;
+            } else if (dcType === 'AAL-Labour') {
+                generatedDcNo = `${paddedSeq}/${fyCode}`;
+            } else if (dcType === 'Labour-jobs') {
+                generatedDcNo = `${paddedSeq}`;
+            } else if (dcType === 'sub-con') {
+                generatedDcNo = `${fyCodeNoDash}-${paddedSeq}`;
+            }
+
+            const dcNoInput = document.getElementById('rmLogDcNo');
+            if (dcNoInput) {
+                dcNoInput.value = generatedDcNo;
+            }
+        } catch (err) {
+            console.error('Error in autoGenerateRmDcNo:', err);
+        }
+    }
+
+    document.getElementById('rmLogDcType')?.addEventListener('change', autoGenerateRmDcNo);
+    document.getElementById('rmLogDate')?.addEventListener('change', autoGenerateRmDcNo);
 
     function getFinYear(dateStr) {
         if (!dateStr) return '2026-27';
@@ -4587,13 +4662,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const id = document.getElementById('rmLogId').value;
             const type = document.getElementById('rmLogType').value;
             const date = document.getElementById('rmLogDate').value;
+            const dc_type = type === 'despatch' ? document.getElementById('rmLogDcType').value : null;
             const forge_pn = document.getElementById('rmLogForgePn').value;
             const dc_no = type === 'despatch' ? document.getElementById('rmLogDcNo').value : null;
             const finish_part_no = type === 'despatch' ? document.getElementById('rmLogFinishPartNo').value : null;
             const part_prefix = type === 'despatch' ? (document.getElementById('rmLogPartPrefix') ? document.getElementById('rmLogPartPrefix').value : '') : null;
             const qty = parseInt(document.getElementById('rmLogQty').value) || 0;
             
-            const payload = { type, date, forge_pn, dc_no, finish_part_no, part_prefix, qty };
+            const payload = { type, date, dc_type, forge_pn, dc_no, finish_part_no, part_prefix, qty };
             const method = id ? 'PUT' : 'POST';
             const url = id ? `/api/rawmateriallogs/${id}` : '/api/rawmateriallogs';
             
