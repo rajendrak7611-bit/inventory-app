@@ -649,7 +649,7 @@
                     <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
                         <label for="attendanceMonthPicker" style="font-weight: 600;">Month:</label>
                         <input type="month" id="attendanceMonthPicker" style="padding: 0.4rem 0.6rem; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; font-family: inherit;">
-                        <button id="markHolidaysBtn" class="btn btn-outline" style="border-color: #22c55e; color: #16a34a; font-weight: 600; padding: 0.4rem 0.8rem; display: inline-flex; align-items: center; gap: 6px;">
+                        <button id="markHolidaysBtn" onclick="openHolidayModal()" class="btn btn-outline" style="border-color: #22c55e; color: #16a34a; font-weight: 600; padding: 0.4rem 0.8rem; display: inline-flex; align-items: center; gap: 6px;">
                             <i class="fas fa-calendar-alt"></i> 🌴 Mark Holidays
                         </button>
                         <button id="addAttendanceEmpBtn" class="btn btn-outline">+ Add Employee Row</button>
@@ -2880,6 +2880,10 @@
                         <button type="submit" class="btn btn-primary" style="padding: 0.45rem 1rem; font-size: 0.85rem;">Save Contact</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Mark Holidays Modal -->
     <div class="modal" id="holidayModal">
         <div class="modal-content" style="max-width: 520px; padding: 1.5rem;">
@@ -2902,6 +2906,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=245"></script>
+    <script src="/static/app.js?v=246"></script>
 </body>
 </html>

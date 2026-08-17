@@ -1505,8 +1505,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const holidayCheckboxesContainer = document.getElementById('holidayCheckboxesContainer');
 
     function openHolidayModal() {
-        if (!attendanceMonthPicker || !holidayModal) return;
-        const monthVal = attendanceMonthPicker.value;
+        const attPicker = document.getElementById('attendanceMonthPicker');
+        const hModal = document.getElementById('holidayModal');
+        const hMonthLabel = document.getElementById('holidayMonthLabel');
+        const hCbContainer = document.getElementById('holidayCheckboxesContainer');
+
+        if (!attPicker || !hModal) return;
+        const monthVal = attPicker.value;
         if (!monthVal) {
             alert('Please select a Month/Year first.');
             return;
@@ -1518,12 +1523,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const daysInMonth = new Date(year, month, 0).getDate();
 
         const monthName = new Date(year, month - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
-        if (holidayMonthLabel) holidayMonthLabel.textContent = monthName;
+        if (hMonthLabel) hMonthLabel.textContent = monthName;
 
         const currentHolidays = new Set(getHolidaysForMonth(monthVal));
 
-        if (holidayCheckboxesContainer) {
-            holidayCheckboxesContainer.innerHTML = '';
+        if (hCbContainer) {
+            hCbContainer.innerHTML = '';
             const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
             for (let d = 1; d <= daysInMonth; d++) {
@@ -1545,12 +1550,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span><strong>${d}</strong> <small style="color: ${isChecked ? '#15803d' : (isSun ? '#1e40af' : '#64748b')};">(${dayOfWeek})</small></span>
                 `;
 
-                holidayCheckboxesContainer.appendChild(wrapper);
+                hCbContainer.appendChild(wrapper);
             }
         }
 
-        holidayModal.classList.add('show');
+        hModal.classList.add('show');
     }
+    window.openHolidayModal = openHolidayModal;
 
     if (markHolidaysBtn) markHolidaysBtn.addEventListener('click', openHolidayModal);
     if (closeHolidayModalBtn) closeHolidayModalBtn.addEventListener('click', () => holidayModal.classList.remove('show'));
