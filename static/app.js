@@ -8074,12 +8074,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         </td>
                     `;
                 }
-                        <td>${monitorCell}</td>
-                        <td class="actions-cell">
-                            <button class="btn btn-outline delete-subusage-btn" data-id="${item.id}" data-usage-idx="${uIdx}" style="padding: 0.25rem 0.45rem; font-size: 0.78rem; color: #ef4444; border-color: #ef4444;" title="Remove this usage entry">Delete Usage</button>
-                        </td>
-                    `;
-                }
                 tbody.appendChild(tr);
             });
         });
