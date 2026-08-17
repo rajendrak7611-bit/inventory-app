@@ -153,10 +153,18 @@ document.addEventListener('DOMContentLoaded', () => {
             actionDiv.appendChild(logoutBtn);
         }
 
-        // Auto-click the first available tab if they don't have access to the default (products)
-        if (userObj.role !== 'admin' && firstAvailableTab && !accessibleScreens.includes('products')) {
+        // Auto-click target initial tab on login (prioritize Insert Issue for shopfloor/toolcrib users)
+        let targetInitialTab = null;
+        if (accessibleScreens.includes('insertissue') || accessibleScreens.includes('toolcrib')) {
+            targetInitialTab = document.getElementById('sidebarInsertIssue');
+        }
+        if (!targetInitialTab) {
+            targetInitialTab = firstAvailableTab;
+        }
+
+        if (targetInitialTab && (userObj.role !== 'admin' || accessibleScreens.includes('insertissue'))) {
             setTimeout(() => {
-                firstAvailableTab.click();
+                targetInitialTab.click();
             }, 100);
         }
     }
@@ -7943,16 +7951,38 @@ document.addEventListener('DOMContentLoaded', () => {
         return filledCount >= numEdges && numEdges > 0;
     }
 
+    function getDeptShortCode(dept) {
+        if (!dept) return '-';
+        const clean = dept.trim().toUpperCase();
+        if (clean === 'WIPRO') return 'W';
+        if (clean === 'SPIDER') return 'S';
+        if (clean === 'MAINT' || clean === 'MAINTENANCE') return 'M';
+        if (clean === 'ADMIN') return 'A';
+        if (clean === 'GEAR') return 'G';
+        if (clean === 'HR') return 'H';
+        if (clean === 'QC' || clean === 'QUALITY') return 'Q';
+        if (clean === 'TC' || clean === 'TOOL CRIB') return 'TC';
+        if (clean === 'BC') return 'B';
+        return clean.charAt(0);
+    }
+
+    function getDayDD(dateStr) {
+        if (!dateStr) return '-';
+        const fmt = formatExcelDate(dateStr);
+        const parts = fmt.split('-');
+        return parts.length === 3 ? parts[2] : fmt;
+    }
+
     function buildMonitorCellHtml(item, uIdx, numEdges) {
         const qty = Math.max(1, parseInt(item.qty_issued) || 1);
-        let html = '<div style="display: flex; flex-direction: column; gap: 4px;">';
+        let html = '<div style="display: flex; flex-direction: column; gap: 3px;">';
         for (let iIdx = 0; iIdx < qty; iIdx++) {
             const isDone = isInstComplete(item, iIdx, numEdges);
-            const btnLabel = qty > 1 ? `Insert #${iIdx + 1} Monitor` : `Insert Monitor`;
+            const btnLabel = qty > 1 ? `Ins #${iIdx + 1}` : `Insert Monitor`;
             html += `
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <button class="btn btn-outline monitor-issue-btn" data-id="${item.id}" data-usage-idx="${uIdx}" data-inst-idx="${iIdx}" style="padding: 0.25rem 0.55rem; font-size: 0.82rem; color: #2563eb; border-color: #2563eb; font-weight: 600;">${btnLabel}</button>
-                    ${isDone ? '<span title="All edge details entered for Insert #' + (iIdx + 1) + '" style="display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; background-color: #22c55e; color: white; border-radius: 4px; font-size: 12px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">✓</span>' : ''}
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    <button class="btn btn-outline monitor-issue-btn" data-id="${item.id}" data-usage-idx="${uIdx}" data-inst-idx="${iIdx}" style="padding: 0.18rem 0.45rem; font-size: 0.76rem; color: #2563eb; border-color: #2563eb; font-weight: 600; border-radius: 4px; line-height: 1.2;">${btnLabel}</button>
+                    ${isDone ? '<span title="All edge details entered for Insert #' + (iIdx + 1) + '" style="display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background-color: #22c55e; color: white; border-radius: 4px; font-size: 11px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">✓</span>' : ''}
                 </div>
             `;
         }
@@ -7965,7 +7995,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!tbody) return;
         tbody.innerHTML = '';
         if (!issues || issues.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No insert issue records found. Click "+ Issue Insert" or "Import Excel" to add records.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="13" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No insert issue records found. Click "+ Issue Insert" or "Import Excel" to add records.</td></tr>';
             return;
         }
 
@@ -8000,6 +8030,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             usages.forEach((u, uIdx) => {
                 const tr = document.createElement('tr');
+                tr.style.height = '28px';
                 if (uIdx > 0) {
                     tr.style.background = '#f9fafb';
                 }
@@ -8008,33 +8039,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (uIdx === 0) {
                     const formattedDate = formatExcelDate(item.date);
+                    const dayDD = getDayDD(item.date);
+                    const deptShort = getDeptShortCode(item.department);
                     tr.innerHTML = `
-                        <td rowspan="${rowSpan}" style="vertical-align: middle; font-weight: bold;">${item.id}</td>
-                        <td rowspan="${rowSpan}" style="vertical-align: middle;"><span style="font-weight: 500;">${formattedDate}</span></td>
-                        <td rowspan="${rowSpan}" style="vertical-align: middle;"><strong>${item.shift || ''}</strong></td>
-                        <td rowspan="${rowSpan}" style="vertical-align: middle;">${item.department || ''}</td>
-                        <td rowspan="${rowSpan}" style="vertical-align: middle;"><strong>${item.insert_spec || ''}</strong></td>
-                        <td rowspan="${rowSpan}" style="vertical-align: middle;">${item.batch_no || ''}</td>
-                        <td rowspan="${rowSpan}" style="vertical-align: middle;"><span style="font-weight: 600; color: var(--primary-color);">${item.qty_issued || 0}</span></td>
-                        <td>${u.machine || ''}</td>
-                        <td>${u.operator || ''}</td>
-                        <td>${u.partno || ''}</td>
-                        <td>${u.opn_no || ''}</td>
-                        <td>${monitorCell}</td>
-                        <td class="actions-cell">
-                            <div style="display: flex; gap: 4px; flex-wrap: wrap;">
-                                <button class="btn btn-outline add-usage-btn" data-id="${item.id}" style="padding: 0.25rem 0.45rem; font-size: 0.78rem; color: #16a34a; border-color: #16a34a; font-weight: 600;" title="Add Usage Entry">+ Add Usage</button>
-                                <button class="btn btn-outline edit-issue-btn" data-id="${item.id}" style="padding: 0.25rem 0.45rem; font-size: 0.78rem;">Edit</button>
-                                <button class="btn btn-outline delete-issue-btn" data-id="${item.id}" style="padding: 0.25rem 0.45rem; font-size: 0.78rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                        <td rowspan="${rowSpan}" style="vertical-align: middle; font-weight: bold; padding: 3px 5px; font-size: 0.8rem;">${item.id}</td>
+                        <td rowspan="${rowSpan}" style="vertical-align: middle; padding: 3px 5px; font-size: 0.8rem;"><span style="font-weight: 600;" title="${formattedDate}">${dayDD}</span></td>
+                        <td rowspan="${rowSpan}" style="vertical-align: middle; padding: 3px 5px; font-size: 0.8rem;"><strong>${item.shift || ''}</strong></td>
+                        <td rowspan="${rowSpan}" style="vertical-align: middle; padding: 3px 5px; font-size: 0.8rem;"><span style="font-weight: 700; color: #0284c7;" title="${item.department || ''}">${deptShort}</span></td>
+                        <td rowspan="${rowSpan}" style="vertical-align: middle; padding: 3px 5px; font-size: 0.8rem;"><strong>${item.insert_spec || ''}</strong></td>
+                        <td rowspan="${rowSpan}" style="vertical-align: middle; padding: 3px 5px; font-size: 0.8rem;">${item.batch_no || ''}</td>
+                        <td rowspan="${rowSpan}" style="vertical-align: middle; padding: 3px 5px; font-size: 0.8rem;"><span style="font-weight: 700; color: var(--primary-color);">${item.qty_issued || 0}</span></td>
+                        <td style="padding: 3px 5px; font-size: 0.8rem;">${u.machine || ''}</td>
+                        <td style="padding: 3px 5px; font-size: 0.8rem;">${u.operator || ''}</td>
+                        <td style="padding: 3px 5px; font-size: 0.8rem;">${u.partno || ''}</td>
+                        <td style="padding: 3px 5px; font-size: 0.8rem;">${u.opn_no || ''}</td>
+                        <td style="padding: 3px 5px; font-size: 0.8rem;">${monitorCell}</td>
+                        <td class="actions-cell" style="padding: 3px 5px;">
+                            <div style="display: flex; gap: 3px; flex-wrap: wrap;">
+                                <button class="btn btn-outline add-usage-btn" data-id="${item.id}" style="padding: 0.15rem 0.35rem; font-size: 0.72rem; color: #16a34a; border-color: #16a34a; font-weight: 600;" title="Add Usage Entry">+ Add Usage</button>
+                                <button class="btn btn-outline edit-issue-btn" data-id="${item.id}" style="padding: 0.15rem 0.35rem; font-size: 0.72rem;">Edit</button>
+                                <button class="btn btn-outline delete-issue-btn" data-id="${item.id}" style="padding: 0.15rem 0.35rem; font-size: 0.72rem; color: #ef4444; border-color: #ef4444;">Delete</button>
                             </div>
                         </td>
                     `;
                 } else {
                     tr.innerHTML = `
-                        <td>${u.machine || ''}</td>
-                        <td>${u.operator || ''}</td>
-                        <td>${u.partno || ''}</td>
-                        <td>${u.opn_no || ''}</td>
+                        <td style="padding: 3px 5px; font-size: 0.8rem;">${u.machine || ''}</td>
+                        <td style="padding: 3px 5px; font-size: 0.8rem;">${u.operator || ''}</td>
+                        <td style="padding: 3px 5px; font-size: 0.8rem;">${u.partno || ''}</td>
+                        <td style="padding: 3px 5px; font-size: 0.8rem;">${u.opn_no || ''}</td>
+                        <td style="padding: 3px 5px; font-size: 0.8rem;">${monitorCell}</td>
+                        <td class="actions-cell" style="padding: 3px 5px;">
+                            <button class="btn btn-outline delete-subusage-btn" data-id="${item.id}" data-usage-idx="${uIdx}" style="padding: 0.15rem 0.35rem; font-size: 0.72rem; color: #ef4444; border-color: #ef4444;" title="Remove this usage entry">Delete Usage</button>
+                        </td>
+                    `;
+                }
                         <td>${monitorCell}</td>
                         <td class="actions-cell">
                             <button class="btn btn-outline delete-subusage-btn" data-id="${item.id}" data-usage-idx="${uIdx}" style="padding: 0.25rem 0.45rem; font-size: 0.78rem; color: #ef4444; border-color: #ef4444;" title="Remove this usage entry">Delete Usage</button>
@@ -8926,6 +8965,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const tbody = document.getElementById('insertMonitorTableBody');
         tbody.innerHTML = '';
 
+        let activeMonitorInput = null;
+
         for (let i = 1; i <= numEdges; i++) {
             const tr = document.createElement('tr');
             const info = edgeObjNormalized[String(i)];
@@ -8933,25 +8974,52 @@ document.addEventListener('DOMContentLoaded', () => {
             let inputHtml = '';
             if (info && info.qty > 0) {
                 if (info.uIdx === targetUidx) {
-                    // Used in THIS usage entry -> Editable!
-                    inputHtml = `<input type="number" class="edge-qty-input" data-edge="${i}" value="${info.qty}" placeholder="Enter Qty" min="0" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px;">`;
+                    inputHtml = `
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                <button type="button" class="btn btn-outline edge-step-btn" data-edge="${i}" data-dir="-1" style="padding: 4px 12px; font-weight: bold; font-size: 1.1rem; border-radius: 4px; border-color: #cbd5e1; background: #f8fafc; touch-action: manipulation;">-</button>
+                                <input type="number" pattern="[0-9]*" inputmode="numeric" class="edge-qty-input" data-edge="${i}" value="${info.qty}" placeholder="Qty" min="0" style="flex: 1; min-width: 60px; padding: 4px 6px; font-size: 1.05rem; font-weight: bold; text-align: center; border: 1px solid var(--border-color); border-radius: 4px;">
+                                <button type="button" class="btn btn-outline edge-step-btn" data-edge="${i}" data-dir="1" style="padding: 4px 12px; font-weight: bold; font-size: 1.1rem; border-radius: 4px; border-color: #cbd5e1; background: #f8fafc; touch-action: manipulation;">+</button>
+                            </div>
+                            <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                <button type="button" class="edge-quick-btn" data-edge="${i}" data-add="10" style="padding: 2px 6px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 3px; background: #f1f5f9; cursor: pointer; touch-action: manipulation;">+10</button>
+                                <button type="button" class="edge-quick-btn" data-edge="${i}" data-add="25" style="padding: 2px 6px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 3px; background: #f1f5f9; cursor: pointer; touch-action: manipulation;">+25</button>
+                                <button type="button" class="edge-quick-btn" data-edge="${i}" data-add="50" style="padding: 2px 6px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 3px; background: #f1f5f9; cursor: pointer; touch-action: manipulation;">+50</button>
+                                <button type="button" class="edge-quick-btn" data-edge="${i}" data-add="100" style="padding: 2px 6px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 3px; background: #f1f5f9; cursor: pointer; touch-action: manipulation;">+100</button>
+                                <button type="button" class="edge-clear-btn" data-edge="${i}" style="padding: 2px 6px; font-size: 0.72rem; border: 1px solid #fca5a5; color: #dc2626; border-radius: 3px; background: #fef2f2; cursor: pointer; touch-action: manipulation;">Clear</button>
+                            </div>
+                        </div>
+                    `;
                 } else {
-                    // Used in ANOTHER usage entry -> Disabled with note & blank input
                     const label = info.partno ? info.partno : `Usage #${info.uIdx + 1}`;
                     inputHtml = `
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <input type="number" class="edge-qty-input" data-edge="${i}" value="" placeholder="Filled in ${label}" disabled style="flex: 1; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px; background: rgba(0,0,0,0.05); color: var(--text-muted); opacity: 0.7; cursor: not-allowed;">
-                            <span style="font-size: 0.8rem; color: #16a34a; font-weight: 500; white-space: nowrap;">✓ (Filled in ${label}: Qty ${info.qty})</span>
+                            <input type="number" pattern="[0-9]*" inputmode="numeric" class="edge-qty-input" data-edge="${i}" value="" placeholder="Filled in ${label}" disabled style="flex: 1; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px; background: rgba(0,0,0,0.05); color: var(--text-muted); opacity: 0.7; cursor: not-allowed;">
+                            <span style="font-size: 0.8rem; color: #16a34a; font-weight: 500; white-space: nowrap;">✓ (${label}: Qty ${info.qty})</span>
                         </div>
                     `;
                 }
             } else {
-                // Not used yet -> Blank editable field for this usage!
-                inputHtml = `<input type="number" class="edge-qty-input" data-edge="${i}" value="" placeholder="Enter Qty" min="0" style="width: 100%; padding: 0.4rem; border: 1px solid var(--border-color); border-radius: 4px;">`;
+                inputHtml = `
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <div style="display: flex; align-items: center; gap: 4px;">
+                            <button type="button" class="btn btn-outline edge-step-btn" data-edge="${i}" data-dir="-1" style="padding: 4px 12px; font-weight: bold; font-size: 1.1rem; border-radius: 4px; border-color: #cbd5e1; background: #f8fafc; touch-action: manipulation;">-</button>
+                            <input type="number" pattern="[0-9]*" inputmode="numeric" class="edge-qty-input" data-edge="${i}" value="" placeholder="Qty" min="0" style="flex: 1; min-width: 60px; padding: 4px 6px; font-size: 1.05rem; font-weight: bold; text-align: center; border: 1px solid var(--border-color); border-radius: 4px;">
+                            <button type="button" class="btn btn-outline edge-step-btn" data-edge="${i}" data-dir="1" style="padding: 4px 12px; font-weight: bold; font-size: 1.1rem; border-radius: 4px; border-color: #cbd5e1; background: #f8fafc; touch-action: manipulation;">+</button>
+                        </div>
+                        <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                            <button type="button" class="edge-quick-btn" data-edge="${i}" data-add="10" style="padding: 2px 6px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 3px; background: #f1f5f9; cursor: pointer; touch-action: manipulation;">+10</button>
+                            <button type="button" class="edge-quick-btn" data-edge="${i}" data-add="25" style="padding: 2px 6px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 3px; background: #f1f5f9; cursor: pointer; touch-action: manipulation;">+25</button>
+                            <button type="button" class="edge-quick-btn" data-edge="${i}" data-add="50" style="padding: 2px 6px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 3px; background: #f1f5f9; cursor: pointer; touch-action: manipulation;">+50</button>
+                            <button type="button" class="edge-quick-btn" data-edge="${i}" data-add="100" style="padding: 2px 6px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 3px; background: #f1f5f9; cursor: pointer; touch-action: manipulation;">+100</button>
+                            <button type="button" class="edge-clear-btn" data-edge="${i}" style="padding: 2px 6px; font-size: 0.72rem; border: 1px solid #fca5a5; color: #dc2626; border-radius: 3px; background: #fef2f2; cursor: pointer; touch-action: manipulation;">Clear</button>
+                        </div>
+                    </div>
+                `;
             }
 
             tr.innerHTML = `
-                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; font-weight: 600;">Edge ${i}</td>
+                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center; font-weight: 700; width: 70px; font-size: 0.9rem;">Edge ${i}</td>
                 <td style="border: 1px solid #cbd5e1; padding: 6px;">
                     ${inputHtml}
                 </td>
@@ -8963,12 +9031,85 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.querySelectorAll('.edge-qty-input').forEach(input => {
             if (!input.disabled) {
+                if (!activeMonitorInput) activeMonitorInput = input;
+                input.addEventListener('focus', () => { activeMonitorInput = input; });
+                input.addEventListener('click', () => { activeMonitorInput = input; });
                 input.addEventListener('input', updateMonitorTotalQty);
             }
         });
 
+        tbody.querySelectorAll('.edge-step-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const edge = btn.getAttribute('data-edge');
+                const dir = parseInt(btn.getAttribute('data-dir')) || 0;
+                const inp = tbody.querySelector(`.edge-qty-input[data-edge="${edge}"]`);
+                if (inp && !inp.disabled) {
+                    activeMonitorInput = inp;
+                    let val = parseInt(inp.value) || 0;
+                    val = Math.max(0, val + dir);
+                    inp.value = val > 0 ? val : '';
+                    updateMonitorTotalQty();
+                }
+            });
+        });
+
+        tbody.querySelectorAll('.edge-quick-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const edge = btn.getAttribute('data-edge');
+                const addVal = parseInt(btn.getAttribute('data-add')) || 0;
+                const inp = tbody.querySelector(`.edge-qty-input[data-edge="${edge}"]`);
+                if (inp && !inp.disabled) {
+                    activeMonitorInput = inp;
+                    let val = parseInt(inp.value) || 0;
+                    val = Math.max(0, val + addVal);
+                    inp.value = val;
+                    updateMonitorTotalQty();
+                }
+            });
+        });
+
+        tbody.querySelectorAll('.edge-clear-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const edge = btn.getAttribute('data-edge');
+                const inp = tbody.querySelector(`.edge-qty-input[data-edge="${edge}"]`);
+                if (inp && !inp.disabled) {
+                    activeMonitorInput = inp;
+                    inp.value = '';
+                    updateMonitorTotalQty();
+                }
+            });
+        });
+
         insertMonitorModal.classList.add('show');
     }
+
+    // Attach touch keypad click listener
+    document.querySelectorAll('.monitor-keypad-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const key = btn.getAttribute('data-key');
+            let targetInp = activeMonitorInput;
+            if (!targetInp || targetInp.disabled || !document.contains(targetInp)) {
+                const availableInputs = Array.from(document.querySelectorAll('#insertMonitorTableBody .edge-qty-input')).filter(i => !i.disabled);
+                if (availableInputs.length > 0) {
+                    targetInp = availableInputs[0];
+                    activeMonitorInput = targetInp;
+                }
+            }
+
+            if (!targetInp || targetInp.disabled) return;
+
+            let curVal = String(targetInp.value || '');
+            if (key === 'clear') {
+                targetInp.value = '';
+            } else if (key === 'backspace') {
+                targetInp.value = curVal.slice(0, -1);
+            } else if (/^[0-9]$/.test(key)) {
+                targetInp.value = curVal + key;
+            }
+            updateMonitorTotalQty();
+        });
+    });
 
     function updateMonitorTotalQty() {
         const inputs = document.querySelectorAll('#insertMonitorTableBody .edge-qty-input');
