@@ -1464,6 +1464,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const attendanceHead = document.getElementById('attendanceHead');
     const attendanceBody = document.getElementById('attendanceBody');
 
+    function getHolidaysForMonth(monthVal) {
+        if (!monthVal) return [];
+        try {
+            const raw = localStorage.getItem('attendance_holidays_' + monthVal);
+            return raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveHolidaysForMonth(monthVal, daysArray) {
+        if (!monthVal) return;
+        localStorage.setItem('attendance_holidays_' + monthVal, JSON.stringify(daysArray));
+    }
+
     async function initAttendance() {
         if (attendanceMonthPicker && !attendanceMonthPicker.value) {
             const now = new Date();
@@ -1480,6 +1495,82 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Holiday Modal Elements & Handlers
+    const markHolidaysBtn = document.getElementById('markHolidaysBtn');
+    const holidayModal = document.getElementById('holidayModal');
+    const closeHolidayModalBtn = document.getElementById('closeHolidayModalBtn');
+    const cancelHolidayBtn = document.getElementById('cancelHolidayBtn');
+    const saveHolidayBtn = document.getElementById('saveHolidayBtn');
+    const holidayMonthLabel = document.getElementById('holidayMonthLabel');
+    const holidayCheckboxesContainer = document.getElementById('holidayCheckboxesContainer');
+
+    function openHolidayModal() {
+        if (!attendanceMonthPicker || !holidayModal) return;
+        const monthVal = attendanceMonthPicker.value;
+        if (!monthVal) {
+            alert('Please select a Month/Year first.');
+            return;
+        }
+
+        const parts = monthVal.split('-');
+        const year = parseInt(parts[0]);
+        const month = parseInt(parts[1]);
+        const daysInMonth = new Date(year, month, 0).getDate();
+
+        const monthName = new Date(year, month - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+        if (holidayMonthLabel) holidayMonthLabel.textContent = monthName;
+
+        const currentHolidays = new Set(getHolidaysForMonth(monthVal));
+
+        if (holidayCheckboxesContainer) {
+            holidayCheckboxesContainer.innerHTML = '';
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateObj = new Date(year, month - 1, d);
+                const dayOfWeek = dayNames[dateObj.getDay()];
+                const isChecked = currentHolidays.has(d);
+                const isSun = dateObj.getDay() === 0;
+
+                const wrapper = document.createElement('label');
+                wrapper.style.cssText = `
+                    display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px; font-size: 0.85rem; cursor: pointer;
+                    border: 1px solid ${isChecked ? '#86efac' : (isSun ? '#bfdbfe' : '#e2e8f0')};
+                    background: ${isChecked ? '#dcfce7' : (isSun ? '#eff6ff' : '#ffffff')};
+                    font-weight: ${isChecked || isSun ? '600' : '400'};
+                `;
+
+                wrapper.innerHTML = `
+                    <input type="checkbox" class="holiday-day-cb" value="${d}" ${isChecked ? 'checked' : ''} style="cursor: pointer; accent-color: #16a34a;">
+                    <span><strong>${d}</strong> <small style="color: ${isChecked ? '#15803d' : (isSun ? '#1e40af' : '#64748b')};">(${dayOfWeek})</small></span>
+                `;
+
+                holidayCheckboxesContainer.appendChild(wrapper);
+            }
+        }
+
+        holidayModal.classList.add('show');
+    }
+
+    if (markHolidaysBtn) markHolidaysBtn.addEventListener('click', openHolidayModal);
+    if (closeHolidayModalBtn) closeHolidayModalBtn.addEventListener('click', () => holidayModal.classList.remove('show'));
+    if (cancelHolidayBtn) cancelHolidayBtn.addEventListener('click', () => holidayModal.classList.remove('show'));
+
+    if (saveHolidayBtn) {
+        saveHolidayBtn.addEventListener('click', () => {
+            if (!attendanceMonthPicker) return;
+            const monthVal = attendanceMonthPicker.value;
+            const selectedDays = [];
+            document.querySelectorAll('#holidayCheckboxesContainer .holiday-day-cb:checked').forEach(cb => {
+                selectedDays.push(parseInt(cb.value));
+            });
+
+            saveHolidaysForMonth(monthVal, selectedDays);
+            if (holidayModal) holidayModal.classList.remove('show');
+            renderAttendanceGrid();
+        });
+    }
+
     async function renderAttendanceGrid() {
         if (!attendanceMonthPicker || !attendanceHead || !attendanceBody) return;
         const monthVal = attendanceMonthPicker.value;
@@ -1490,7 +1581,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const month = parseInt(parts[1]);
         const daysInMonth = new Date(year, month, 0).getDate();
 
-        // Build Table Header with Sticky Positioning
+        const holidaysSet = new Set(getHolidaysForMonth(monthVal));
+
+        // Build Table Header with Sticky Positioning & Light Green Holiday Headers
         let trHead = '<tr style="background-color: #f1f5f9; font-weight: bold;">';
         trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 140px; text-align: left; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;">Name</th>';
         trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 80px; text-align: left; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;">Dept</th>';
@@ -1499,7 +1592,11 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let d = 1; d <= daysInMonth; d++) {
             const dateObj = new Date(year, month - 1, d);
             const isSunday = dateObj.getDay() === 0;
-            if (isSunday) {
+            const isHoliday = holidaysSet.has(d);
+
+            if (isHoliday) {
+                trHead += `<th style="border: 1px solid #86efac; padding: 4px 2px; min-width: 36px; background-color: #dcfce7; color: #15803d; font-weight: bold; position: sticky; top: 0; z-index: 10;" title="Holiday">🌴 ${d}<br><span style="font-size: 0.65rem; font-weight: 600; color: #166534;">Hol</span></th>`;
+            } else if (isSunday) {
                 trHead += `<th style="border: 1px solid #93c5fd; padding: 4px 2px; min-width: 36px; background-color: #dbeafe; color: #1e40af; font-weight: bold; position: sticky; top: 0; z-index: 10;">${d}<br><span style="font-size: 0.7rem; font-weight: normal;">Sun</span></th>`;
             } else {
                 trHead += `<th style="border: 1px solid #cbd5e1; padding: 4px 2px; min-width: 36px; background-color: #f8fafc; position: sticky; top: 0; z-index: 10;">${d}</th>`;
@@ -1564,6 +1661,8 @@ document.addEventListener('DOMContentLoaded', () => {
             daysInMonth = new Date(year, month, 0).getDate();
         }
 
+        const holidaysSet = new Set(getHolidaysForMonth(monthVal));
+
         const tr = document.createElement('tr');
         tr.style.height = '32px';
 
@@ -1576,7 +1675,15 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let d = 1; d <= daysInMonth; d++) {
             const dateObj = new Date(year, month - 1, d);
             const isSunday = dateObj.getDay() === 0;
-            const bgStyle = isSunday ? 'background-color: #eff6ff; border: 1px solid #bfdbfe;' : 'border: 1px solid #cbd5e1;';
+            const isHoliday = holidaysSet.has(d);
+
+            let bgStyle = 'border: 1px solid #cbd5e1;';
+            if (isHoliday) {
+                bgStyle = 'background-color: #dcfce7; border: 1px solid #86efac;';
+            } else if (isSunday) {
+                bgStyle = 'background-color: #eff6ff; border: 1px solid #bfdbfe;';
+            }
+
             const val = emp.days && emp.days[d] !== undefined ? emp.days[d] : '';
             rowHtml += `
                 <td style="${bgStyle} padding: 1px;">
