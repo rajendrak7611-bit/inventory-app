@@ -2652,7 +2652,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     finPn: pName,
                     schedule: sData.schedQty || 0,
                     despatch: sData.despProd || 0,
-                    wip: wip
+                    wip: wip,
+                    rmStatus: rmStatus,
+                    fAvail: fAvail
                 });
 
                 trRow.innerHTML = rowContent;
@@ -2709,36 +2711,96 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const buffers = getSpiderBuffers();
 
+        // Group items by forgePn (or detect common forgePn)
+        const groupsMap = new Map();
         forgingList.forEach(item => {
-            const partKey = (item.finPn || '').trim().toUpperCase();
-            const forgePn = item.forgePn || '-';
-            const schedule = item.schedule || 0;
-            const despatch = item.despatch || 0;
-            const balToDesp = schedule - despatch;
-            const wip = item.wip || 0;
-            const wipBal = wip - balToDesp;
-            
-            const defaultBuf = SPIDER_DEFAULT_BUFFERS[partKey] !== undefined ? SPIDER_DEFAULT_BUFFERS[partKey] : (SPIDER_DEFAULT_BUFFERS[partKey.replace(/\s+/g, '')] !== undefined ? SPIDER_DEFAULT_BUFFERS[partKey.replace(/\s+/g, '')] : 0);
-            const bufferVal = buffers[partKey] !== undefined ? buffers[partKey] : defaultBuf;
+            const rawFpn = (item.forgePn || '').trim().toUpperCase();
+            // If forgePn is missing or dash, use finPn as key
+            const groupKey = (rawFpn && rawFpn !== '-') ? rawFpn : item.finPn.trim().toUpperCase();
+            if (!groupsMap.has(groupKey)) {
+                groupsMap.set(groupKey, []);
+            }
+            groupsMap.get(groupKey).push(item);
+        });
 
-            const forgeReqdCalculated = wipBal + bufferVal;
-            const forgeReqd = forgeReqdCalculated < 0 ? 0 : forgeReqdCalculated;
+        groupsMap.forEach((items, groupKey) => {
+            const rowCount = items.length;
 
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: 500;">${forgePn}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">${item.finPn}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right;">${schedule}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right;">${despatch}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: 600; color: ${balToDesp < 0 ? '#ef4444' : '#1e293b'};">${balToDesp}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: 600;">${wip}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: 600; color: ${wipBal < 0 ? '#ef4444' : '#16a34a'};">${wipBal}</td>
-                <td style="border: 1px solid #cbd5e1; padding: 4px; text-align: right;">
-                    <input type="number" class="spider-buffer-input" data-part="${partKey}" value="${bufferVal}" style="width: 85px; padding: 3px 6px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px; text-align: right; font-weight: 500;">
-                </td>
-                <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: bold; color: ${forgeReqd > 0 ? '#d97706' : '#64748b'};">${forgeReqd}</td>
-            `;
-            tbody.appendChild(tr);
+            let combinedBalToDesp = 0;
+            let combinedWipPlusRm = 0;
+            let combinedBuffer = 0;
+
+            items.forEach((item, idx) => {
+                const schedule = item.schedule || 0;
+                const despatch = item.despatch || 0;
+                const balToDesp = schedule - despatch;
+                combinedBalToDesp += balToDesp;
+
+                const partKey = item.finPn.trim().toUpperCase();
+                const defaultBuf = SPIDER_DEFAULT_BUFFERS[partKey] !== undefined ? SPIDER_DEFAULT_BUFFERS[partKey] : (SPIDER_DEFAULT_BUFFERS[partKey.replace(/\s+/g, '')] !== undefined ? SPIDER_DEFAULT_BUFFERS[partKey.replace(/\s+/g, '')] : 0);
+                const bufVal = buffers[partKey] !== undefined ? buffers[partKey] : defaultBuf;
+                combinedBuffer += bufVal;
+
+                if (rowCount > 1) {
+                    if (idx === 0) {
+                        combinedWipPlusRm = (item.fAvail !== undefined && item.fAvail !== null && item.fAvail > 0) ? item.fAvail : ((item.wip || 0) + (item.rmStatus || 0));
+                    }
+                } else {
+                    combinedWipPlusRm = (item.wip || 0) + (item.rmStatus || 0);
+                }
+            });
+
+            if (buffers[groupKey] !== undefined) {
+                combinedBuffer = buffers[groupKey];
+            }
+
+            const combinedWipBal = combinedWipPlusRm - combinedBalToDesp;
+            const combinedForgeReqdCalculated = combinedBuffer - combinedWipBal;
+            const combinedForgeReqd = combinedForgeReqdCalculated < 0 ? 0 : combinedForgeReqdCalculated;
+
+            items.forEach((item, idx) => {
+                const partKey = item.finPn.trim().toUpperCase();
+                const schedule = item.schedule || 0;
+                const despatch = item.despatch || 0;
+                const balToDesp = schedule - despatch;
+                const wip = item.wip || 0;
+
+                const tr = document.createElement('tr');
+                let html = '';
+
+                if (idx === 0) {
+                    if (rowCount > 1) {
+                        html += `<td rowspan="${rowCount}" style="border: 1px solid #cbd5e1; padding: 6px; font-weight: 500; vertical-align: middle;">${item.forgePn || '-'}</td>`;
+                    } else {
+                        html += `<td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: 500;">${item.forgePn || '-'}</td>`;
+                    }
+                }
+
+                html += `<td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">${item.finPn}</td>`;
+                html += `<td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right;">${schedule}</td>`;
+                html += `<td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right;">${despatch}</td>`;
+                html += `<td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: 600; color: ${balToDesp < 0 ? '#ef4444' : '#1e293b'};">${balToDesp}</td>`;
+                html += `<td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: 600;">${wip}</td>`;
+
+                if (idx === 0) {
+                    if (rowCount > 1) {
+                        html += `<td rowspan="${rowCount}" style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: 600; vertical-align: middle; color: ${combinedWipBal < 0 ? '#ef4444' : '#16a34a'};">${combinedWipBal}</td>`;
+                        html += `<td rowspan="${rowCount}" style="border: 1px solid #cbd5e1; padding: 4px; text-align: right; vertical-align: middle;">
+                            <input type="number" class="spider-buffer-input" data-part="${groupKey}" value="${combinedBuffer}" style="width: 85px; padding: 3px 6px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px; text-align: right; font-weight: 500;">
+                        </td>`;
+                        html += `<td rowspan="${rowCount}" style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: bold; vertical-align: middle; color: ${combinedForgeReqd > 0 ? '#d97706' : '#64748b'};">${combinedForgeReqd}</td>`;
+                    } else {
+                        html += `<td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: 600; color: ${combinedWipBal < 0 ? '#ef4444' : '#16a34a'};">${combinedWipBal}</td>`;
+                        html += `<td style="border: 1px solid #cbd5e1; padding: 4px; text-align: right;">
+                            <input type="number" class="spider-buffer-input" data-part="${partKey}" value="${combinedBuffer}" style="width: 85px; padding: 3px 6px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px; text-align: right; font-weight: 500;">
+                        </td>`;
+                        html += `<td style="border: 1px solid #cbd5e1; padding: 6px; text-align: right; font-weight: bold; color: ${combinedForgeReqd > 0 ? '#d97706' : '#64748b'};">${combinedForgeReqd}</td>`;
+                    }
+                }
+
+                tr.innerHTML = html;
+                tbody.appendChild(tr);
+            });
         });
 
         tbody.querySelectorAll('.spider-buffer-input').forEach(input => {
