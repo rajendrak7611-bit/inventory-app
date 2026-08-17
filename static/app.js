@@ -2193,6 +2193,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!dept) return;
 
         try {
+            if (!statusAllParts || statusAllParts.length === 0) {
+                try {
+                    const partsRes = await fetch('/api/partmaster');
+                    statusAllParts = await partsRes.json();
+                } catch(e) { statusAllParts = []; }
+            }
             const [schedRes, logRes, rmLogRes, htLogRes, htReceiptLogRes, pcLogRes, pcReceiptLogRes, rmRes] = await Promise.all([
                 fetch('/api/schedule'),
                 fetch('/api/prodlog'),
@@ -2217,11 +2223,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const uniqueParts = [...new Set(deptSchedules.map(s => s.partno))];
             
             for (const partno of uniqueParts) {
-                const partObj = statusAllParts.find(p => (p.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase());
-                if (!partObj) continue;
+                const partObj = (statusAllParts || []).find(p => (p.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase());
                 
-                const opsRes = await fetch(`/api/partmaster/${partObj.id}/operations`);
-                const operations = await opsRes.json();
+                let operations = [];
+                if (partObj) {
+                    try {
+                        const opsRes = await fetch(`/api/partmaster/${partObj.id}/operations`);
+                        operations = await opsRes.json();
+                    } catch(e) { operations = []; }
+                }
                 
                 // Sort operations numerically if possible
                 operations.sort((a, b) => {
@@ -2495,6 +2505,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         ];
 
+        const safeHtLogs = Array.isArray(allHtLogs) ? allHtLogs : [];
+        const safeHtReceiptLogs = Array.isArray(allHtReceiptLogs) ? allHtReceiptLogs : [];
+
         for (const group of groups) {
             const trHeader1 = document.createElement('tr');
             trHeader1.style.backgroundColor = '#dbeafe';
@@ -2538,7 +2551,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Helper to get WIP for a part
                 const getWip = (pKey) => {
-                    const sData = spiderStatusDataMap[pKey] || { opnBalances: [0,0,0,0,0,0,0,0,0,0], rfdBal: 0, forInsBal: 0 };
+                    const sData = spiderStatusDataMap[pKey] || spiderStatusDataMap[pKey.replace(/\s+/g, '')] || { opnBalances: [0,0,0,0,0,0,0,0,0,0], rfdBal: 0, forInsBal: 0 };
                     const opn = sData.opnBalances || [0,0,0,0,0,0,0,0,0,0];
                     return (opn[0]||0) + (opn[1]||0) + (opn[2]||0) + (opn[3]||0) + (sData.forInsBal||0) + (sData.rfdBal||0);
                 };
@@ -2548,8 +2561,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 group2MergedWip = qdWip + amwWip;
 
                 // Lookup common forge_pn for QD / AMW
-                const qdPartObj = statusAllParts.find(p => (p.partno || '').trim().toUpperCase() === 'QD');
-                const amwPartObj = statusAllParts.find(p => (p.partno || '').trim().toUpperCase() === 'AMW');
+                const qdPartObj = (statusAllParts || []).find(p => (p.partno || '').trim().toUpperCase() === 'QD');
+                const amwPartObj = (statusAllParts || []).find(p => (p.partno || '').trim().toUpperCase() === 'AMW');
                 const qdFpn = qdPartObj ? qdPartObj.forge_pn : '';
                 const amwFpn = amwPartObj ? amwPartObj.forge_pn : '';
                 const sharedFpn = qdFpn || amwFpn || 'A1#06';
@@ -2561,19 +2574,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
             for (const pName of group.parts) {
                 const partKey = pName.trim().toUpperCase();
-                const partObj = statusAllParts.find(p => (p.partno || '').trim().toUpperCase() === partKey);
-                const sData = spiderStatusDataMap[partKey] || { schedQty: 0, opnBalances: [0,0,0,0,0,0,0,0,0,0], rfdBal: 0, despProd: 0 };
+                const partObj = (statusAllParts || []).find(p => (p.partno || '').trim().toUpperCase() === partKey || (p.partno || '').replace(/\s+/g, '').toUpperCase() === partKey.replace(/\s+/g, ''));
+                const sData = spiderStatusDataMap[partKey] || spiderStatusDataMap[partKey.replace(/\s+/g, '')] || { schedQty: 0, opnBalances: [0,0,0,0,0,0,0,0,0,0], rfdBal: 0, despProd: 0 };
                 const opn = sData.opnBalances || [0,0,0,0,0,0,0,0,0,0];
 
                 const fpn = partObj ? (partObj.forge_pn || '').trim().toUpperCase() : '';
                 let fAvail = findRmStock(fpn, partKey, allRms);
 
-                const sentAnusha = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === partKey && (l.vendor || '').toLowerCase().includes('anusha')).reduce((sum, l) => sum + (l.qty || 0), 0);
-                const recAnusha = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === partKey && (l.vendor || '').toLowerCase().includes('anusha')).reduce((sum, l) => sum + (l.qty || 0), 0);
+                const sentAnusha = safeHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === partKey && (l.vendor || '').toLowerCase().includes('anusha')).reduce((sum, l) => sum + (l.qty || 0), 0);
+                const recAnusha = safeHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === partKey && (l.vendor || '').toLowerCase().includes('anusha')).reduce((sum, l) => sum + (l.qty || 0), 0);
                 const pendingAnusha = Math.max(0, sentAnusha - recAnusha);
 
-                const sentJMS = allHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === partKey && (l.vendor || '').toLowerCase().includes('jms')).reduce((sum, l) => sum + (l.qty || 0), 0);
-                const recJMS = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === partKey && (l.vendor || '').toLowerCase().includes('jms')).reduce((sum, l) => sum + (l.qty || 0), 0);
+                const sentJMS = safeHtLogs.filter(l => (l.partno || '').trim().toUpperCase() === partKey && (l.vendor || '').toLowerCase().includes('jms')).reduce((sum, l) => sum + (l.qty || 0), 0);
+                const recJMS = safeHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === partKey && (l.vendor || '').toLowerCase().includes('jms')).reduce((sum, l) => sum + (l.qty || 0), 0);
                 const pendingJMS = Math.max(0, sentJMS - recJMS);
 
                 const trRow = document.createElement('tr');
@@ -2590,6 +2603,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px;">${fAvail || 0}</td>`;
                 }
 
+                let wip = 0;
                 if (group.name === 'Group 1') {
                     const facCen = opn[1] || 0;
                     const forHt = opn[2] || 0;
@@ -2597,7 +2611,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const forIns = opn[4] || 0;
                     const rfdVal = sData.rfdBal || 0;
 
-                    const wip = facCen + forHt + pendingAnusha + pendingJMS + forGrind + forIns + rfdVal;
+                    wip = facCen + forHt + pendingAnusha + pendingJMS + forGrind + forIns + rfdVal;
                     const rmStatus = fAvail - wip;
 
                     rowContent += `<td style="border:1px solid #cbd5e1; padding:6px; font-weight:600;">${wip}</td>`;
@@ -2616,7 +2630,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const forInsBal = sData.forInsBal || 0;
                     const rfdVal = sData.rfdBal || 0;
 
-                    const wip = opn0 + opn1 + opn2 + opn3 + forInsBal + rfdVal;
+                    wip = opn0 + opn1 + opn2 + opn3 + forInsBal + rfdVal;
                     const rmStatus = fAvail - wip;
 
                     if (!isGroup2Merged || (partKey !== 'QD' && partKey !== 'AMW')) {
