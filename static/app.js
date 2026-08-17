@@ -1019,23 +1019,45 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function applyPartMasterHeaderFilters() {
-        const filters = {};
-        document.querySelectorAll('.part-master-col-filter').forEach(input => {
+        applyTableColFilters('partMasterTable');
+    }
+
+    // Universal Table Header Filter Engine
+    window.applyTableColFilters = function(tableId) {
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return;
+
+        const inputs = table.querySelectorAll('thead input, thead select');
+        const activeFilters = [];
+        inputs.forEach(input => {
             const val = input.value.trim().toLowerCase();
             if (val) {
-                filters[input.getAttribute('data-col')] = val;
+                let colIdx = input.getAttribute('data-col');
+                if (colIdx !== null && colIdx !== undefined) {
+                    colIdx = parseInt(colIdx, 10);
+                } else {
+                    const th = input.closest('th');
+                    if (th && th.parentNode) {
+                        colIdx = Array.from(th.parentNode.children).indexOf(th);
+                    }
+                }
+                if (colIdx !== null && colIdx !== undefined && !isNaN(colIdx)) {
+                    activeFilters.push({ colIdx, val });
+                }
             }
         });
 
-        const rows = document.querySelectorAll('#partMasterBody tr');
+        const rows = tbody.querySelectorAll('tr');
         rows.forEach(tr => {
-            const cells = tr.children;
+            if (tr.children.length === 1 && tr.children[0].hasAttribute('colspan')) return;
             let show = true;
-            for (const colIdx in filters) {
-                const cell = cells[parseInt(colIdx)];
+            for (const f of activeFilters) {
+                const cell = tr.children[f.colIdx];
                 if (cell) {
-                    const cellText = (cell.textContent || '').trim().toLowerCase();
-                    if (!cellText.includes(filters[colIdx])) {
+                    const text = (cell.textContent || '').trim().toLowerCase();
+                    if (!text.includes(f.val)) {
                         show = false;
                         break;
                     }
@@ -1043,17 +1065,31 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             tr.style.display = show ? '' : 'none';
         });
-    }
+
+        const clearBtn = table.querySelector('.clear-table-filters-btn, [id^="clearFilters"], [id$="FiltersBtn"]');
+        if (clearBtn) {
+            clearBtn.style.display = activeFilters.length > 0 ? 'inline-block' : 'none';
+        }
+    };
 
     document.addEventListener('input', (e) => {
-        if (e.target && e.target.classList.contains('part-master-col-filter')) {
-            applyPartMasterHeaderFilters();
+        if (e.target && e.target.closest('thead') && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) {
+            const table = e.target.closest('table');
+            if (table && table.id) {
+                applyTableColFilters(table.id);
+            }
         }
     });
 
-    document.getElementById('clearPartMasterFiltersBtn')?.addEventListener('click', () => {
-        document.querySelectorAll('.part-master-col-filter').forEach(input => input.value = '');
-        applyPartMasterHeaderFilters();
+    document.addEventListener('click', (e) => {
+        const clearBtn = e.target.closest('.clear-table-filters-btn, [id^="clearFilters"], [id$="FiltersBtn"]');
+        if (clearBtn) {
+            const table = clearBtn.closest('table');
+            if (table && table.id) {
+                table.querySelectorAll('thead input, thead select').forEach(inp => inp.value = '');
+                applyTableColFilters(table.id);
+            }
+        }
     });
 
     function openPartModal(isEdit) {
@@ -5227,6 +5263,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
+        applyTableColFilters('vendorsTable');
     }
 
     function openVendorModal(vendor = null) {
@@ -5346,6 +5383,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
+        applyTableColFilters('suppliersTable');
     }
 
     function openSupplierModal(supplier = null) {
@@ -5472,6 +5510,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 openHtModal(partno);
             });
         });
+        applyTableColFilters('htAvailablePartsTable');
     }
 
     async function fetchHtLogs() {
@@ -5518,6 +5557,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
+        applyTableColFilters('htTable');
     }
 
     async function openHtModal(preselectedPartNo = null) {
@@ -5672,6 +5712,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 openHtReceiptModal(vendor, partno);
             });
         });
+        applyTableColFilters('htVendorPendingTable');
     }
 
     async function fetchHtReceiptLogs() {
@@ -5717,6 +5758,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
+        applyTableColFilters('htReceiptTable');
     }
 
     async function openHtReceiptModal(preVendor = null, prePartNo = null) {
@@ -5884,6 +5926,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 openPcModal(partno);
             });
         });
+        applyTableColFilters('pcAvailablePartsTable');
     }
 
     async function fetchPcLogs() {
@@ -5930,6 +5973,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
+        applyTableColFilters('pcTable');
     }
 
     // Modal elements for PC
@@ -6090,6 +6134,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 openPcReceiptModal(vendor, partno);
             });
         });
+        applyTableColFilters('pcVendorPendingTable');
     }
 
     async function fetchPcReceiptLogs() {
@@ -6135,6 +6180,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
+        applyTableColFilters('pcReceiptTable');
     }
 
     async function openPcReceiptModal(vendor = null, partno = null) {
