@@ -124,16 +124,13 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
     except Exception:
         pass
 
-# Seed default admin user
+# Seed default admin user if not existing
 with Session(engine) as db:
     admin_user = db.query(User).filter(func.lower(User.username) == "admin").first()
-    hashed = hashlib.sha256("admin123".encode()).hexdigest()
     if not admin_user:
+        hashed = hashlib.sha256("admin123".encode()).hexdigest()
         new_admin = User(username="admin", password_hash=hashed, role="admin", accessible_screens='["users","rawmaterial","products","partmaster","machines","operators","schedule","status","prodlog","debur","inspection"]')
         db.add(new_admin)
-        db.commit()
-    else:
-        admin_user.password_hash = hashed
         db.commit()
 
 app = FastAPI(title="Inventory Management API")
