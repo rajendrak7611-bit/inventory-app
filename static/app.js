@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         allTabs.forEach(tab => {
             const screen = tab.getAttribute('data-screen');
-            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || ((screen === 'rawmaterial' || screen === 'ht' || screen === 'pc') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) || (screen === 'attendance' && accessibleScreens.includes('hr')) || ((screen === 'bdslip' || screen === 'servicedetails') && (accessibleScreens.includes('maintenance') || accessibleScreens.includes('bdslip') || accessibleScreens.includes('servicedetails'))) || ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'tapmaster' || screen === 'insertreceipt' || screen === 'insertissue' || screen === 'insertcpc') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib')));
+            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || ((screen === 'rawmaterial' || screen === 'ht' || screen === 'pc') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) || (screen === 'attendance' && accessibleScreens.includes('hr')) || ((screen === 'bdslip' || screen === 'servicedetails') && (accessibleScreens.includes('maintenance') || accessibleScreens.includes('bdslip') || accessibleScreens.includes('servicedetails'))) || ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'tapmaster' || screen === 'insertreceipt' || screen === 'tapreceipt' || screen === 'insertissue' || screen === 'insertcpc') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib')));
             if (isAllowed) {
                 tab.style.display = 'inline-block';
                 if (!firstAvailableTab) firstAvailableTab = tab;
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'master': ['partmaster', 'machines', 'operators', 'dept', 'shift', 'vendors', 'setters', 'suppliers'],
                     'inventory': ['inventory', 'rawmaterial', 'ht', 'pc'],
                     'production': ['schedule', 'status', 'prodlog', 'debur'],
-                    'toolcrib': ['insertmaster', 'drillmaster', 'tapmaster', 'products', 'insertreceipt', 'insertissue', 'insertcpc'],
+                    'toolcrib': ['insertmaster', 'drillmaster', 'tapmaster', 'products', 'insertreceipt', 'tapreceipt', 'insertissue', 'insertcpc'],
                     'reports': ['reports'],
                     'maintenance': ['maintenance', 'bdslip', 'servicedetails'],
                     'hr': ['hr', 'attendance']
@@ -533,6 +533,13 @@ document.addEventListener('DOMContentLoaded', () => {
             importBtn.style.display = 'inline-block';
             addBtn.style.display = 'none';
             fetchInsertReceipts();
+        }},
+        'sidebarTapReceipt': { tab: 'tapreceipt', action: () => {
+            const sec = document.getElementById('tapReceiptSection');
+            if (sec) sec.style.display = 'block';
+            importBtn.style.display = 'inline-block';
+            addBtn.style.display = 'none';
+            fetchTapReceipts();
         }},
         'sidebarInsertIssue': { tab: 'insertissue', action: () => {
             const sec = document.getElementById('insertIssueSection');
@@ -7640,6 +7647,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    document.getElementById('deleteAllTapReceiptsBtn')?.addEventListener('click', async () => {
+        if (!checkAdminAccess()) return;
+        if (confirm('Are you sure you want to delete ALL tap receipt entries? This action cannot be undone!')) {
+            try {
+                const res = await fetch('/api/tap_receipts/all', { method: 'DELETE' });
+                if (res.ok) {
+                    alert('All tap receipt entries deleted successfully.');
+                    fetchTapReceipts();
+                } else {
+                    alert('Error deleting tap receipt entries.');
+                }
+            } catch (e) { console.error(e); }
+        }
+    });
+
     document.getElementById('deleteAllInsertIssuesBtn')?.addEventListener('click', async () => {
         if (!checkAdminAccess()) return;
         if (confirm('Are you sure you want to delete ALL insert issue entries? This action cannot be undone!')) {
@@ -7988,6 +8010,352 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert('Error saving receipt record');
                 }
             } catch (err) { console.error(err); alert('Error saving receipt record'); }
+        });
+    }
+
+    // ====== TAP RECEIPT CRUD ======
+    const tapReceiptModal = document.getElementById('tapReceiptModal');
+    const tapReceiptForm = document.getElementById('tapReceiptForm');
+    const addTapReceiptBtn = document.getElementById('addTapReceiptBtn');
+    const cancelTapReceiptBtn = document.getElementById('cancelTapReceiptBtn');
+    const closeTapReceiptModalBtn = document.getElementById('closeTapReceiptModalBtn');
+
+    let allTapReceiptsCache = [];
+
+    async function fetchTapReceipts() {
+        try {
+            const res = await fetch('/api/tap_receipts');
+            allTapReceiptsCache = await res.json();
+            applyTapReceiptFilters();
+        } catch (err) { console.error(err); }
+    }
+
+    function applyTapReceiptFilters() {
+        if (!allTapReceiptsCache) return;
+        const inputs = document.querySelectorAll('.tap-receipt-col-filter');
+        const filters = {};
+        inputs.forEach(inp => {
+            const key = inp.getAttribute('data-key');
+            const val = inp.value.trim().toLowerCase();
+            if (val) filters[key] = val;
+        });
+
+        let filtered = allTapReceiptsCache;
+        if (Object.keys(filters).length > 0) {
+            filtered = allTapReceiptsCache.filter(item => {
+                if (filters.id && !String(item.id).toLowerCase().includes(filters.id)) return false;
+                if (filters.date && !(item.date || '').toLowerCase().includes(filters.date) && !formatExcelDate(item.date).toLowerCase().includes(filters.date)) return false;
+                if (filters.supplier && !(item.supplier || '').toLowerCase().includes(filters.supplier)) return false;
+                if (filters.tap_spec && !(item.tap_spec || '').toLowerCase().includes(filters.tap_spec)) return false;
+                if (filters.qty && !String(item.qty || 0).toLowerCase().includes(filters.qty)) return false;
+                if (filters.rate && !String(item.rate || 0).toLowerCase().includes(filters.rate)) return false;
+                return true;
+            });
+        }
+
+        renderTapReceipts(filtered);
+    }
+
+    document.addEventListener('input', (e) => {
+        if (e.target && e.target.classList.contains('tap-receipt-col-filter')) {
+            applyTapReceiptFilters();
+        }
+    });
+
+    document.getElementById('clearTapReceiptFiltersBtn')?.addEventListener('click', () => {
+        document.querySelectorAll('.tap-receipt-col-filter').forEach(inp => inp.value = '');
+        applyTapReceiptFilters();
+    });
+
+    function renderTapReceipts(receipts) {
+        const tbody = document.getElementById('tapReceiptBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!receipts || receipts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No tap receipts found. Click "+ Add Receipt" or "Import Excel" to add records.</td></tr>';
+            return;
+        }
+        receipts.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.id}</td>
+                <td><span style="font-weight: 500;">${item.date || ''}</span></td>
+                <td>${item.supplier || ''}</td>
+                <td><strong>${item.tap_spec || ''}</strong></td>
+                <td>${item.qty || 0}</td>
+                <td>Rs. ${(item.rate || 0).toFixed(2)}</td>
+                <td class="actions-cell">
+                    <button class="btn btn-outline edit-tap-receipt-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit</button>
+                    <button class="btn btn-outline delete-tap-receipt-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.edit-tap-receipt-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.target.getAttribute('data-id');
+                const res = await fetch('/api/tap_receipts');
+                const data = await res.json();
+                const item = data.find(x => x.id == id);
+                if (item) openTapReceiptModal(item);
+            });
+        });
+
+        tbody.querySelectorAll('.delete-tap-receipt-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (confirm('Delete this tap receipt record?')) {
+                    const id = e.target.getAttribute('data-id');
+                    try {
+                        const res = await fetch(`/api/tap_receipts/${id}`, { method: 'DELETE' });
+                        if (res.ok) fetchTapReceipts();
+                        else alert('Error deleting receipt record');
+                    } catch (err) { console.error(err); }
+                }
+            });
+        });
+    }
+
+    async function populateTapSpecDropdown(selectedSpec = '') {
+        const sel = document.getElementById('tapReceiptSpecSelect');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">-- Select Tap Spec --</option>';
+        try {
+            const res = await fetch('/api/tap_masters');
+            const data = await res.json();
+            data.forEach(item => {
+                const spec = item.tap_spec || item.specification || item.name || '';
+                if (spec) {
+                    const opt = document.createElement('option');
+                    opt.value = spec;
+                    opt.textContent = spec;
+                    if (selectedSpec && selectedSpec.trim().toLowerCase() === spec.trim().toLowerCase()) {
+                        opt.selected = true;
+                    }
+                    sel.appendChild(opt);
+                }
+            });
+            if (selectedSpec && !data.some(item => (item.tap_spec || item.specification || item.name || '').trim().toLowerCase() === selectedSpec.trim().toLowerCase())) {
+                const customOpt = document.createElement('option');
+                customOpt.value = selectedSpec;
+                customOpt.textContent = selectedSpec;
+                customOpt.selected = true;
+                sel.appendChild(customOpt);
+            }
+            makeSearchableSelect('tapReceiptSpecSelect', '-- Select Tap Spec --');
+            if (selectedSpec && tomSelectCache['tapReceiptSpecSelect']) {
+                tomSelectCache['tapReceiptSpecSelect'].setValue(selectedSpec);
+            }
+        } catch (e) { console.error('Error fetching tap specs for dropdown:', e); }
+    }
+
+    let tapReceiptSupplierTomSelect = null;
+
+    async function populateTapReceiptSupplierDropdown(selectedSupplier = '') {
+        const sel = document.getElementById('tapReceiptSupplierInput');
+        if (!sel) return;
+
+        if (tapReceiptSupplierTomSelect) {
+            try { tapReceiptSupplierTomSelect.destroy(); } catch (e) {}
+            tapReceiptSupplierTomSelect = null;
+        }
+
+        sel.innerHTML = '<option value="">-- Select Supplier --</option>';
+
+        try {
+            const res = await fetch('/api/suppliers');
+            const suppliers = await res.json();
+            
+            suppliers.sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+
+            suppliers.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.name;
+                opt.textContent = s.name;
+                if (selectedSupplier && (s.name.trim().toLowerCase() === selectedSupplier.trim().toLowerCase())) {
+                    opt.selected = true;
+                }
+                sel.appendChild(opt);
+            });
+
+            if (selectedSupplier && !suppliers.some(s => s.name.trim().toLowerCase() === selectedSupplier.trim().toLowerCase())) {
+                const customOpt = document.createElement('option');
+                customOpt.value = selectedSupplier;
+                customOpt.textContent = selectedSupplier;
+                customOpt.selected = true;
+                sel.appendChild(customOpt);
+            }
+        } catch (err) {
+            console.error('Error fetching suppliers for dropdown:', err);
+        }
+
+        try {
+            if (window.TomSelect) {
+                tapReceiptSupplierTomSelect = new TomSelect(sel, {
+                    create: true,
+                    placeholder: '-- Select or Type Supplier --',
+                    allowEmptyOption: true,
+                    maxOptions: 500,
+                    sortField: { field: "text", direction: "asc" }
+                });
+                if (selectedSupplier) {
+                    tapReceiptSupplierTomSelect.setValue(selectedSupplier);
+                }
+            }
+        } catch (e) {
+            console.error('Error initializing TomSelect on tapReceiptSupplierInput:', e);
+        }
+    }
+
+    async function openTapReceiptModal(item = null) {
+        if (!tapReceiptModal) return;
+        await populateTapSpecDropdown(item ? item.tap_spec : '');
+        await populateTapReceiptSupplierDropdown(item ? item.supplier : '');
+        if (item) {
+            document.getElementById('tapReceiptModalTitle').textContent = 'Edit Tap Receipt';
+            document.getElementById('tapReceiptId').value = item.id;
+            document.getElementById('tapReceiptDateInput').value = item.date || '';
+            document.getElementById('tapReceiptQtyInput').value = (item.qty !== undefined && item.qty !== null) ? item.qty : 1;
+            document.getElementById('tapReceiptRateInput').value = (item.rate !== undefined && item.rate !== null) ? item.rate : 0.00;
+        } else {
+            document.getElementById('tapReceiptModalTitle').textContent = 'Add Tap Receipt';
+            tapReceiptForm.reset();
+            document.getElementById('tapReceiptId').value = '';
+            const todayStr = new Date().toISOString().split('T')[0];
+            document.getElementById('tapReceiptDateInput').value = todayStr;
+        }
+        makeSearchableSelect('tapReceiptSpecSelect', '-- Select Tap Spec --');
+        if (item && item.tap_spec && tomSelectCache['tapReceiptSpecSelect']) {
+            tomSelectCache['tapReceiptSpecSelect'].setValue(item.tap_spec);
+        }
+        if (item && item.supplier && tapReceiptSupplierTomSelect) {
+            tapReceiptSupplierTomSelect.setValue(item.supplier);
+        }
+        tapReceiptModal.classList.add('show');
+    }
+
+    if (addTapReceiptBtn) addTapReceiptBtn.addEventListener('click', () => openTapReceiptModal());
+    if (cancelTapReceiptBtn) cancelTapReceiptBtn.addEventListener('click', () => tapReceiptModal.classList.remove('show'));
+    if (closeTapReceiptModalBtn) closeTapReceiptModalBtn.addEventListener('click', () => tapReceiptModal.classList.remove('show'));
+
+    if (tapReceiptForm) {
+        tapReceiptForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('tapReceiptId').value;
+            const payload = {
+                date: document.getElementById('tapReceiptDateInput').value,
+                supplier: (tapReceiptSupplierTomSelect ? tapReceiptSupplierTomSelect.getValue() : document.getElementById('tapReceiptSupplierInput').value || '').trim(),
+                tap_spec: document.getElementById('tapReceiptSpecSelect').value,
+                qty: parseInt(document.getElementById('tapReceiptQtyInput').value) || 1,
+                rate: parseFloat(document.getElementById('tapReceiptRateInput').value) || 0.00
+            };
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/tap_receipts/${id}` : '/api/tap_receipts';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    tapReceiptModal.classList.remove('show');
+                    fetchTapReceipts();
+                } else {
+                    alert('Error saving tap receipt record');
+                }
+            } catch (err) { console.error(err); alert('Error saving tap receipt record'); }
+        });
+    }
+
+    document.getElementById('importTapReceiptBtn')?.addEventListener('click', () => {
+        document.getElementById('importTapReceiptInput')?.click();
+    });
+
+    const importTapReceiptInput = document.getElementById('importTapReceiptInput');
+    if (importTapReceiptInput) {
+        importTapReceiptInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    const data = evt.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (!json || json.length === 0) {
+                        alert('No valid data found in Excel sheet.');
+                        return;
+                    }
+
+                    const receipts = [];
+                    const todayStr = new Date().toISOString().slice(0, 10);
+                    json.forEach(row => {
+                        let dateVal = todayStr;
+                        let supplierVal = '';
+                        let specVal = '';
+                        let qtyVal = 0;
+                        let rateVal = 0.0;
+
+                        for (const key of Object.keys(row)) {
+                            const k = key.trim().toLowerCase();
+                            if (['date', 'receipt_date', 'receipt date'].includes(k)) {
+                                dateVal = formatExcelDate(row[key]);
+                            }
+                            if (['supplier', 'vendor', 'supplier_name', 'supplier name'].includes(k)) {
+                                supplierVal = String(row[key] || '').trim();
+                            }
+                            if (['tap spec', 'tap_spec', 'tap', 'specification', 'spec', 'tap size', 'tap_size'].includes(k)) {
+                                specVal = String(row[key] || '').trim();
+                            }
+                            if (['qty', 'quantity', 'qty_received', 'qty received', 'rec_qty'].includes(k)) {
+                                qtyVal = parseInt(row[key]) || 0;
+                            }
+                            if (['rate', 'price', 'unit_price', 'unit price', 'cost'].includes(k)) {
+                                rateVal = parseFloat(row[key]) || 0.0;
+                            }
+                        }
+
+                        if (specVal) {
+                            receipts.push({
+                                date: dateVal,
+                                supplier: supplierVal,
+                                tap_spec: specVal,
+                                qty: qtyVal,
+                                rate: rateVal
+                            });
+                        }
+                    });
+
+                    if (receipts.length === 0) {
+                        alert('No valid tap receipt records found in Excel sheet. Make sure headers are "Date", "Supplier", "Tap Spec", "Qty", and "Rate".');
+                        return;
+                    }
+
+                    const res = await fetch('/api/tap_receipts/bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ receipts })
+                    });
+
+                    if (res.ok) {
+                        alert(`Successfully imported ${receipts.length} Tap Receipt records!`);
+                        fetchTapReceipts();
+                    } else {
+                        alert('Error importing Excel data.');
+                    }
+                } catch (err) {
+                    console.error('Error importing Tap Receipt Excel:', err);
+                    alert('Error reading Excel file.');
+                } finally {
+                    importTapReceiptInput.value = '';
+                }
+            };
+            reader.readAsBinaryString(file);
         });
     }
 

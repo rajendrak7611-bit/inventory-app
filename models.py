@@ -262,6 +262,17 @@ class InsertReceipt(Base):
     rate = Column(Numeric(10, 2), default=0.00)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class TapReceipt(Base):
+    __tablename__ = "tap_receipts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(String, index=True)
+    supplier = Column(String, index=True, nullable=True)
+    tap_spec = Column(String, index=True)
+    qty = Column(Integer, default=0)
+    rate = Column(Numeric(10, 2), default=0.00)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class InsertIssue(Base):
     __tablename__ = "insert_issues"
 

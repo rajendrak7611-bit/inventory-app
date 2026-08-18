@@ -8,7 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, Supplier, HTLog, HTReceiptLog, PcLog, PcReceiptLog, Attendance, InsertMaster, DrillMaster, TapMaster, InsertReceipt, InsertIssue, BreakdownSlip, ServiceDetail
+from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, Supplier, HTLog, HTReceiptLog, PcLog, PcReceiptLog, Attendance, InsertMaster, DrillMaster, TapMaster, InsertReceipt, TapReceipt, InsertIssue, BreakdownSlip, ServiceDetail
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -1884,6 +1884,72 @@ def delete_insert_receipt(item_id: int, db: Session = Depends(get_db)):
     db.delete(db_item)
     db.commit()
     return {"message": "Insert Receipt item deleted"}
+
+# --- Tap Receipt Schemas & Endpoints ---
+class TapReceiptBase(BaseModel):
+    date: str
+    supplier: Optional[str] = ""
+    tap_spec: str
+    qty: Optional[int] = 0
+    rate: Optional[float] = 0.00
+
+class TapReceiptCreate(TapReceiptBase):
+    pass
+
+class TapReceiptResponse(TapReceiptBase):
+    id: int
+    class Config:
+        from_attributes = True
+
+@app.get("/api/tap_receipts", response_model=List[TapReceiptResponse])
+def get_tap_receipts(db: Session = Depends(get_db)):
+    return db.query(TapReceipt).order_by(TapReceipt.id.desc()).all()
+
+@app.post("/api/tap_receipts", response_model=TapReceiptResponse)
+def create_tap_receipt(item: TapReceiptCreate, db: Session = Depends(get_db)):
+    db_item = TapReceipt(**item.model_dump())
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+@app.put("/api/tap_receipts/{item_id}", response_model=TapReceiptResponse)
+def update_tap_receipt(item_id: int, item: TapReceiptCreate, db: Session = Depends(get_db)):
+    db_item = db.query(TapReceipt).filter(TapReceipt.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Tap Receipt item not found")
+    for key, value in item.model_dump().items():
+        setattr(db_item, key, value)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+class BulkImportTapReceiptPayload(BaseModel):
+    receipts: List[TapReceiptCreate]
+
+@app.post("/api/tap_receipts/bulk")
+def bulk_import_tap_receipts(payload: BulkImportTapReceiptPayload, db: Session = Depends(get_db)):
+    new_items = []
+    for item in payload.receipts:
+        new_items.append(TapReceipt(**item.model_dump()))
+    db.add_all(new_items)
+    db.commit()
+    return {"message": f"Successfully imported {len(new_items)} tap receipt records"}
+
+@app.delete("/api/tap_receipts/all")
+def delete_all_tap_receipts(db: Session = Depends(get_db)):
+    db.query(TapReceipt).delete()
+    db.commit()
+    return {"message": "All tap receipt records deleted"}
+
+@app.delete("/api/tap_receipts/{item_id}")
+def delete_tap_receipt(item_id: int, db: Session = Depends(get_db)):
+    db_item = db.query(TapReceipt).filter(TapReceipt.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Tap Receipt item not found")
+    db.delete(db_item)
+    db.commit()
+    return {"message": "Tap Receipt item deleted"}
 
 # --- Insert Issue Schemas & Endpoints ---
 class InsertIssueBase(BaseModel):
