@@ -9134,9 +9134,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.querySelectorAll('.edge-qty-input').forEach(input => {
             if (!input.disabled) {
-                if (!activeMonitorInput) activeMonitorInput = input;
-                input.addEventListener('focus', () => { activeMonitorInput = input; });
-                input.addEventListener('click', () => { activeMonitorInput = input; });
                 input.addEventListener('input', updateMonitorTotalQty);
             }
         });
@@ -9147,7 +9144,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const dir = parseInt(btn.getAttribute('data-dir')) || 0;
                 const inp = tbody.querySelector(`.edge-qty-input[data-edge="${edge}"]`);
                 if (inp && !inp.disabled) {
-                    activeMonitorInput = inp;
                     let val = parseInt(inp.value) || 0;
                     val = Math.max(0, val + dir);
                     inp.value = val > 0 ? val : '';
@@ -9162,7 +9158,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const addVal = parseInt(btn.getAttribute('data-add')) || 0;
                 const inp = tbody.querySelector(`.edge-qty-input[data-edge="${edge}"]`);
                 if (inp && !inp.disabled) {
-                    activeMonitorInput = inp;
                     let val = parseInt(inp.value) || 0;
                     val = Math.max(0, val + addVal);
                     inp.value = val;
@@ -9176,7 +9171,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const edge = btn.getAttribute('data-edge');
                 const inp = tbody.querySelector(`.edge-qty-input[data-edge="${edge}"]`);
                 if (inp && !inp.disabled) {
-                    activeMonitorInput = inp;
                     inp.value = '';
                     updateMonitorTotalQty();
                 }
@@ -9185,34 +9179,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         insertMonitorModal.classList.add('show');
     }
-
-    // Attach touch keypad click listener
-    document.querySelectorAll('.monitor-keypad-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            const key = btn.getAttribute('data-key');
-            let targetInp = activeMonitorInput;
-            if (!targetInp || targetInp.disabled || !document.contains(targetInp)) {
-                const availableInputs = Array.from(document.querySelectorAll('#insertMonitorTableBody .edge-qty-input')).filter(i => !i.disabled);
-                if (availableInputs.length > 0) {
-                    targetInp = availableInputs[0];
-                    activeMonitorInput = targetInp;
-                }
-            }
-
-            if (!targetInp || targetInp.disabled) return;
-
-            let curVal = String(targetInp.value || '');
-            if (key === 'clear') {
-                targetInp.value = '';
-            } else if (key === 'backspace') {
-                targetInp.value = curVal.slice(0, -1);
-            } else if (/^[0-9]$/.test(key)) {
-                targetInp.value = curVal + key;
-            }
-            updateMonitorTotalQty();
-        });
-    });
 
     function updateMonitorTotalQty() {
         const inputs = document.querySelectorAll('#insertMonitorTableBody .edge-qty-input');
