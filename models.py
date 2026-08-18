@@ -293,6 +293,23 @@ class InsertIssue(Base):
     edge_data = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class TapIssue(Base):
+    __tablename__ = "tap_issues"
+
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(String, index=True)
+    shift = Column(String, index=True, nullable=True)
+    department = Column(String, index=True, nullable=True)
+    tap_spec = Column(String, index=True)
+    qty = Column(Integer, default=1)
+    machine = Column(String, nullable=True)
+    operator = Column(String, nullable=True)
+    partno = Column(String, nullable=True)
+    opn_no = Column(String, nullable=True)
+    tap_life = Column(Integer, default=0)
+    usages = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class BreakdownSlip(Base):
     __tablename__ = "breakdown_slips"
 

@@ -91,6 +91,7 @@
                 <button class="sub-tab" id="sidebarInsertReceipt" data-screen="insertreceipt">Insert Receipt</button>
                 <button class="sub-tab" id="sidebarTapReceipt" data-screen="tapreceipt">Tap Receipt</button>
                 <button class="sub-tab" id="sidebarInsertIssue" data-screen="insertissue">Insert Issue</button>
+                <button class="sub-tab" id="sidebarTapIssue" data-screen="tapissue">Tap Issue</button>
                 <button class="sub-tab" id="sidebarInsertCpc" data-screen="insertcpc">Insert CPC</button>
             </div>
             <div class="sub-group" id="submenuReports" style="display: none;">
@@ -323,6 +324,57 @@
                     </tr>
                 </thead>
                 <tbody id="insertIssueBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Tap Issue Section -->
+        <div class="table-container" id="tapIssueSection" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2>Tap Issue</h2>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button id="deleteAllTapIssuesBtn" class="btn btn-outline delete-btn" style="color: #ef4444; border-color: #ef4444;">Clear All Entries</button>
+                    <button id="importTapIssueBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Import Excel
+                    </button>
+                    <button id="addTapIssueBtn" class="btn btn-primary">+ Issue Tap</button>
+                </div>
+            </div>
+            <input type="file" id="importTapIssueInput" accept=".xlsx, .xls" style="display: none;">
+            <table id="tapIssueTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Date</th>
+                        <th>Shift</th>
+                        <th>Dept</th>
+                        <th>Tap Spec</th>
+                        <th>Qty</th>
+                        <th>Machine</th>
+                        <th>Operator</th>
+                        <th>Part No</th>
+                        <th>Opn No</th>
+                        <th>Tap Life</th>
+                        <th>Usage</th>
+                        <th>Actions</th>
+                    </tr>
+                    <tr style="background-color: var(--table-header-bg, #f8fafc);">
+                        <th><input type="text" class="tap-issue-col-filter" data-key="id" placeholder="Filter ID..." style="width: 100%; min-width: 40px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="tap-issue-col-filter" data-key="date" placeholder="Filter Date..." style="width: 100%; min-width: 60px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="tap-issue-col-filter" data-key="shift" placeholder="Filter Shift..." style="width: 100%; min-width: 50px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="tap-issue-col-filter" data-key="department" placeholder="Filter Dept..." style="width: 100%; min-width: 50px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="tap-issue-col-filter" data-key="tap_spec" placeholder="Filter Spec..." style="width: 100%; min-width: 80px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="tap-issue-col-filter" data-key="qty" placeholder="Filter Qty..." style="width: 100%; min-width: 45px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="tap-issue-col-filter" data-key="machine" placeholder="Filter M/C..." style="width: 100%; min-width: 60px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="tap-issue-col-filter" data-key="operator" placeholder="Filter Op..." style="width: 100%; min-width: 65px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="tap-issue-col-filter" data-key="partno" placeholder="Filter Part..." style="width: 100%; min-width: 55px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="tap-issue-col-filter" data-key="opn_no" placeholder="Filter Opn..." style="width: 100%; min-width: 45px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="tap-issue-col-filter" data-key="tap_life" placeholder="Filter Life..." style="width: 100%; min-width: 45px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th><input type="text" class="tap-issue-col-filter" data-key="usages" placeholder="Filter Usage..." style="width: 100%; min-width: 55px; padding: 2px 4px; font-size: 0.72rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                        <th style="text-align: center;"><button id="clearTapIssueFiltersBtn" class="btn btn-outline" style="padding: 0.15rem 0.4rem; font-size: 0.7rem; color: #ef4444; border-color: #ef4444; white-space: nowrap;" title="Clear all column filters">Clear</button></th>
+                    </tr>
+                </thead>
+                <tbody id="tapIssueBody"></tbody>
             </table>
         </div>
 
@@ -2796,6 +2848,107 @@
         </div>
     </div>
 
+    <!-- Tap Issue Modal -->
+    <div id="tapIssueModal" class="modal">
+        <div class="modal-content" style="max-width: 550px; border-radius: 12px; padding: 1.5rem;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 0.75rem;">
+                <h3 id="tapIssueModalTitle" style="margin: 0; font-size: 1.25rem;">Issue Tap</h3>
+                <button class="close-btn" id="closeTapIssueModalBtn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+            </div>
+            <form id="tapIssueForm">
+                <input type="hidden" id="tapIssueId">
+                
+                <div class="form-row" style="display: flex; gap: 1rem; margin-top: 1rem;">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="tapIssueDateInput" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Date</label>
+                        <input type="date" id="tapIssueDateInput" required style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="tapIssueShiftSelect" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Shift</label>
+                        <select id="tapIssueShiftSelect" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                            <option value="">-- Select Shift --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row" style="display: flex; gap: 1rem; margin-top: 0.8rem;">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="tapIssueDeptSelect" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Department</label>
+                        <select id="tapIssueDeptSelect" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                            <option value="">-- Select Department --</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="tapIssueSpecSelect" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Tap Spec</label>
+                        <select id="tapIssueSpecSelect" required style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                            <option value="">-- Select Tap Spec --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row" style="display: flex; gap: 1rem; margin-top: 0.8rem;">
+                    <div class="form-group" style="flex: 1;">
+                        <label for="tapIssueQtyInput" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Qty</label>
+                        <input type="number" id="tapIssueQtyInput" min="1" value="1" required style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label for="tapIssueLifeInput" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Tap Life (Holes/Pcs)</label>
+                        <input type="number" id="tapIssueLifeInput" min="0" value="0" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                    </div>
+                </div>
+
+                <!-- Usage Details -->
+                <div style="margin-top: 1rem; border-top: 1px dashed var(--border-color, #cbd5e1); padding-top: 0.8rem;">
+                    <h4 style="margin: 0 0 0.6rem 0; font-size: 0.95rem; color: var(--text-color);">Usage Details</h4>
+                    <div class="form-row" style="display: flex; gap: 1rem; margin-bottom: 0.8rem;">
+                        <div class="form-group" style="flex: 1;">
+                            <label for="tapIssueMachineSelect" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Machine</label>
+                            <select id="tapIssueMachineSelect" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <option value="">-- Select Machine --</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label for="tapIssueOperatorSelect" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Operator</label>
+                            <select id="tapIssueOperatorSelect" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <option value="">-- Select Operator --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row" style="display: flex; gap: 1rem; margin-bottom: 0.8rem;">
+                        <div class="form-group" style="flex: 1;">
+                            <label for="tapIssuePartNoSelect" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Part No</label>
+                            <select id="tapIssuePartNoSelect" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <option value="">-- Select Part No --</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label for="tapIssueOpnNoSelect" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Opn No</label>
+                            <select id="tapIssueOpnNoSelect" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <option value="">-- Select Operation --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tapIssueUsageSelect" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Usage Type</label>
+                        <select id="tapIssueUsageSelect" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px;">
+                            <option value="New">New</option>
+                            <option value="Regrind">Regrind</option>
+                            <option value="Roughing">Roughing</option>
+                            <option value="Finishing">Finishing</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.5rem;">
+                    <button type="button" class="btn btn-outline" id="cancelTapIssueBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Submit Issue</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Insert Monitor Modal -->
     <div id="insertMonitorModal" class="modal">
         <div class="modal-content" style="max-width: 540px; border-radius: 12px; padding: 1.25rem; width: 96%;">
@@ -3050,6 +3203,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=260"></script>
+    <script src="/static/app.js?v=261"></script>
 </body>
 </html>

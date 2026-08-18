@@ -8,7 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, Supplier, HTLog, HTReceiptLog, PcLog, PcReceiptLog, Attendance, InsertMaster, DrillMaster, TapMaster, InsertReceipt, TapReceipt, InsertIssue, BreakdownSlip, ServiceDetail
+from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, Supplier, HTLog, HTReceiptLog, PcLog, PcReceiptLog, Attendance, InsertMaster, DrillMaster, TapMaster, InsertReceipt, TapReceipt, InsertIssue, TapIssue, BreakdownSlip, ServiceDetail
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -2095,6 +2095,93 @@ def delete_insert_issue(item_id: int, db: Session = Depends(get_db)):
 
     db.delete(db_item)
     db.commit()
+    return {"message": "Insert Issue record deleted successfully"}
+
+@app.delete("/api/insert_issues/all")
+def delete_all_insert_issues(db: Session = Depends(get_db)):
+    db.query(InsertIssue).delete()
+    db.commit()
+    return {"message": "All insert issue records deleted"}
+
+# --- Tap Issue Schemas & Endpoints ---
+class TapIssueBase(BaseModel):
+    date: str
+    shift: Optional[str] = ""
+    department: Optional[str] = ""
+    tap_spec: str
+    qty: Optional[int] = 1
+    machine: Optional[str] = ""
+    operator: Optional[str] = ""
+    partno: Optional[str] = ""
+    opn_no: Optional[str] = ""
+    tap_life: Optional[int] = 0
+    usages: Optional[str] = ""
+
+    model_config = ConfigDict(extra="ignore")
+
+class TapIssueCreate(TapIssueBase):
+    pass
+
+class TapIssueResponse(TapIssueBase):
+    id: int
+    class Config:
+        from_attributes = True
+
+@app.get("/api/tap_issues", response_model=List[TapIssueResponse])
+def get_tap_issues(db: Session = Depends(get_db)):
+    return db.query(TapIssue).order_by(TapIssue.id.desc()).all()
+
+@app.post("/api/tap_issues", response_model=TapIssueResponse)
+def create_tap_issue(item: TapIssueCreate, db: Session = Depends(get_db)):
+    db_item = TapIssue(**item.model_dump())
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+@app.get("/api/tap_issues/{item_id}", response_model=TapIssueResponse)
+def get_single_tap_issue(item_id: int, db: Session = Depends(get_db)):
+    db_item = db.query(TapIssue).filter(TapIssue.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Tap Issue item not found")
+    return db_item
+
+@app.put("/api/tap_issues/{item_id}", response_model=TapIssueResponse)
+def update_tap_issue(item_id: int, item: TapIssueCreate, db: Session = Depends(get_db)):
+    db_item = db.query(TapIssue).filter(TapIssue.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Tap Issue item not found")
+    for key, value in item.model_dump().items():
+        setattr(db_item, key, value)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+class BulkImportTapIssuePayload(BaseModel):
+    issues: List[TapIssueCreate]
+
+@app.post("/api/tap_issues/bulk")
+def bulk_import_tap_issues(payload: BulkImportTapIssuePayload, db: Session = Depends(get_db)):
+    new_items = [TapIssue(**item.model_dump()) for item in payload.issues]
+    db.add_all(new_items)
+    db.commit()
+    return {"message": f"Successfully imported {len(new_items)} tap issue records"}
+
+@app.delete("/api/tap_issues/all")
+def delete_all_tap_issues(db: Session = Depends(get_db)):
+    db.query(TapIssue).delete()
+    db.commit()
+    return {"message": "All tap issue records deleted"}
+
+@app.delete("/api/tap_issues/{item_id}")
+def delete_tap_issue(item_id: int, db: Session = Depends(get_db)):
+    db_item = db.query(TapIssue).filter(TapIssue.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Tap Issue item not found")
+    db.delete(db_item)
+    db.commit()
+    return {"message": "Tap Issue item deleted"}
+
 # --- Breakdown Slip Schemas & API Routes ---
 class BreakdownSlipCreate(BaseModel):
     date_time: str

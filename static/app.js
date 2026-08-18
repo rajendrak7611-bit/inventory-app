@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         allTabs.forEach(tab => {
             const screen = tab.getAttribute('data-screen');
-            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || ((screen === 'rawmaterial' || screen === 'ht' || screen === 'pc') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) || (screen === 'attendance' && accessibleScreens.includes('hr')) || ((screen === 'bdslip' || screen === 'servicedetails') && (accessibleScreens.includes('maintenance') || accessibleScreens.includes('bdslip') || accessibleScreens.includes('servicedetails'))) || ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'tapmaster' || screen === 'insertreceipt' || screen === 'tapreceipt' || screen === 'insertissue' || screen === 'insertcpc') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib')));
+            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || ((screen === 'rawmaterial' || screen === 'ht' || screen === 'pc') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) || (screen === 'attendance' && accessibleScreens.includes('hr')) || ((screen === 'bdslip' || screen === 'servicedetails') && (accessibleScreens.includes('maintenance') || accessibleScreens.includes('bdslip') || accessibleScreens.includes('servicedetails'))) || ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'tapmaster' || screen === 'insertreceipt' || screen === 'tapreceipt' || screen === 'insertissue' || screen === 'tapissue' || screen === 'insertcpc') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib')));
             if (isAllowed) {
                 tab.style.display = 'inline-block';
                 if (!firstAvailableTab) firstAvailableTab = tab;
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'master': ['partmaster', 'machines', 'operators', 'dept', 'shift', 'vendors', 'setters', 'suppliers'],
                     'inventory': ['inventory', 'rawmaterial', 'ht', 'pc'],
                     'production': ['schedule', 'status', 'prodlog', 'debur'],
-                    'toolcrib': ['insertmaster', 'drillmaster', 'tapmaster', 'products', 'insertreceipt', 'tapreceipt', 'insertissue', 'insertcpc'],
+                    'toolcrib': ['insertmaster', 'drillmaster', 'tapmaster', 'products', 'insertreceipt', 'tapreceipt', 'insertissue', 'tapissue', 'insertcpc'],
                     'reports': ['reports'],
                     'maintenance': ['maintenance', 'bdslip', 'servicedetails'],
                     'hr': ['hr', 'attendance']
@@ -312,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const sections = [
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection',
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
-            'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'insertCpcSection', 'partMasterSection', 'machinesSection',
+            'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
             'inspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'hrSection', 'attendanceSection'
@@ -551,6 +551,13 @@ document.addEventListener('DOMContentLoaded', () => {
             importBtn.style.display = 'inline-block';
             addBtn.style.display = 'none';
             fetchInsertIssues();
+        }},
+        'sidebarTapIssue': { tab: 'tapissue', action: () => {
+            const sec = document.getElementById('tapIssueSection');
+            if (sec) sec.style.display = 'block';
+            importBtn.style.display = 'inline-block';
+            addBtn.style.display = 'none';
+            fetchTapIssues();
         }},
         'sidebarInsertCpc': { tab: 'insertcpc', action: () => {
             const sec = document.getElementById('insertCpcSection');
@@ -9604,6 +9611,454 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) { console.error(err); alert('Error saving issue record'); }
         });
     }
+
+    // ====== TAP ISSUE CRUD ======
+    const tapIssueModal = document.getElementById('tapIssueModal');
+    const tapIssueForm = document.getElementById('tapIssueForm');
+    const addTapIssueBtn = document.getElementById('addTapIssueBtn');
+    const cancelTapIssueBtn = document.getElementById('cancelTapIssueBtn');
+    const closeTapIssueModalBtn = document.getElementById('closeTapIssueModalBtn');
+
+    let allTapIssuesCache = [];
+
+    async function fetchTapIssues() {
+        try {
+            const res = await fetch('/api/tap_issues');
+            allTapIssuesCache = await res.json();
+            applyTapIssueFilters();
+        } catch (err) { console.error(err); }
+    }
+
+    function applyTapIssueFilters() {
+        if (!allTapIssuesCache) return;
+        const inputs = document.querySelectorAll('.tap-issue-col-filter');
+        const filters = {};
+        inputs.forEach(inp => {
+            const key = inp.getAttribute('data-key');
+            const val = inp.value.trim().toLowerCase();
+            if (val) filters[key] = val;
+        });
+
+        let filtered = allTapIssuesCache;
+        if (Object.keys(filters).length > 0) {
+            filtered = allTapIssuesCache.filter(item => {
+                if (filters.id && !String(item.id).toLowerCase().includes(filters.id)) return false;
+                if (filters.date && !(item.date || '').toLowerCase().includes(filters.date) && !formatExcelDate(item.date).toLowerCase().includes(filters.date)) return false;
+                if (filters.shift && !(item.shift || '').toLowerCase().includes(filters.shift)) return false;
+                if (filters.department && !(item.department || '').toLowerCase().includes(filters.department)) return false;
+                if (filters.tap_spec && !(item.tap_spec || '').toLowerCase().includes(filters.tap_spec)) return false;
+                if (filters.qty && !String(item.qty || 0).toLowerCase().includes(filters.qty)) return false;
+                if (filters.machine && !(item.machine || '').toLowerCase().includes(filters.machine)) return false;
+                if (filters.operator && !(item.operator || '').toLowerCase().includes(filters.operator)) return false;
+                if (filters.partno && !(item.partno || '').toLowerCase().includes(filters.partno)) return false;
+                if (filters.opn_no && !(item.opn_no || '').toLowerCase().includes(filters.opn_no)) return false;
+                if (filters.tap_life && !String(item.tap_life || 0).toLowerCase().includes(filters.tap_life)) return false;
+                if (filters.usages && !(item.usages || '').toLowerCase().includes(filters.usages)) return false;
+                return true;
+            });
+        }
+
+        renderTapIssues(filtered);
+    }
+
+    document.addEventListener('input', (e) => {
+        if (e.target && e.target.classList.contains('tap-issue-col-filter')) {
+            applyTapIssueFilters();
+        }
+    });
+
+    document.getElementById('clearTapIssueFiltersBtn')?.addEventListener('click', () => {
+        document.querySelectorAll('.tap-issue-col-filter').forEach(inp => inp.value = '');
+        applyTapIssueFilters();
+    });
+
+    function renderTapIssues(issues) {
+        const tbody = document.getElementById('tapIssueBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!issues || issues.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="13" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No tap issues found. Click "+ Issue Tap" or "Import Excel" to add records.</td></tr>';
+            return;
+        }
+        issues.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.id}</td>
+                <td><span style="font-weight: 500;">${item.date || ''}</span></td>
+                <td>${item.shift || ''}</td>
+                <td>${item.department || ''}</td>
+                <td><strong>${item.tap_spec || ''}</strong></td>
+                <td>${item.qty || 0}</td>
+                <td>${item.machine || ''}</td>
+                <td>${item.operator || ''}</td>
+                <td>${item.partno || ''}</td>
+                <td>${item.opn_no || ''}</td>
+                <td>${item.tap_life || 0}</td>
+                <td><span class="badge" style="background: var(--primary-light, #e0f2fe); color: var(--primary-color, #0284c7); border-radius: 4px; padding: 2px 6px; font-size: 0.75rem;">${item.usages || 'New'}</span></td>
+                <td class="actions-cell">
+                    <button class="btn btn-outline edit-tap-issue-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit</button>
+                    <button class="btn btn-outline delete-tap-issue-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.edit-tap-issue-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.target.getAttribute('data-id');
+                const res = await fetch('/api/tap_issues');
+                const data = await res.json();
+                const item = data.find(x => x.id == id);
+                if (item) openTapIssueModal(item);
+            });
+        });
+
+        tbody.querySelectorAll('.delete-tap-issue-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (confirm('Delete this tap issue record?')) {
+                    const id = e.target.getAttribute('data-id');
+                    try {
+                        const res = await fetch(`/api/tap_issues/${id}`, { method: 'DELETE' });
+                        if (res.ok) fetchTapIssues();
+                        else alert('Error deleting issue record');
+                    } catch (err) { console.error(err); }
+                }
+            });
+        });
+    }
+
+    async function populateTapIssueDropdowns(item = null) {
+        // Shift dropdown
+        try {
+            const res = await fetch('/api/shifts');
+            const data = await res.json();
+            const sel = document.getElementById('tapIssueShiftSelect');
+            sel.innerHTML = '<option value="">-- Select Shift --</option>';
+            data.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.name;
+                opt.textContent = s.name;
+                if (item && item.shift === s.name) opt.selected = true;
+                sel.appendChild(opt);
+            });
+            makeSearchableSelect('tapIssueShiftSelect', '-- Select Shift --');
+            if (item && item.shift && tomSelectCache['tapIssueShiftSelect']) {
+                tomSelectCache['tapIssueShiftSelect'].setValue(item.shift);
+            }
+        } catch (e) {}
+
+        // Dept dropdown
+        try {
+            const res = await fetch('/api/departments');
+            const data = await res.json();
+            const sel = document.getElementById('tapIssueDeptSelect');
+            sel.innerHTML = '<option value="">-- Select Department --</option>';
+            data.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d.name;
+                opt.textContent = d.name;
+                if (item && item.department === d.name) opt.selected = true;
+                sel.appendChild(opt);
+            });
+            makeSearchableSelect('tapIssueDeptSelect', '-- Select Department --');
+            if (item && item.department && tomSelectCache['tapIssueDeptSelect']) {
+                tomSelectCache['tapIssueDeptSelect'].setValue(item.department);
+            }
+        } catch (e) {}
+
+        // Tap Spec dropdown (from TapMaster)
+        try {
+            const res = await fetch('/api/tap_masters');
+            const data = await res.json();
+            const sel = document.getElementById('tapIssueSpecSelect');
+            sel.innerHTML = '<option value="">-- Select Tap Spec --</option>';
+            data.forEach(t => {
+                const spec = t.tap_spec || t.specification || t.name || '';
+                if (spec) {
+                    const opt = document.createElement('option');
+                    opt.value = spec;
+                    opt.textContent = spec;
+                    if (item && item.tap_spec === spec) opt.selected = true;
+                    sel.appendChild(opt);
+                }
+            });
+            makeSearchableSelect('tapIssueSpecSelect', '-- Select Tap Spec --');
+            if (item && item.tap_spec && tomSelectCache['tapIssueSpecSelect']) {
+                tomSelectCache['tapIssueSpecSelect'].setValue(item.tap_spec);
+            }
+        } catch (e) {}
+
+        // Machine dropdown
+        try {
+            const res = await fetch('/api/machines');
+            const data = await res.json();
+            const sel = document.getElementById('tapIssueMachineSelect');
+            sel.innerHTML = '<option value="">-- Select Machine --</option>';
+            data.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.name;
+                opt.textContent = m.name;
+                if (item && item.machine === m.name) opt.selected = true;
+                sel.appendChild(opt);
+            });
+            makeSearchableSelect('tapIssueMachineSelect', '-- Select Machine --');
+            if (item && item.machine && tomSelectCache['tapIssueMachineSelect']) {
+                tomSelectCache['tapIssueMachineSelect'].setValue(item.machine);
+            }
+        } catch (e) {}
+
+        // Operator dropdown
+        try {
+            const res = await fetch('/api/operators');
+            const data = await res.json();
+            const sel = document.getElementById('tapIssueOperatorSelect');
+            sel.innerHTML = '<option value="">-- Select Operator --</option>';
+            data.forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.name;
+                opt.textContent = o.name;
+                if (item && item.operator === o.name) opt.selected = true;
+                sel.appendChild(opt);
+            });
+            makeSearchableSelect('tapIssueOperatorSelect', '-- Select Operator --');
+            if (item && item.operator && tomSelectCache['tapIssueOperatorSelect']) {
+                tomSelectCache['tapIssueOperatorSelect'].setValue(item.operator);
+            }
+        } catch (e) {}
+
+        // Part No dropdown
+        try {
+            const res = await fetch('/api/parts');
+            const parts = await res.json();
+            const sel = document.getElementById('tapIssuePartNoSelect');
+            sel.innerHTML = '<option value="">-- Select Part No --</option>';
+            parts.forEach(p => {
+                const partName = p.part_number || p.name || '';
+                if (partName) {
+                    const opt = document.createElement('option');
+                    opt.value = partName;
+                    opt.textContent = partName;
+                    if (item && item.partno === partName) opt.selected = true;
+                    sel.appendChild(opt);
+                }
+            });
+            makeSearchableSelect('tapIssuePartNoSelect', '-- Select Part No --');
+            if (item && item.partno && tomSelectCache['tapIssuePartNoSelect']) {
+                tomSelectCache['tapIssuePartNoSelect'].setValue(item.partno);
+                populateTapIssueOpnDropdown(item.partno, item ? item.opn_no : '');
+            }
+        } catch (e) {}
+    }
+
+    async function populateTapIssueOpnDropdown(partNo, selectedOpn = '') {
+        const sel = document.getElementById('tapIssueOpnNoSelect');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">-- Select Operation --</option>';
+        if (!partNo) {
+            makeSearchableSelect('tapIssueOpnNoSelect', '-- Select Operation --');
+            return;
+        }
+        try {
+            const res = await fetch('/api/parts');
+            const parts = await res.json();
+            const part = parts.find(p => (p.part_number || p.name || '') === partNo);
+            if (part && part.id) {
+                const opRes = await fetch(`/api/parts/${part.id}/operations`);
+                const ops = await opRes.json();
+                ops.forEach(op => {
+                    const opnName = op.opn_no || op.name || `OPN ${op.sequence_order || ''}`;
+                    const opt = document.createElement('option');
+                    opt.value = opnName;
+                    opt.textContent = opnName;
+                    if (selectedOpn && selectedOpn === opnName) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+            }
+            makeSearchableSelect('tapIssueOpnNoSelect', '-- Select Operation --');
+            if (selectedOpn && tomSelectCache['tapIssueOpnNoSelect']) {
+                tomSelectCache['tapIssueOpnNoSelect'].setValue(selectedOpn);
+            }
+        } catch (e) { console.error('Error fetching opns:', e); }
+    }
+
+    document.getElementById('tapIssuePartNoSelect')?.addEventListener('change', (e) => {
+        const selectedPart = e.target.value;
+        populateTapIssueOpnDropdown(selectedPart);
+    });
+
+    async function openTapIssueModal(item = null) {
+        if (!tapIssueModal) return;
+        await populateTapIssueDropdowns(item);
+        if (item) {
+            document.getElementById('tapIssueModalTitle').textContent = 'Edit Tap Issue';
+            document.getElementById('tapIssueId').value = item.id;
+            document.getElementById('tapIssueDateInput').value = item.date || '';
+            document.getElementById('tapIssueQtyInput').value = (item.qty !== undefined && item.qty !== null) ? item.qty : 1;
+            document.getElementById('tapIssueLifeInput').value = (item.tap_life !== undefined && item.tap_life !== null) ? item.tap_life : 0;
+            document.getElementById('tapIssueUsageSelect').value = item.usages || 'New';
+        } else {
+            document.getElementById('tapIssueModalTitle').textContent = 'Issue Tap';
+            tapIssueForm.reset();
+            document.getElementById('tapIssueId').value = '';
+            const todayStr = new Date().toISOString().split('T')[0];
+            document.getElementById('tapIssueDateInput').value = todayStr;
+        }
+        tapIssueModal.classList.add('show');
+    }
+
+    if (addTapIssueBtn) addTapIssueBtn.addEventListener('click', () => openTapIssueModal());
+    if (cancelTapIssueBtn) cancelTapIssueBtn.addEventListener('click', () => tapIssueModal.classList.remove('show'));
+    if (closeTapIssueModalBtn) closeTapIssueModalBtn.addEventListener('click', () => tapIssueModal.classList.remove('show'));
+
+    if (tapIssueForm) {
+        tapIssueForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('tapIssueId').value;
+            const payload = {
+                date: document.getElementById('tapIssueDateInput').value,
+                shift: (tomSelectCache['tapIssueShiftSelect'] ? tomSelectCache['tapIssueShiftSelect'].getValue() : document.getElementById('tapIssueShiftSelect').value || '').trim(),
+                department: (tomSelectCache['tapIssueDeptSelect'] ? tomSelectCache['tapIssueDeptSelect'].getValue() : document.getElementById('tapIssueDeptSelect').value || '').trim(),
+                tap_spec: (tomSelectCache['tapIssueSpecSelect'] ? tomSelectCache['tapIssueSpecSelect'].getValue() : document.getElementById('tapIssueSpecSelect').value || '').trim(),
+                qty: parseInt(document.getElementById('tapIssueQtyInput').value) || 1,
+                machine: (tomSelectCache['tapIssueMachineSelect'] ? tomSelectCache['tapIssueMachineSelect'].getValue() : document.getElementById('tapIssueMachineSelect').value || '').trim(),
+                operator: (tomSelectCache['tapIssueOperatorSelect'] ? tomSelectCache['tapIssueOperatorSelect'].getValue() : document.getElementById('tapIssueOperatorSelect').value || '').trim(),
+                partno: (tomSelectCache['tapIssuePartNoSelect'] ? tomSelectCache['tapIssuePartNoSelect'].getValue() : document.getElementById('tapIssuePartNoSelect').value || '').trim(),
+                opn_no: (tomSelectCache['tapIssueOpnNoSelect'] ? tomSelectCache['tapIssueOpnNoSelect'].getValue() : document.getElementById('tapIssueOpnNoSelect').value || '').trim(),
+                tap_life: parseInt(document.getElementById('tapIssueLifeInput').value) || 0,
+                usages: document.getElementById('tapIssueUsageSelect').value
+            };
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/tap_issues/${id}` : '/api/tap_issues';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    tapIssueModal.classList.remove('show');
+                    fetchTapIssues();
+                } else {
+                    alert('Error saving tap issue record');
+                }
+            } catch (err) { console.error(err); alert('Error saving tap issue record'); }
+        });
+    }
+
+    document.getElementById('importTapIssueBtn')?.addEventListener('click', () => {
+        document.getElementById('importTapIssueInput')?.click();
+    });
+
+    const importTapIssueInput = document.getElementById('importTapIssueInput');
+    if (importTapIssueInput) {
+        importTapIssueInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    const data = evt.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (!json || json.length === 0) {
+                        alert('No valid data found in Excel sheet.');
+                        return;
+                    }
+
+                    const issues = [];
+                    const todayStr = new Date().toISOString().slice(0, 10);
+                    json.forEach(row => {
+                        let dateVal = todayStr;
+                        let shiftVal = '';
+                        let deptVal = '';
+                        let specVal = '';
+                        let qtyVal = 1;
+                        let machineVal = '';
+                        let operatorVal = '';
+                        let partVal = '';
+                        let opnVal = '';
+                        let lifeVal = 0;
+                        let usageVal = 'New';
+
+                        for (const key of Object.keys(row)) {
+                            const k = key.trim().toLowerCase();
+                            if (['date', 'issue_date', 'issue date'].includes(k)) dateVal = formatExcelDate(row[key]);
+                            if (['shift'].includes(k)) shiftVal = String(row[key] || '').trim();
+                            if (['dept', 'department'].includes(k)) deptVal = String(row[key] || '').trim();
+                            if (['tap spec', 'tap_spec', 'spec', 'tap'].includes(k)) specVal = String(row[key] || '').trim();
+                            if (['qty', 'quantity'].includes(k)) qtyVal = parseInt(row[key]) || 1;
+                            if (['machine', 'm/c', 'mc'].includes(k)) machineVal = String(row[key] || '').trim();
+                            if (['operator', 'op'].includes(k)) operatorVal = String(row[key] || '').trim();
+                            if (['part no', 'partno', 'part_no', 'part'].includes(k)) partVal = String(row[key] || '').trim();
+                            if (['opn no', 'opnno', 'opn_no', 'opn', 'operation'].includes(k)) opnVal = String(row[key] || '').trim();
+                            if (['tap life', 'tap_life', 'life'].includes(k)) lifeVal = parseInt(row[key]) || 0;
+                            if (['usage', 'usages', 'usage type', 'usage_type'].includes(k)) usageVal = String(row[key] || '').trim();
+                        }
+
+                        if (specVal) {
+                            issues.push({
+                                date: dateVal,
+                                shift: shiftVal,
+                                department: deptVal,
+                                tap_spec: specVal,
+                                qty: qtyVal,
+                                machine: machineVal,
+                                operator: operatorVal,
+                                partno: partVal,
+                                opn_no: opnVal,
+                                tap_life: lifeVal,
+                                usages: usageVal
+                            });
+                        }
+                    });
+
+                    if (issues.length === 0) {
+                        alert('No valid tap issue records found in Excel sheet.');
+                        return;
+                    }
+
+                    const res = await fetch('/api/tap_issues/bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ issues })
+                    });
+
+                    if (res.ok) {
+                        alert(`Successfully imported ${issues.length} Tap Issue records!`);
+                        fetchTapIssues();
+                    } else {
+                        alert('Error importing Excel data.');
+                    }
+                } catch (err) {
+                    console.error('Error importing Tap Issue Excel:', err);
+                    alert('Error reading Excel file.');
+                } finally {
+                    importTapIssueInput.value = '';
+                }
+            };
+            reader.readAsBinaryString(file);
+        });
+    }
+
+    document.getElementById('deleteAllTapIssuesBtn')?.addEventListener('click', async () => {
+        if (!checkAdminAccess()) return;
+        if (confirm('Are you sure you want to delete ALL tap issue entries? This action cannot be undone!')) {
+            try {
+                const res = await fetch('/api/tap_issues/all', { method: 'DELETE' });
+                if (res.ok) {
+                    alert('All tap issue entries deleted successfully.');
+                    fetchTapIssues();
+                } else {
+                    alert('Error deleting tap issue entries.');
+                }
+            } catch (e) { console.error(e); }
+        }
+    });
 
     // ====== INSERT MONITOR MODAL ======
     const insertMonitorModal = document.getElementById('insertMonitorModal');
