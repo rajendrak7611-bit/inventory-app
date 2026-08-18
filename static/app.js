@@ -2429,13 +2429,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         } else {
                             const deburredTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                             const forInsLogTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                            const rfdProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                            const reworkProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                            const ncProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                            const rejectionProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rejection').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                            const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
+                            const lastOpProdVal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === opnClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                             
-                            nextProd = Math.max(deburredTotal, forInsLogTotal, totalInspected);
+                            nextProd = Math.max(deburredTotal, forInsLogTotal, lastOpProdVal);
                         }
                         
                         let balance = currentProd - nextProd;
@@ -2458,10 +2454,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const lastOpProd = operations.length > 0 ? allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === (operations[operations.length - 1].opn_no || '').trim().toLowerCase()).reduce((sum, l) => sum + (l.prod_qty || 0), 0) : 0;
 
-                const effectiveForIns = deburredTotal > 0 ? deburredTotal : (forInsLogTotal > 0 ? forInsLogTotal : lastOpProd);
+                const deburBal = Math.max(0, lastOpProd - deburredTotal);
+                const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
                 const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
-
-                const deburBal = 0; // Deburring is completed once deburredTotal is logged
                 const forInsBal = Math.max(0, effectiveForIns - totalInspected);
                 const rfdBal = rfdProd - despProd;
 
@@ -3568,7 +3563,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const forInsLogTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const lastOpProd = lastOpnNo ? allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === lastOpnNo).reduce((sum, l) => sum + (l.prod_qty || 0), 0) : 0;
 
-                const effectiveForIns = deburredTotal > 0 ? deburredTotal : (forInsLogTotal > 0 ? forInsLogTotal : lastOpProd);
+                const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
 
                 const rfdProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const reworkProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
