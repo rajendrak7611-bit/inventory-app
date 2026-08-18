@@ -7966,6 +7966,16 @@ document.addEventListener('DOMContentLoaded', () => {
         return clean.charAt(0);
     }
 
+    function formatDateDDMM(dateStr) {
+        if (!dateStr) return '-';
+        const fmt = formatExcelDate(dateStr);
+        const parts = fmt.split('-');
+        if (parts.length === 3) {
+            return `${parts[2]}-${parts[1]}`;
+        }
+        return fmt;
+    }
+
     function getDayDD(dateStr) {
         if (!dateStr) return '-';
         const fmt = formatExcelDate(dateStr);
@@ -8039,11 +8049,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (uIdx === 0) {
                     const formattedDate = formatExcelDate(item.date);
-                    const dayDD = getDayDD(item.date);
+                    const dateDDMM = formatDateDDMM(item.date);
                     const deptShort = getDeptShortCode(item.department);
                     tr.innerHTML = `
                         <td rowspan="${rowSpan}" style="vertical-align: middle; font-weight: bold; padding: 3px 5px; font-size: 0.8rem;">${item.id}</td>
-                        <td rowspan="${rowSpan}" style="vertical-align: middle; padding: 3px 5px; font-size: 0.8rem;"><span style="font-weight: 600;">${formattedDate}</span></td>
+                        <td rowspan="${rowSpan}" style="vertical-align: middle; padding: 3px 5px; font-size: 0.8rem;"><span style="font-weight: 600;" title="${formattedDate}">${dateDDMM}</span></td>
                         <td rowspan="${rowSpan}" style="vertical-align: middle; padding: 3px 5px; font-size: 0.8rem;"><strong>${item.shift || ''}</strong></td>
                         <td rowspan="${rowSpan}" style="vertical-align: middle; padding: 3px 5px; font-size: 0.8rem;"><span style="font-weight: 700; color: #0284c7;">${item.department || ''}</span></td>
                         <td rowspan="${rowSpan}" style="vertical-align: middle; padding: 3px 5px; font-size: 0.8rem;"><strong>${item.insert_spec || ''}</strong></td>
