@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         allTabs.forEach(tab => {
             const screen = tab.getAttribute('data-screen');
-            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || ((screen === 'rawmaterial' || screen === 'ht' || screen === 'pc') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) || (screen === 'attendance' && accessibleScreens.includes('hr')) || ((screen === 'bdslip' || screen === 'servicedetails') && (accessibleScreens.includes('maintenance') || accessibleScreens.includes('bdslip') || accessibleScreens.includes('servicedetails'))) || ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'insertreceipt' || screen === 'insertissue' || screen === 'insertcpc') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib')));
+            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || ((screen === 'rawmaterial' || screen === 'ht' || screen === 'pc') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) || (screen === 'attendance' && accessibleScreens.includes('hr')) || ((screen === 'bdslip' || screen === 'servicedetails') && (accessibleScreens.includes('maintenance') || accessibleScreens.includes('bdslip') || accessibleScreens.includes('servicedetails'))) || ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'tapmaster' || screen === 'insertreceipt' || screen === 'insertissue' || screen === 'insertcpc') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib')));
             if (isAllowed) {
                 tab.style.display = 'inline-block';
                 if (!firstAvailableTab) firstAvailableTab = tab;
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'master': ['partmaster', 'machines', 'operators', 'dept', 'shift', 'vendors', 'setters', 'suppliers'],
                     'inventory': ['inventory', 'rawmaterial', 'ht', 'pc'],
                     'production': ['schedule', 'status', 'prodlog', 'debur'],
-                    'toolcrib': ['insertmaster', 'drillmaster', 'products', 'insertreceipt', 'insertissue', 'insertcpc'],
+                    'toolcrib': ['insertmaster', 'drillmaster', 'tapmaster', 'products', 'insertreceipt', 'insertissue', 'insertcpc'],
                     'reports': ['reports'],
                     'maintenance': ['maintenance', 'bdslip', 'servicedetails'],
                     'hr': ['hr', 'attendance']
@@ -519,6 +519,13 @@ document.addEventListener('DOMContentLoaded', () => {
             importBtn.style.display = 'inline-block';
             addBtn.style.display = 'none';
             fetchDrillMasters();
+        }},
+        'sidebarTapMaster': { tab: 'tapmaster', action: () => {
+            const sec = document.getElementById('tapMasterSection');
+            if (sec) sec.style.display = 'block';
+            importBtn.style.display = 'inline-block';
+            addBtn.style.display = 'none';
+            fetchTapMasters();
         }},
         'sidebarInsertReceipt': { tab: 'insertreceipt', action: () => {
             const sec = document.getElementById('insertReceiptSection');
@@ -7283,6 +7290,190 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ====== TAP MASTER CRUD ======
+    const tapMasterModal = document.getElementById('tapMasterModal');
+    const tapMasterForm = document.getElementById('tapMasterForm');
+    const addTapMasterBtn = document.getElementById('addTapMasterBtn');
+    const cancelTapMasterBtn = document.getElementById('cancelTapMasterBtn');
+    const closeTapMasterModalBtn = document.getElementById('closeTapMasterModalBtn');
+
+    async function fetchTapMasters() {
+        try {
+            const res = await fetch('/api/tap_masters');
+            const data = await res.json();
+            renderTapMasters(data);
+        } catch (err) { console.error(err); }
+    }
+
+    function renderTapMasters(items) {
+        const tbody = document.getElementById('tapMasterBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (!items || items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No tap records found. Click "+ Add Tap" or "Import Excel" to add records.</td></tr>';
+            return;
+        }
+        items.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.id}</td>
+                <td><strong>${item.tap_spec || item.specification || item.name || ''}</strong></td>
+                <td class="actions-cell">
+                    <button class="btn btn-outline edit-tap-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">Edit</button>
+                    <button class="btn btn-outline delete-tap-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.edit-tap-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = e.target.getAttribute('data-id');
+                const res = await fetch('/api/tap_masters');
+                const data = await res.json();
+                const item = data.find(x => x.id == id);
+                if (item) openTapMasterModal(item);
+            });
+        });
+
+        tbody.querySelectorAll('.delete-tap-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                if (confirm('Delete this tap master record?')) {
+                    const id = e.target.getAttribute('data-id');
+                    try {
+                        const res = await fetch(`/api/tap_masters/${id}`, { method: 'DELETE' });
+                        if (res.ok) fetchTapMasters();
+                        else alert('Error deleting tap record');
+                    } catch (err) { console.error(err); }
+                }
+            });
+        });
+    }
+
+    function openTapMasterModal(item = null) {
+        if (!tapMasterModal) return;
+        if (item) {
+            document.getElementById('tapMasterModalTitle').textContent = 'Edit Tap Master';
+            document.getElementById('tapMasterId').value = item.id;
+            document.getElementById('tapSpecInput').value = item.tap_spec || item.specification || item.name || '';
+        } else {
+            document.getElementById('tapMasterModalTitle').textContent = 'Add Tap Master';
+            tapMasterForm.reset();
+            document.getElementById('tapMasterId').value = '';
+        }
+        tapMasterModal.classList.add('show');
+    }
+
+    if (addTapMasterBtn) addTapMasterBtn.addEventListener('click', () => openTapMasterModal());
+    if (cancelTapMasterBtn) cancelTapMasterBtn.addEventListener('click', () => tapMasterModal.classList.remove('show'));
+    if (closeTapMasterModalBtn) closeTapMasterModalBtn.addEventListener('click', () => tapMasterModal.classList.remove('show'));
+
+    if (tapMasterForm) {
+        tapMasterForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('tapMasterId').value;
+            const payload = {
+                tap_spec: document.getElementById('tapSpecInput').value.trim(),
+                name: '',
+                specification: '',
+                make: '',
+                stock: 0,
+                price: 0.00
+            };
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/tap_masters/${id}` : '/api/tap_masters';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    tapMasterModal.classList.remove('show');
+                    fetchTapMasters();
+                } else {
+                    alert('Error saving tap record');
+                }
+            } catch (err) { console.error(err); alert('Error saving tap record'); }
+        });
+    }
+
+    document.getElementById('importTapMasterBtn')?.addEventListener('click', () => {
+        document.getElementById('importTapMasterInput')?.click();
+    });
+
+    const importTapMasterInput = document.getElementById('importTapMasterInput');
+    if (importTapMasterInput) {
+        importTapMasterInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                try {
+                    const data = evt.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (!json || json.length === 0) {
+                        alert('No valid data found in Excel sheet.');
+                        return;
+                    }
+
+                    const taps = [];
+                    json.forEach(row => {
+                        let tapSpecVal = '';
+
+                        for (const key of Object.keys(row)) {
+                            const k = key.trim().toLowerCase();
+                            if (['tap spec', 'tap_spec', 'tap', 'specification', 'spec', 'tap size', 'tap_size', 'name'].includes(k)) {
+                                tapSpecVal = String(row[key] || '').trim();
+                            }
+                        }
+
+                        if (tapSpecVal) {
+                            taps.push({
+                                tap_spec: tapSpecVal,
+                                name: '',
+                                specification: '',
+                                make: '',
+                                stock: 0,
+                                price: 0.0
+                            });
+                        }
+                    });
+
+                    if (taps.length === 0) {
+                        alert('No valid tap records found in Excel sheet. Make sure column header is "Tap Spec".');
+                        return;
+                    }
+
+                    const res = await fetch('/api/tap_masters/bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ taps })
+                    });
+
+                    if (res.ok) {
+                        alert(`Successfully imported ${taps.length} Tap Master records!`);
+                        fetchTapMasters();
+                    } else {
+                        alert('Error importing Excel data.');
+                    }
+                } catch (err) {
+                    console.error('Error importing Tap Master Excel:', err);
+                    alert('Error reading Excel file.');
+                } finally {
+                    importTapMasterInput.value = '';
+                }
+            };
+            reader.readAsBinaryString(file);
+        });
+    }
+
     // ====== INSERT RECEIPT CRUD ======
     const insertReceiptModal = document.getElementById('insertReceiptModal');
     const insertReceiptForm = document.getElementById('insertReceiptForm');
@@ -7414,6 +7605,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     fetchDrillMasters();
                 } else {
                     alert('Error deleting drill master entries.');
+                }
+            } catch (e) { console.error(e); }
+        }
+    });
+
+    document.getElementById('deleteAllTapMastersBtn')?.addEventListener('click', async () => {
+        if (!checkAdminAccess()) return;
+        if (confirm('Are you sure you want to delete ALL tap master entries? This action cannot be undone!')) {
+            try {
+                const res = await fetch('/api/tap_masters/all', { method: 'DELETE' });
+                if (res.ok) {
+                    alert('All tap master entries deleted successfully.');
+                    fetchTapMasters();
+                } else {
+                    alert('Error deleting tap master entries.');
                 }
             } catch (e) { console.error(e); }
         }

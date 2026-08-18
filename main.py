@@ -8,7 +8,7 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 
 from database import engine, get_db, Base
-from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, Supplier, HTLog, HTReceiptLog, PcLog, PcReceiptLog, Attendance, InsertMaster, DrillMaster, InsertReceipt, InsertIssue, BreakdownSlip, ServiceDetail
+from models import Product, PartMaster, Machine, Operator, Setter, PartOperation, Schedule, ProductionLog, User, RawMaterial, RawMaterialLog, Department, Shift, Vendor, Supplier, HTLog, HTReceiptLog, PcLog, PcReceiptLog, Attendance, InsertMaster, DrillMaster, TapMaster, InsertReceipt, InsertIssue, BreakdownSlip, ServiceDetail
 
 # Ensure tables are created (just in case they aren't)
 Base.metadata.create_all(bind=engine)
@@ -1750,6 +1750,73 @@ def delete_drill_master(item_id: int, db: Session = Depends(get_db)):
     db.delete(db_item)
     db.commit()
     return {"message": "Drill Master item deleted"}
+
+# --- Tap Master Schemas & Endpoints ---
+class TapMasterBase(BaseModel):
+    tap_spec: str
+    name: Optional[str] = ""
+    specification: Optional[str] = ""
+    make: Optional[str] = ""
+    stock: Optional[int] = 0
+    price: Optional[float] = 0.00
+
+class TapMasterCreate(TapMasterBase):
+    pass
+
+class TapMasterResponse(TapMasterBase):
+    id: int
+    class Config:
+        from_attributes = True
+
+@app.get("/api/tap_masters", response_model=List[TapMasterResponse])
+def get_tap_masters(db: Session = Depends(get_db)):
+    return db.query(TapMaster).order_by(TapMaster.tap_spec.asc(), TapMaster.id.asc()).all()
+
+@app.post("/api/tap_masters", response_model=TapMasterResponse)
+def create_tap_master(item: TapMasterCreate, db: Session = Depends(get_db)):
+    db_item = TapMaster(**item.model_dump())
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+@app.put("/api/tap_masters/{item_id}", response_model=TapMasterResponse)
+def update_tap_master(item_id: int, item: TapMasterCreate, db: Session = Depends(get_db)):
+    db_item = db.query(TapMaster).filter(TapMaster.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Tap Master item not found")
+    for key, value in item.model_dump().items():
+        setattr(db_item, key, value)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+class BulkImportTapMasterPayload(BaseModel):
+    taps: List[TapMasterCreate]
+
+@app.post("/api/tap_masters/bulk")
+def bulk_import_tap_masters(payload: BulkImportTapMasterPayload, db: Session = Depends(get_db)):
+    new_items = []
+    for item in payload.taps:
+        new_items.append(TapMaster(**item.model_dump()))
+    db.add_all(new_items)
+    db.commit()
+    return {"message": f"Successfully imported {len(new_items)} tap master records"}
+
+@app.delete("/api/tap_masters/all")
+def delete_all_tap_masters(db: Session = Depends(get_db)):
+    db.query(TapMaster).delete()
+    db.commit()
+    return {"message": "All tap master records deleted"}
+
+@app.delete("/api/tap_masters/{item_id}")
+def delete_tap_master(item_id: int, db: Session = Depends(get_db)):
+    db_item = db.query(TapMaster).filter(TapMaster.id == item_id).first()
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Tap Master item not found")
+    db.delete(db_item)
+    db.commit()
+    return {"message": "Tap Master item deleted"}
 
 # --- Insert Receipt Schemas & Endpoints ---
 class InsertReceiptBase(BaseModel):

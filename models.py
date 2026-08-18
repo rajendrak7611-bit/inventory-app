@@ -239,6 +239,17 @@ class DrillMaster(Base):
     stock = Column(Integer, default=0)
     price = Column(Numeric(10, 2), default=0.00)
 
+class TapMaster(Base):
+    __tablename__ = "tap_masters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tap_spec = Column(String, index=True, nullable=True)
+    name = Column(String, index=True, nullable=True)
+    specification = Column(String, nullable=True)
+    make = Column(String, nullable=True)
+    stock = Column(Integer, default=0)
+    price = Column(Numeric(10, 2), default=0.00)
+
 class InsertReceipt(Base):
     __tablename__ = "insert_receipts"
 
