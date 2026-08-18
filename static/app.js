@@ -8755,7 +8755,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
-                // Transform data into flat array for Excel sheet
+                // Ensure insert masters cache is populated to get edge count per spec
+                if (!allInsertMastersCache || allInsertMastersCache.length === 0) {
+                    try {
+                        const mRes = await fetch('/api/insert_masters');
+                        allInsertMastersCache = await mRes.json();
+                    } catch(e) {}
+                }
+
+                // Transform data into flat array for Excel sheet with Insert Monitor Edge rows
                 const exportRows = [];
                 data.forEach(item => {
                     let usages = [];
@@ -8779,22 +8787,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const formattedDate = formatExcelDate(item.date);
 
-                    usages.forEach((u, idx) => {
-                        exportRows.push({
-                            'Issue ID': item.id,
-                            'Date': formattedDate,
-                            'Shift': item.shift || '',
-                            'Dept': item.department || '',
-                            'Insert Spec': item.insert_spec || '',
-                            'Batch No': item.batch_no || '',
-                            'Qty Issued': item.qty_issued || 1,
-                            'Machine': u.machine || '',
-                            'Operator': u.operator || '',
-                            'Part No': u.partno || '',
-                            'Opn No': u.opn_no || '',
-                            'Usage Entry': idx + 1
-                        });
-                    });
+                    // Determine number of edges for this spec
+                    let numEdges = 4;
+                    const specKey = (item.insert_spec || '').trim().toLowerCase();
+                    const master = (allInsertMastersCache || []).find(s => (s.insert_spec || s.name || '').trim().toLowerCase() === specKey);
+                    if (master) {
+                        numEdges = parseInt(master.no_of_edges) || parseInt(master.edges) || 4;
+                    }
+
+                    const totalQty = Math.max(1, parseInt(item.qty_issued) || 1);
+
+                    for (let instIdx = 0; instIdx < totalQty; instIdx++) {
+                        const instObj = getInstEdgeObj(item.edge_data, instIdx);
+                        let instTotalEdgeQty = 0;
+                        for (let e = 1; e <= numEdges; e++) {
+                            const info = instObj[String(e)];
+                            if (info && info.qty > 0) instTotalEdgeQty += parseFloat(info.qty) || 0;
+                        }
+
+                        for (let e = 1; e <= numEdges; e++) {
+                            const info = instObj[String(e)] || { qty: 0, uIdx: 0, partno: '' };
+                            const assignedUidx = info.uIdx !== undefined ? parseInt(info.uIdx) : 0;
+                            const assignedUsage = usages[assignedUidx] || usages[0] || {};
+
+                            exportRows.push({
+                                'Issue ID': item.id,
+                                'Date': formattedDate,
+                                'Shift': item.shift || '',
+                                'Dept': item.department || '',
+                                'Insert Spec': item.insert_spec || '',
+                                'Batch No': item.batch_no || '',
+                                'Qty Issued': item.qty_issued || 1,
+                                'Machine': assignedUsage.machine || item.machine || '',
+                                'Operator': assignedUsage.operator || item.operator || '',
+                                'Part No': assignedUsage.partno || item.partno || '',
+                                'Opn No': assignedUsage.opn_no || item.opn_no || '',
+                                'Insert No': totalQty > 1 ? `Insert #${instIdx + 1}` : `Insert #1`,
+                                'Edge No': `Edge ${e}`,
+                                'Edge Qty': info.qty || 0,
+                                'Total Edge Qty': instTotalEdgeQty
+                            });
+                        }
+                    }
                 });
 
                 if (typeof XLSX === 'undefined') {
@@ -8804,10 +8838,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const ws = XLSX.utils.json_to_sheet(exportRows);
                 const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "Insert Issues");
+                XLSX.utils.book_append_sheet(wb, ws, "Insert Monitor Issues");
 
                 const todayStr = new Date().toISOString().slice(0, 10);
-                XLSX.writeFile(wb, `Insert_Issues_${todayStr}.xlsx`);
+                XLSX.writeFile(wb, `Insert_Monitor_Issues_${todayStr}.xlsx`);
             } catch (err) {
                 console.error('Error exporting Insert Issues to Excel:', err);
                 alert('Error generating Excel file.');
