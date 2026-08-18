@@ -8049,6 +8049,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td rowspan="${rowSpan}" style="vertical-align: middle; padding: 3px 5px; font-size: 0.8rem;"><strong>${item.insert_spec || ''}</strong></td>
                         <td rowspan="${rowSpan}" style="vertical-align: middle; padding: 3px 5px; font-size: 0.8rem;">${item.batch_no || ''}</td>
                         <td rowspan="${rowSpan}" style="vertical-align: middle; padding: 3px 5px; font-size: 0.8rem;"><span style="font-weight: 700; color: var(--primary-color);">${item.qty_issued || 0}</span></td>
+                        <td rowspan="${rowSpan}" style="vertical-align: middle; padding: 3px 5px; font-size: 0.8rem;"><span style="font-weight: 700; color: #16a34a;">${item.qty_received || 0}</span></td>
                         <td style="padding: 3px 5px; font-size: 0.8rem;">${u.machine || ''}</td>
                         <td style="padding: 3px 5px; font-size: 0.8rem;">${u.operator || ''}</td>
                         <td style="padding: 3px 5px; font-size: 0.8rem;">${u.partno || ''}</td>
@@ -8700,6 +8701,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('insertIssueId').value = item.id;
             document.getElementById('issueDateInput').value = item.date || '';
             document.getElementById('issueQtyInput').value = item.qty_issued || 1;
+            if (document.getElementById('issueQtyReceivedInput')) {
+                document.getElementById('issueQtyReceivedInput').value = item.qty_received || 0;
+            }
             await populateIssueModalDropdowns(item.department, item.insert_spec, item.batch_no, item.partno, item.opn_no, item.shift);
 
             let usages = [];
@@ -8726,6 +8730,9 @@ document.addEventListener('DOMContentLoaded', () => {
             insertIssueForm.reset();
             document.getElementById('insertIssueId').value = '';
             document.getElementById('issueDateInput').valueAsDate = new Date();
+            if (document.getElementById('issueQtyReceivedInput')) {
+                document.getElementById('issueQtyReceivedInput').value = 0;
+            }
             await populateIssueModalDropdowns();
             createUsageCard();
         }
@@ -8818,6 +8825,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 'Insert Spec': item.insert_spec || '',
                                 'Batch No': item.batch_no || '',
                                 'Qty Issued': item.qty_issued || 1,
+                                'Qty Received': item.qty_received || 0,
                                 'Machine': assignedUsage.machine || item.machine || '',
                                 'Operator': assignedUsage.operator || item.operator || '',
                                 'Part No': assignedUsage.partno || item.partno || '',
@@ -8876,6 +8884,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         let specVal = '';
                         let batchVal = '';
                         let qtyVal = 1;
+                        let qtyRecVal = 0;
                         let shiftVal = '';
                         let machineVal = '';
                         let opVal = '';
@@ -8889,6 +8898,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (['insert spec', 'insert_spec', 'spec'].includes(k)) specVal = String(row[key] || '').trim();
                             if (['batch no', 'batch_no', 'batch'].includes(k)) batchVal = String(row[key] || '').trim();
                             if (['qty issued', 'qty_issued', 'qty', 'issued qty'].includes(k)) qtyVal = parseInt(row[key]) || 1;
+                            if (['qty received', 'qty_received', 'qty rec', 'received qty'].includes(k)) qtyRecVal = parseInt(row[key]) || 0;
                             if (['machine', 'machine name', 'm/c'].includes(k)) machineVal = String(row[key] || '').trim();
                             if (['operator', 'operator name'].includes(k)) opVal = String(row[key] || '').trim();
                             if (['part no', 'partno', 'part_no'].includes(k)) partVal = String(row[key] || '').trim();
@@ -8902,6 +8912,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 insert_spec: specVal,
                                 batch_no: batchVal,
                                 qty_issued: qtyVal,
+                                qty_received: qtyRecVal,
                                 machine: machineVal,
                                 operator: opVal,
                                 partno: partVal,
@@ -8981,6 +8992,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 insert_spec: document.getElementById('issueInsertSpecSelect').value,
                 batch_no: batchSel.value,
                 qty_issued: parseInt(document.getElementById('issueQtyInput').value) || 1,
+                qty_received: parseInt(document.getElementById('issueQtyReceivedInput')?.value) || 0,
                 machine: mach,
                 operator: op,
                 partno: part,

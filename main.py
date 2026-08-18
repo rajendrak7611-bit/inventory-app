@@ -127,6 +127,10 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         conn.execute(text("ALTER TABLE insert_issues ADD COLUMN shift VARCHAR;"))
     except Exception:
         pass
+    try:
+        conn.execute(text("ALTER TABLE insert_issues ADD COLUMN qty_received INTEGER DEFAULT 0;"))
+    except Exception:
+        pass
 
 # Seed default admin user if not existing
 with Session(engine) as db:
@@ -1822,6 +1826,7 @@ class InsertIssueBase(BaseModel):
     insert_spec: str
     batch_no: Optional[str] = ""
     qty_issued: int
+    qty_received: Optional[int] = 0
     machine: Optional[str] = ""
     operator: Optional[str] = ""
     partno: Optional[str] = ""

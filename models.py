@@ -261,6 +261,7 @@ class InsertIssue(Base):
     insert_spec = Column(String, index=True)
     batch_no = Column(String, nullable=True)
     qty_issued = Column(Integer, default=0)
+    qty_received = Column(Integer, default=0)
     machine = Column(String, nullable=True)
     operator = Column(String, nullable=True)
     partno = Column(String, nullable=True)
