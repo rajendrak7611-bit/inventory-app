@@ -312,14 +312,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const sections = [
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection',
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
-            'productsSection', 'insertMasterSection', 'drillMasterSection', 'insertReceiptSection', 'insertIssueSection', 'insertCpcSection', 'partMasterSection', 'machinesSection',
-            'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'scheduleRunSection',
+            'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'insertCpcSection', 'partMasterSection', 'machinesSection',
+            'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
             'inspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'hrSection', 'attendanceSection'
         ];
         sections.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
+        });
+
+        document.querySelectorAll('.table-container').forEach(el => {
+            el.style.display = 'none';
         });
         
         document.querySelectorAll('.main-tab').forEach(btn => btn.classList.remove('active'));
