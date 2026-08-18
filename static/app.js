@@ -8886,6 +8886,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         let qtyVal = 1;
                         let qtyRecVal = 0;
                         let shiftVal = '';
+                        let deptVal = '';
                         let machineVal = '';
                         let opVal = '';
                         let partVal = '';
@@ -8895,9 +8896,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             const k = key.trim().toLowerCase();
                             if (['date', 'issue date', 'issue_date'].includes(k)) dateVal = String(row[key] || '').trim();
                             if (['shift', 'shift name', 'shift_name'].includes(k)) shiftVal = String(row[key] || '').trim();
+                            if (['dept', 'dep', 'department', 'dept name', 'dept_name'].includes(k)) deptVal = String(row[key] || '').trim();
                             if (['insert spec', 'insert_spec', 'spec'].includes(k)) specVal = String(row[key] || '').trim();
                             if (['batch no', 'batch_no', 'batch'].includes(k)) batchVal = String(row[key] || '').trim();
-                            if (['qty issued', 'qty_issued', 'qty', 'issued qty'].includes(k)) qtyVal = parseInt(row[key]) || 1;
+                            if (['qty issued', 'qty_issued', 'qty', 'issued qty', 'qty issu'].includes(k)) qtyVal = parseInt(row[key]) || 1;
                             if (['qty received', 'qty_received', 'qty rec', 'received qty'].includes(k)) qtyRecVal = parseInt(row[key]) || 0;
                             if (['machine', 'machine name', 'm/c'].includes(k)) machineVal = String(row[key] || '').trim();
                             if (['operator', 'operator name'].includes(k)) opVal = String(row[key] || '').trim();
@@ -8909,6 +8911,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             issues.push({
                                 date: formatExcelDate(dateVal),
                                 shift: shiftVal,
+                                department: deptVal,
                                 insert_spec: specVal,
                                 batch_no: batchVal,
                                 qty_issued: qtyVal,
