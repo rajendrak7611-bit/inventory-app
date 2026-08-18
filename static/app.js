@@ -8740,6 +8740,81 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('importInsertIssueInput')?.click();
     });
 
+    const exportInsertIssueExcelBtn = document.getElementById('exportInsertIssueExcelBtn');
+    if (exportInsertIssueExcelBtn) {
+        exportInsertIssueExcelBtn.addEventListener('click', async () => {
+            try {
+                const res = await fetch('/api/insert_issues');
+                if (!res.ok) {
+                    alert('Failed to fetch insert issues for export.');
+                    return;
+                }
+                const data = await res.json();
+                if (!data || data.length === 0) {
+                    alert('No Insert Issue records available to export.');
+                    return;
+                }
+
+                // Transform data into flat array for Excel sheet
+                const exportRows = [];
+                data.forEach(item => {
+                    let usages = [];
+                    if (item.usages) {
+                        try {
+                            let parsed = item.usages;
+                            while (typeof parsed === 'string') {
+                                parsed = JSON.parse(parsed);
+                            }
+                            if (Array.isArray(parsed)) usages = parsed;
+                        } catch(e) {}
+                    }
+                    if (!usages || !Array.isArray(usages) || usages.length === 0) {
+                        usages = [{
+                            machine: item.machine || '',
+                            operator: item.operator || '',
+                            partno: item.partno || '',
+                            opn_no: item.opn_no || ''
+                        }];
+                    }
+
+                    const formattedDate = formatExcelDate(item.date);
+
+                    usages.forEach((u, idx) => {
+                        exportRows.push({
+                            'Issue ID': item.id,
+                            'Date': formattedDate,
+                            'Shift': item.shift || '',
+                            'Dept': item.department || '',
+                            'Insert Spec': item.insert_spec || '',
+                            'Batch No': item.batch_no || '',
+                            'Qty Issued': item.qty_issued || 1,
+                            'Machine': u.machine || '',
+                            'Operator': u.operator || '',
+                            'Part No': u.partno || '',
+                            'Opn No': u.opn_no || '',
+                            'Usage Entry': idx + 1
+                        });
+                    });
+                });
+
+                if (typeof XLSX === 'undefined') {
+                    alert('Excel export library is loading, please try again in a moment.');
+                    return;
+                }
+
+                const ws = XLSX.utils.json_to_sheet(exportRows);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Insert Issues");
+
+                const todayStr = new Date().toISOString().slice(0, 10);
+                XLSX.writeFile(wb, `Insert_Issues_${todayStr}.xlsx`);
+            } catch (err) {
+                console.error('Error exporting Insert Issues to Excel:', err);
+                alert('Error generating Excel file.');
+            }
+        });
+    }
+
     const importInsertIssueInput = document.getElementById('importInsertIssueInput');
     if (importInsertIssueInput) {
         importInsertIssueInput.addEventListener('change', (e) => {
