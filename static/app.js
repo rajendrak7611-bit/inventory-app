@@ -322,7 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (el) el.style.display = 'none';
         });
 
-        document.querySelectorAll('.table-container').forEach(el => {
+        document.querySelectorAll('.table-container:not(.modal *)').forEach(el => {
             el.style.display = 'none';
         });
         
@@ -1247,6 +1247,9 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 addOperationRow();
             }
+
+            const opTableContainer = document.getElementById('operationsTable')?.closest('.table-container, .modal-table-container');
+            if (opTableContainer) opTableContainer.style.display = 'block';
 
             operationsModal.classList.add('show');
         } catch(e) {
