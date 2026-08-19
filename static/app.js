@@ -3947,7 +3947,36 @@ document.addEventListener('DOMContentLoaded', () => {
     let prodLogAllOperators = [];
     let prodLogAllSetters = [];
     let prodLogSchedules = [];
+    let prodLogAllPartMasters = [];
     let currentPartOperations = [];
+
+    function updateProdLogPartList(dept = '') {
+        const partList = document.getElementById('prodLogPartNoList');
+        if (!partList) return;
+        partList.innerHTML = '';
+
+        const deptUpper = (dept || '').trim().toUpperCase();
+        const partNoSet = new Set();
+
+        // 1. Scheduled parts matching dept (or all if no dept)
+        const schedParts = prodLogSchedules.filter(s => !deptUpper || (s.department || '').trim().toUpperCase() === deptUpper);
+        schedParts.forEach(s => s.partno && partNoSet.add(String(s.partno).trim()));
+
+        // 2. Part Master parts matching dept
+        const pmPartsMatching = prodLogAllPartMasters.filter(p => !deptUpper || !p.department || (p.department || '').trim().toUpperCase() === deptUpper);
+        pmPartsMatching.forEach(p => p.partno && partNoSet.add(String(p.partno).trim()));
+
+        // 3. Always include ALL Part Master parts as fallback so user can search any part
+        prodLogAllPartMasters.forEach(p => p.partno && partNoSet.add(String(p.partno).trim()));
+
+        const sortedParts = Array.from(partNoSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+        sortedParts.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p;
+            partList.appendChild(opt);
+        });
+    }
 
     async function initProdLog() {
         if (!document.getElementById('prodLogDate').value) {
@@ -3955,14 +3984,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Fetch dependencies
-        const machRes = await fetch('/api/machines');
-        prodLogAllMachines = await machRes.json();
-        
-        const opRes = await fetch('/api/operators');
-        prodLogAllOperators = await opRes.json();
+        const [machRes, opRes, setterRes, schedRes, pmRes] = await Promise.all([
+            fetch('/api/machines'),
+            fetch('/api/operators'),
+            fetch('/api/setters'),
+            fetch('/api/schedule'),
+            fetch('/api/partmaster')
+        ]);
 
-        const setterRes = await fetch('/api/setters');
+        prodLogAllMachines = await machRes.json();
+        prodLogAllOperators = await opRes.json();
         prodLogAllSetters = await setterRes.json();
+        const schedData = await schedRes.json();
+        prodLogSchedules = schedData.filter(s => s.status === 'Pending' || !s.status);
+        prodLogAllPartMasters = await pmRes.json();
 
         // Populate Setter dropdown
         const setterSelect = document.getElementById('prodLogSetter');
@@ -3973,17 +4008,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
-        const schedRes = await fetch('/api/schedule');
-        const schedData = await schedRes.json();
-        prodLogSchedules = schedData.filter(s => s.status === 'Pending' || !s.status);
-        
-        // Populate Schedule Parts with ALL active schedules initially
-        const partList = document.getElementById('prodLogPartNoList');
-        partList.innerHTML = '';
-        const uniqueSchedParts = [...new Set(prodLogSchedules.map(s => s.partno))];
-        uniqueSchedParts.forEach(p => {
-            partList.innerHTML += `<option value="${p}">`;
-        });
+        const currentDept = document.getElementById('prodLogDept')?.value || '';
+        updateProdLogPartList(currentDept);
         
         fetchProdLogs();
     }
@@ -3993,13 +4019,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const machSelect = document.getElementById('prodLogMachine');
         const opSelect = document.getElementById('prodLogOperator');
         const setterSelect = document.getElementById('prodLogSetter');
-        const partList = document.getElementById('prodLogPartNoList');
         
         machSelect.innerHTML = '<option value="">-- Select Machine --</option>';
         opSelect.innerHTML = '<option value="">-- Select Operator --</option>';
         if (setterSelect) setterSelect.innerHTML = '<option value="">-- Select Setter --</option>';
         document.getElementById('prodLogPartNo').value = '';
-        partList.innerHTML = '';
         
         prodLogAllMachines.filter(m => (m.department || '').trim().toUpperCase() === dept).forEach(m => {
             machSelect.innerHTML += `<option value="${m.name}">${m.name}</option>`;
@@ -4020,12 +4044,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
-        // Filter pending schedules by this department
-        const deptSchedules = prodLogSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept);
-        const uniqueSchedParts = [...new Set(deptSchedules.map(s => s.partno))];
-        uniqueSchedParts.forEach(p => {
-            partList.innerHTML += `<option value="${p}">`;
-        });
+        updateProdLogPartList(dept);
         
         // Reset dependent fields
         document.getElementById('prodLogOpnNo').innerHTML = '<option value="">-- Select Operation --</option>';
