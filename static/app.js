@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         allTabs.forEach(tab => {
             const screen = tab.getAttribute('data-screen');
-            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || ((screen === 'rawmaterial' || screen === 'ht' || screen === 'pc') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) || (screen === 'attendance' && accessibleScreens.includes('hr')) || ((screen === 'bdslip' || screen === 'servicedetails') && (accessibleScreens.includes('maintenance') || accessibleScreens.includes('bdslip') || accessibleScreens.includes('servicedetails'))) || ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'tapmaster' || screen === 'insertreceipt' || screen === 'tapreceipt' || screen === 'insertissue' || screen === 'tapissue' || screen === 'insertcpc') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib')));
+            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || ((screen === 'rawmaterial' || screen === 'ht' || screen === 'pc') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) || (screen === 'attendance' && accessibleScreens.includes('hr')) || ((screen === 'bdslip' || screen === 'servicedetails') && (accessibleScreens.includes('maintenance') || accessibleScreens.includes('bdslip') || accessibleScreens.includes('servicedetails'))) || ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'tapmaster' || screen === 'insertreceipt' || screen === 'tapreceipt' || screen === 'insertissue' || screen === 'tapissue' || screen === 'insertcpc') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib'))) || ((screen === 'rm_requirement' || screen === 'mc_util' || screen === 'oper_eff' || screen === 'reports') && accessibleScreens.includes('reports'));
             if (isAllowed) {
                 tab.style.display = 'inline-block';
                 if (!firstAvailableTab) firstAvailableTab = tab;
@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'inventory': ['inventory', 'rawmaterial', 'ht', 'pc'],
                     'production': ['schedule', 'status', 'prodlog', 'debur'],
                     'toolcrib': ['insertmaster', 'drillmaster', 'tapmaster', 'products', 'insertreceipt', 'tapreceipt', 'insertissue', 'tapissue', 'insertcpc'],
-                    'reports': ['reports'],
+                    'reports': ['reports', 'rm_requirement', 'mc_util', 'oper_eff'],
                     'maintenance': ['maintenance', 'bdslip', 'servicedetails'],
                     'hr': ['hr', 'attendance']
                 };
@@ -492,6 +492,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const rmReqSec = document.getElementById('rmRequirementSection');
             if (rmReqSec) rmReqSec.style.display = 'block';
             addBtn.style.display = 'none';
+            if (typeof fetchDepartments === 'function') fetchDepartments();
             fetchRmRequirement();
         }},
         'sidebarScheduleCreate': { tab: 'schedule_create', action: () => {
@@ -503,12 +504,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const mcUtilSec = document.getElementById('mcUtilSection');
             if (mcUtilSec) mcUtilSec.style.display = 'block';
             addBtn.style.display = 'none';
-            // Set default dates if empty
+            if (typeof fetchDepartments === 'function') fetchDepartments();
             if (!document.getElementById('mcUtilToDate').value) {
                 const today = new Date().toISOString().split('T')[0];
                 document.getElementById('mcUtilToDate').value = today;
                 document.getElementById('mcUtilFromDate').value = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
             }
+            document.getElementById('generateMcUtilBtn')?.click();
         }},
         'sidebarInsertMaster': { tab: 'insertmaster', action: () => {
             const sec = document.getElementById('insertMasterSection');
@@ -570,11 +572,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const operEffSec = document.getElementById('operEffSection');
             if (operEffSec) operEffSec.style.display = 'block';
             addBtn.style.display = 'none';
+            if (typeof fetchDepartments === 'function') fetchDepartments();
             if (!document.getElementById('operEffDate').value) {
                 const today = new Date().toISOString().split('T')[0];
                 document.getElementById('operEffDate').value = today;
             }
-            fetchOperEffReport();
+            if (typeof fetchOperEffReport === 'function') fetchOperEffReport();
         }},
         'sidebarScheduleCreate': { tab: 'schedule_create', action: () => { 
             scheduleCreateSection.style.display = 'block'; 
@@ -5310,6 +5313,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const partMasters = await pmRes.json();
             const rawMaterials = await rmRes.json();
             
+            const selectedDept = (document.getElementById('rmReqDept')?.value || '').trim().toUpperCase();
+            const searchForgePn = (document.getElementById('rmReqForgePnInput')?.value || '').trim().toUpperCase();
+
             const reqs = {};
             // Only consider Pending schedules for requirement calculation
             const pendingSchedules = schedules.filter(s => s.status === 'Pending' || !s.status);
@@ -5318,6 +5324,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const part = partMasters.find(p => p.partno === sched.partno);
                 if (part && part.forge_pn) {
                     const fpn = part.forge_pn.trim().toUpperCase();
+                    const partDept = (part.department || '').trim().toUpperCase();
+                    if (selectedDept && partDept !== selectedDept) return;
+                    if (searchForgePn && !fpn.includes(searchForgePn)) return;
                     reqs[fpn] = (reqs[fpn] || 0) + (sched.qty || 0);
                 }
             });
@@ -5328,18 +5337,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const keys = Object.keys(reqs).sort();
                 
                 if (keys.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No pending schedules found to generate requirement report.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No matching pending schedules found for requirement report.</td></tr>';
                     return;
                 }
                 
+                let count = 0;
                 keys.forEach(fpn => {
                     const required = reqs[fpn];
                     const rm = rawMaterials.find(r => (r.forge_pn || '').trim().toUpperCase() === fpn);
                     const stock = rm ? (rm.stock || 0) : 0;
                     const shortage = Math.max(0, required - stock);
                     
-                    if (shortage <= 0) return; // Display only parts with an actual shortage
-                    
+                    count++;
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td>${fpn}</td>
@@ -5349,15 +5358,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                     tbody.appendChild(tr);
                 });
-                
-                if (tbody.children.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No parts with shortage found.</td></tr>';
+
+                if (count === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No shortages found.</td></tr>';
                 }
             }
-        } catch (e) {
-            console.error('Error fetching RM Requirement', e);
+        } catch(e) {
+            console.error('Error fetching RM requirement:', e);
         }
     }
+
+    document.getElementById('generateRmReqBtn')?.addEventListener('click', fetchRmRequirement);
+    document.getElementById('rmReqDept')?.addEventListener('change', fetchRmRequirement);
+    document.getElementById('rmReqForgePnInput')?.addEventListener('input', fetchRmRequirement);
     
     const exportRmReqBtn = document.getElementById('exportRmReqBtn');
     if (exportRmReqBtn) {
@@ -5485,7 +5498,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function populateDeptDropdowns(depts) {
         const selects = [
             'scheduleDept', 'statusDeptSelect', 'deburDeptSelect', 
-            'inspDeptSelect', 'prodLogDept', 'partDept', 'machineDept', 'operEffDept'
+            'inspDeptSelect', 'prodLogDept', 'partDept', 'machineDept'
         ];
         
         selects.forEach(id => {
@@ -5503,19 +5516,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // mcUtilDept has a different first option "-- All Departments --"
-        const mcUtilDept = document.getElementById('mcUtilDept');
-        if (mcUtilDept) {
-            const currentVal = mcUtilDept.value;
-            let html = '<option value="">-- All Departments --</option>';
-            depts.forEach(d => {
-                html += `<option value="${d.name}">${d.name}</option>`;
-            });
-            mcUtilDept.innerHTML = html;
-            if (currentVal && depts.find(d => d.name === currentVal)) {
-                mcUtilDept.value = currentVal;
+        // Report dept dropdowns have "-- All Departments --" as default
+        ['mcUtilDept', 'operEffDept', 'rmReqDept'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                const currentVal = el.value;
+                let html = '<option value="">-- All Departments --</option>';
+                depts.forEach(d => {
+                    html += `<option value="${d.name}">${d.name}</option>`;
+                });
+                el.innerHTML = html;
+                if (currentVal && depts.find(d => d.name === currentVal)) {
+                    el.value = currentVal;
+                }
+                makeSearchableSelect(id, '-- All Departments --');
             }
-        }
+        });
     }
     
     // ====== SHIFT CRUD ======
@@ -6941,6 +6957,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     document.getElementById('generateOperEffBtn')?.addEventListener('click', fetchOperEffReport);
+    document.getElementById('operEffDept')?.addEventListener('change', fetchOperEffReport);
+    document.getElementById('operEffDate')?.addEventListener('change', fetchOperEffReport);
+    document.getElementById('mcUtilDept')?.addEventListener('change', () => document.getElementById('generateMcUtilBtn')?.click());
+    document.getElementById('mcUtilFromDate')?.addEventListener('change', () => document.getElementById('generateMcUtilBtn')?.click());
+    document.getElementById('mcUtilToDate')?.addEventListener('change', () => document.getElementById('generateMcUtilBtn')?.click());
+
     document.getElementById('exportOperEffBtn')?.addEventListener('click', () => {
         const table = document.getElementById('operEffTable');
         if (!table) return;

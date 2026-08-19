@@ -95,9 +95,9 @@
                 <button class="sub-tab" id="sidebarInsertCpc" data-screen="insertcpc">Insert CPC</button>
             </div>
             <div class="sub-group" id="submenuReports" style="display: none;">
-                <button class="sub-tab" id="sidebarRmRequirement" data-screen="reports">RM Requirement</button>
-                <button class="sub-tab" id="sidebarMcUtil" data-screen="reports">M/c Util</button>
-                <button class="sub-tab" id="sidebarOperEff" data-screen="reports">Oper Eff</button>
+                <button class="sub-tab" id="sidebarRmRequirement" data-screen="rm_requirement">RM Requirement</button>
+                <button class="sub-tab" id="sidebarMcUtil" data-screen="mc_util">M/c Util</button>
+                <button class="sub-tab" id="sidebarOperEff" data-screen="oper_eff">Oper Eff</button>
             </div>
             <div class="sub-group" id="submenuMaintenance" style="display: none;">
                 <button class="sub-tab" id="sidebarBdSlip" data-screen="bdslip">Breakdown Slip</button>
@@ -1501,6 +1501,20 @@
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                         Export Excel
                     </button>
+                <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; align-items: flex-end;">
+                    <div style="flex: 1; min-width: 180px;">
+                        <label for="rmReqDept" style="display: block; margin-bottom: 5px; font-weight: 500;">Department</label>
+                        <select id="rmReqDept" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+                            <option value="">-- All Departments --</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1; min-width: 180px;">
+                        <label for="rmReqForgePnInput" style="display: block; margin-bottom: 5px; font-weight: 500;">Search Forge PN</label>
+                        <input type="text" id="rmReqForgePnInput" placeholder="Search Forge PN..." style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+                    </div>
+                    <div>
+                        <button id="generateRmReqBtn" class="btn btn-primary" style="padding: 0.5rem 1rem;">Generate</button>
+                    </div>
                 </div>
                 <div class="table-container">
                     <table class="styled-table" id="rmRequirementTable">
@@ -3204,6 +3218,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=263"></script>
+    <script src="/static/app.js?v=264"></script>
 </body>
 </html>
