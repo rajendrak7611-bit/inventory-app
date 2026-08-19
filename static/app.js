@@ -2403,13 +2403,28 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         list.innerHTML = html;
-        modal.style.display = 'block';
+        modal.style.display = 'flex';
+        modal.classList.add('show');
     }
 
     function closeEditWipModal() {
         const modal = document.getElementById('editWipModal');
-        if (modal) modal.style.display = 'none';
+        if (modal) {
+            modal.style.display = 'none';
+            modal.classList.remove('show');
+        }
     }
+
+    document.getElementById('statusTable')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.edit-wip-btn');
+        if (btn) {
+            const partno = btn.getAttribute('data-partno');
+            const dept = btn.getAttribute('data-dept');
+            if (partno && dept) {
+                openEditWipModal(dept, partno);
+            }
+        }
+    });
 
     document.getElementById('closeEditWipModalBtn')?.addEventListener('click', closeEditWipModal);
     document.getElementById('cancelEditWipBtn')?.addEventListener('click', closeEditWipModal);
