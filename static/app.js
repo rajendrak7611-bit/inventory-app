@@ -2350,6 +2350,109 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- SCHEDULE STATUS LOGIC ---
     let statusAllParts = [];
     let spiderStatusDataMap = {};
+    let wipPartBalancesCache = {};
+
+    function openEditWipModal(dept, partno) {
+        const modal = document.getElementById('editWipModal');
+        const title = document.getElementById('editWipModalTitle');
+        const list = document.getElementById('editWipOperationsList');
+        const inputPart = document.getElementById('editWipPartNo');
+        const inputDept = document.getElementById('editWipDept');
+
+        if (!modal || !list) return;
+
+        inputPart.value = partno;
+        inputDept.value = dept;
+        title.textContent = `Adjust WIP Balances - Part: ${partno} (${dept})`;
+
+        const cacheKey = `${dept.trim().toUpperCase()}_${partno.trim().toUpperCase()}`;
+        const cached = wipPartBalancesCache[cacheKey] || { operations: [], rfdBal: 0 };
+
+        let html = '';
+
+        cached.operations.forEach(op => {
+            const currentBal = op.current_balance;
+            const defaultTarget = currentBal < 0 ? 0 : currentBal;
+            html += `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--card-bg);">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; font-size: 0.9rem; color: var(--text-main);">OPN ${op.opn_no} <span style="font-size: 0.8rem; font-weight: normal; color: var(--text-muted);">(${op.description})</span></div>
+                        <div style="font-size: 0.78rem; color: var(--text-muted);">Current System Balance: <strong style="${currentBal < 0 ? 'color:#ef4444;' : 'color:#10b981;'}">${currentBal}</strong></div>
+                    </div>
+                    <div style="width: 130px;">
+                        <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 2px;">Target Actual</label>
+                        <input type="number" class="wip-target-input" data-opn="${op.opn_no}" value="${defaultTarget}" style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: 600;">
+                    </div>
+                </div>
+            `;
+        });
+
+        const rfdBal = cached.rfdBal || 0;
+        const rfdDefault = rfdBal < 0 ? 0 : rfdBal;
+        html += `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(16, 185, 129, 0.05);">
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; font-size: 0.9rem; color: #10b981;">RFD (Ready For Despatch)</div>
+                    <div style="font-size: 0.78rem; color: var(--text-muted);">Current System Balance: <strong style="${rfdBal < 0 ? 'color:#ef4444;' : 'color:#10b981;'}">${rfdBal}</strong></div>
+                </div>
+                <div style="width: 130px;">
+                    <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 2px;">Target Actual</label>
+                    <input type="number" class="wip-target-input" data-opn="rfd" value="${rfdDefault}" style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: 600;">
+                </div>
+            </div>
+        `;
+
+        list.innerHTML = html;
+        modal.style.display = 'block';
+    }
+
+    function closeEditWipModal() {
+        const modal = document.getElementById('editWipModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    document.getElementById('closeEditWipModalBtn')?.addEventListener('click', closeEditWipModal);
+    document.getElementById('cancelEditWipBtn')?.addEventListener('click', closeEditWipModal);
+
+    document.getElementById('editWipForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const partno = document.getElementById('editWipPartNo').value;
+        const dept = document.getElementById('editWipDept').value;
+        const inputs = document.querySelectorAll('#editWipOperationsList .wip-target-input');
+
+        const adjustments = [];
+        inputs.forEach(inp => {
+            const opn = inp.getAttribute('data-opn');
+            const val = parseFloat(inp.value);
+            if (opn && !isNaN(val)) {
+                adjustments.push({ opn_no: opn, target_balance: val });
+            }
+        });
+
+        if (adjustments.length === 0) {
+            closeEditWipModal();
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/schedule_status/adjust_part_wip', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ department: dept, partno: partno, adjustments: adjustments })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert(data.message || 'WIP Balances saved successfully!');
+                closeEditWipModal();
+                fetchScheduleStatus();
+            } else {
+                alert('Error updating WIP Balances: ' + (data.detail || data.message || 'Unknown error'));
+            }
+        } catch (err) {
+            console.error('Error saving WIP Balances:', err);
+            alert('Failed to save WIP Balances: ' + err.message);
+        }
+    });
     
     document.getElementById('statusDeptSelect').addEventListener('change', (e) => {
         const val = e.target.value;
@@ -2616,6 +2719,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 rowHtml += `<td>${ncProd}</td>`;
                 rowHtml += `<td>${rfdBal}</td>`;
                 rowHtml += `<td>${despProd}</td>`;
+                rowHtml += `<td><button class="btn btn-outline edit-wip-btn" data-partno="${partno}" data-dept="${dept}" style="padding: 2px 8px; font-size: 0.75rem; border-color: #0284c7; color: #0284c7;" title="Adjust WIP / Actual balances for this part">✏️ Edit WIP</button></td>`;
                 
                 spiderStatusDataMap[(partno || '').trim().toUpperCase()] = {
                     schedQty,
@@ -2624,10 +2728,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     rfdBal,
                     despProd
                 };
+
+                wipPartBalancesCache[`${dept.trim().toUpperCase()}_${partno.trim().toUpperCase()}`] = {
+                    partno: partno,
+                    dept: dept,
+                    operations: operations.map((op, idx) => ({
+                        opn_no: op.opn_no,
+                        description: op.description || `OPN ${op.opn_no}`,
+                        current_balance: opnBalances[idx] !== undefined ? opnBalances[idx] : 0
+                    })),
+                    rfdBal: rfdBal
+                };
                 
                 const tr = document.createElement('tr');
                 tr.innerHTML = rowHtml;
                 tbody.appendChild(tr);
+
+                tr.querySelector('.edit-wip-btn')?.addEventListener('click', () => {
+                    openEditWipModal(dept, partno);
+                });
             }
 
             if (dept.trim().toUpperCase() === 'SPIDER') {

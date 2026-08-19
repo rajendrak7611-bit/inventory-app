@@ -1005,6 +1005,7 @@
                                 <th>nc</th>
                                 <th>rfd</th>
                                 <th>desp</th>
+                                <th>actions</th>
                             </tr>
                         </thead>
                           <tbody id="statusBody">
@@ -3274,6 +3275,34 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=273"></script>
+    <!-- Edit WIP Modal -->
+    <div class="modal" id="editWipModal">
+        <div class="modal-content" style="max-width: 550px; padding: 2rem; border-radius: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3 style="margin: 0; font-size: 1.2rem; color: var(--text-main);" id="editWipModalTitle">Adjust WIP Balances</h3>
+                <button type="button" class="close-btn" id="closeEditWipModalBtn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-muted);">&times;</button>
+            </div>
+            
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem; line-height: 1.4;">
+                Enter actual physical WIP numbers for each operation/stage below. Saving will adjust system balances to match physical shopfloor counts.
+            </p>
+
+            <form id="editWipForm">
+                <input type="hidden" id="editWipPartNo">
+                <input type="hidden" id="editWipDept">
+
+                <div id="editWipOperationsList" style="display: flex; flex-direction: column; gap: 10px; max-height: 380px; overflow-y: auto; padding-right: 5px; margin-bottom: 1.5rem;">
+                    <!-- Dynamically populated per part operations -->
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                    <button type="button" class="btn btn-secondary" id="cancelEditWipBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="background-color: #0284c7; border-color: #0284c7;">Save WIP Balances</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/app.js?v=274"></script>
 </body>
 </html>

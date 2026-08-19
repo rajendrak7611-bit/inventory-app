@@ -1517,6 +1517,108 @@ def autofix_schedule_status_wip(payload: AutofixWipPayload, db: Session = Depend
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+class OpWipAdjustmentItem(BaseModel):
+    opn_no: str
+    target_balance: float
+
+class AdjustPartWipPayload(BaseModel):
+    department: str
+    partno: str
+    adjustments: List[OpWipAdjustmentItem]
+
+@app.post("/api/schedule_status/adjust_part_wip")
+def adjust_part_wip(payload: AdjustPartWipPayload, db: Session = Depends(get_db)):
+    from datetime import datetime
+    try:
+        dept = payload.department.strip()
+        partno = payload.partno.strip()
+        
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        created_count = 0
+        
+        part_obj = db.query(PartMaster).filter(func.lower(PartMaster.partno) == partno.lower()).first()
+        operations = []
+        if part_obj:
+            ops = db.query(PartOperation).filter(PartOperation.part_id == part_obj.id).all()
+            def parse_opn(op):
+                try:
+                    return int(op.opn_no)
+                except:
+                    return 9999
+            operations = sorted(ops, key=parse_opn)
+            
+        all_logs = db.query(ProductionLog).filter(func.lower(ProductionLog.partno) == partno.lower()).all()
+        all_rm_logs = db.query(RawMaterialLog).filter(func.lower(RawMaterialLog.finish_part_no) == partno.lower()).all()
+        
+        desp_prod = sum((l.qty or 0) for l in all_rm_logs if (l.type or "").lower() == "despatch")
+        
+        target_map = { (adj.opn_no or "").strip().lower(): adj.target_balance for adj in payload.adjustments }
+        
+        rfd_clean = "rfd"
+        if rfd_clean in target_map:
+            target_rfd_bal = target_map[rfd_clean]
+            req_rfd_prod = target_rfd_bal + desp_prod
+            curr_rfd_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "rfd")
+            diff = req_rfd_prod - curr_rfd_prod
+            if diff != 0:
+                fix_log = ProductionLog(
+                    dept=dept, date=today_str, shift="1", setter="-", machine="-", operator="-",
+                    partno=partno, opn_no="rfd", description="Manual WIP Adjustment",
+                    runtime=0.0, target_qty=diff, prod_qty=diff, efficiency=100.0,
+                    idle_hours=0.0, idle_reason="Manual WIP Adjustment", cycle_time=0.0
+                )
+                db.add(fix_log)
+                created_count += 1
+                all_logs.append(fix_log)
+                
+        rfd_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "rfd")
+        rework_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "rework")
+        nc_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "nc")
+        rejection_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "rejection")
+        for_ins_total = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "for ins")
+        debur_total = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "debur")
+        
+        for i in range(len(operations) - 1, -1, -1):
+            op = operations[i]
+            opn_clean = (op.opn_no or "").strip().lower()
+            
+            if opn_clean not in target_map:
+                continue
+                
+            target_bal = target_map[opn_clean]
+            
+            next_op = operations[i + 1] if i + 1 < len(operations) else None
+            next_prod = 0
+            if next_op:
+                next_opn_clean = (next_op.opn_no or "").strip().lower()
+                next_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").strip().lower() == next_opn_clean)
+            else:
+                total_inspected = max(for_ins_total, rfd_prod + rework_prod + nc_prod + rejection_prod)
+                next_prod = max(debur_total, for_ins_total, total_inspected)
+                
+            req_curr_prod = target_bal + next_prod
+            curr_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").strip().lower() == opn_clean)
+            diff = req_curr_prod - curr_prod
+            
+            if diff != 0:
+                op_fix = ProductionLog(
+                    dept=dept, date=today_str, shift="1", setter="-", machine=op.machine or "-", operator="-",
+                    partno=partno, opn_no=op.opn_no, description=f"Opn {op.opn_no} Manual WIP Adjustment",
+                    runtime=0.0, target_qty=diff, prod_qty=diff, efficiency=100.0,
+                    idle_hours=0.0, idle_reason="Manual WIP Adjustment", cycle_time=op.cycle_time or 0.0
+                )
+                db.add(op_fix)
+                created_count += 1
+                all_logs.append(op_fix)
+                
+        db.commit()
+        return {"message": f"Successfully updated WIP for part {partno} ({created_count} adjustment entries).", "created_logs": created_count}
+    except Exception as e:
+        db.rollback()
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 # --- RAW MATERIALS ENDPOINTS ---
 @app.get("/api/rawmaterials", response_model=List[RawMaterialResponse])
 def get_raw_materials(db: Session = Depends(get_db)):
