@@ -2396,11 +2396,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert(data.message || 'WIP Auto-Fix complete!');
                 fetchScheduleStatus();
             } else {
-                alert('Error performing WIP Auto-Fix: ' + (data.detail || 'Unknown error'));
+                alert('Error performing WIP Auto-Fix: ' + (data.detail || data.message || 'Unknown server error'));
             }
         } catch (err) {
             console.error('Error in Auto-Fix WIP:', err);
-            alert('Failed to execute WIP Auto-Fix.');
+            alert('Failed to execute WIP Auto-Fix: ' + err.message);
         } finally {
             btn.disabled = false;
             btn.innerHTML = origText;
