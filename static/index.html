@@ -90,6 +90,7 @@
                 <button class="sub-tab" id="sidebarInsertReceipt" data-screen="insertreceipt">Insert/Tap Receipt</button>
                 <button class="sub-tab" id="sidebarInsertIssue" data-screen="insertissue">Insert/Tap Issue</button>
                 <button class="sub-tab" id="sidebarInsertCpc" data-screen="insertcpc">Insert CPC</button>
+                <button class="sub-tab" id="sidebarInsertStock" data-screen="insertstock">Insert Stock</button>
             </div>
             <div class="sub-group" id="submenuReports" style="display: none;">
                 <button class="sub-tab" id="sidebarRmRequirement" data-screen="rm_requirement">RM Requirement</button>
@@ -423,6 +424,53 @@
                     </thead>
                     <tbody id="insertCpcBody">
                     </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Insert Stock Section -->
+        <div class="table-container" id="insertStockSection" style="display: none; padding: 2rem; color: var(--text-main);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                <h2 style="margin: 0;">Insert Stock Summary</h2>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="insertStockSearchInput" placeholder="Search Insert Spec..." style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif; min-width: 220px;">
+                    <button id="exportInsertStockBtn" class="btn btn-outline" style="padding: 0.5rem 1rem; font-size: 0.85rem;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Export Excel
+                    </button>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 180px; background: rgba(0, 122, 255, 0.06); border: 1px solid rgba(0, 122, 255, 0.2); border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">Total Variants</div>
+                    <div id="insertStockTotalVariants" style="font-size: 1.5rem; font-weight: 700; color: #007aff; margin-top: 4px;">0</div>
+                </div>
+                <div style="flex: 1; min-width: 180px; background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">Total Stock Qty</div>
+                    <div id="insertStockTotalQty" style="font-size: 1.5rem; font-weight: 700; color: #10b981; margin-top: 4px;">0</div>
+                </div>
+                <div style="flex: 1; min-width: 180px; background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">Total Stock Value</div>
+                    <div id="insertStockTotalValue" style="font-size: 1.5rem; font-weight: 700; color: #f59e0b; margin-top: 4px;">Rs. 0.00</div>
+                </div>
+            </div>
+
+            <div style="max-height: 700px; overflow-y: auto;">
+                <table class="styled-table" id="insertStockTable" style="width: 100%; white-space: nowrap;">
+                    <thead>
+                        <tr>
+                            <th>INSERT SPEC (VARIANT)</th>
+                            <th>NO. OF EDGES</th>
+                            <th>TOTAL RECEIVED</th>
+                            <th>TOTAL ISSUED</th>
+                            <th>CURRENT STOCK</th>
+                            <th>AVG RATE (RS)</th>
+                            <th>TOTAL VALUE (RS)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="insertStockBody"></tbody>
                 </table>
             </div>
         </div>
@@ -1657,6 +1705,7 @@
                                     <label><input type="checkbox" value="drillmaster"> Drill Master</label>
                                     <label><input type="checkbox" value="insertreceipt"> Insert/Tap Receipt</label>
                                     <label><input type="checkbox" value="insertissue"> Insert/Tap Issue</label>
+                                    <label><input type="checkbox" value="insertstock"> Insert Stock</label>
                                     <label><input type="checkbox" value="partmaster"> Part Master</label>
                                     <label><input type="checkbox" value="machines"> Machines</label>
                                     <label><input type="checkbox" value="operators"> Operators</label>
@@ -3220,6 +3269,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=270"></script>
+    <script src="/static/app.js?v=271"></script>
 </body>
 </html>

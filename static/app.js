@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         allTabs.forEach(tab => {
             const screen = tab.getAttribute('data-screen');
-            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || ((screen === 'rawmaterial' || screen === 'ht' || screen === 'pc') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) || (screen === 'attendance' && accessibleScreens.includes('hr')) || ((screen === 'bdslip' || screen === 'servicedetails') && (accessibleScreens.includes('maintenance') || accessibleScreens.includes('bdslip') || accessibleScreens.includes('servicedetails'))) || ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'tapmaster' || screen === 'insertreceipt' || screen === 'tapreceipt' || screen === 'insertissue' || screen === 'tapissue' || screen === 'insertcpc') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib'))) || ((screen === 'rm_requirement' || screen === 'mc_util' || screen === 'oper_eff' || screen === 'reports') && accessibleScreens.includes('reports'));
+            const isAllowed = userObj.role === 'admin' || accessibleScreens.includes(screen) || ((screen === 'rawmaterial' || screen === 'ht' || screen === 'pc') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) || (screen === 'attendance' && accessibleScreens.includes('hr')) || ((screen === 'bdslip' || screen === 'servicedetails') && (accessibleScreens.includes('maintenance') || accessibleScreens.includes('bdslip') || accessibleScreens.includes('servicedetails'))) || ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'tapmaster' || screen === 'insertreceipt' || screen === 'tapreceipt' || screen === 'insertissue' || screen === 'tapissue' || screen === 'insertcpc' || screen === 'insertstock') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib'))) || ((screen === 'rm_requirement' || screen === 'mc_util' || screen === 'oper_eff' || screen === 'reports') && accessibleScreens.includes('reports'));
             if (isAllowed) {
                 tab.style.display = 'inline-block';
                 if (!firstAvailableTab) firstAvailableTab = tab;
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'master': ['partmaster', 'machines', 'operators', 'dept', 'shift', 'vendors', 'setters', 'suppliers'],
                     'inventory': ['inventory', 'rawmaterial', 'ht', 'pc'],
                     'production': ['schedule', 'status', 'prodlog', 'debur'],
-                    'toolcrib': ['insertmaster', 'drillmaster', 'products', 'insertreceipt', 'insertissue', 'insertcpc'],
+                    'toolcrib': ['insertmaster', 'drillmaster', 'products', 'insertreceipt', 'insertissue', 'insertcpc', 'insertstock'],
                     'reports': ['reports', 'rm_requirement', 'mc_util', 'oper_eff'],
                     'maintenance': ['maintenance', 'bdslip', 'servicedetails'],
                     'hr': ['hr', 'attendance']
@@ -312,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const sections = [
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection',
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
-            'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'partMasterSection', 'machinesSection',
+            'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'insertStockSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
             'inspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'hrSection', 'attendanceSection'
@@ -569,6 +569,13 @@ document.addEventListener('DOMContentLoaded', () => {
             importBtn.style.display = 'none';
             addBtn.style.display = 'none';
             fetchInsertCpcReport();
+        }},
+        'sidebarInsertStock': { tab: 'insertstock', action: () => {
+            const sec = document.getElementById('insertStockSection');
+            if (sec) sec.style.display = 'block';
+            importBtn.style.display = 'none';
+            addBtn.style.display = 'none';
+            fetchInsertStockReport();
         }},
         'sidebarOperEff': { tab: 'oper_eff', action: () => {
             const operEffSec = document.getElementById('operEffSection');
@@ -11414,5 +11421,171 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!table) return;
         const wb = XLSX.utils.table_to_book(table, { sheet: "Insert_CPC_Report" });
         XLSX.writeFile(wb, `Insert_CPC_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    });
+
+    // --- Insert Stock Summary Implementation ---
+    let allInsertStockCache = [];
+
+    async function fetchInsertStockReport() {
+        const tbody = document.getElementById('insertStockBody');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted); padding: 1.5rem;">Loading Insert Stock...</td></tr>';
+
+        try {
+            const [mastersRes, receiptsRes, issuesRes] = await Promise.all([
+                fetch('/api/insert_masters'),
+                fetch('/api/insert_receipts'),
+                fetch('/api/insert_issues')
+            ]);
+
+            const masters = await mastersRes.json();
+            const receipts = await receiptsRes.json();
+            const issues = await issuesRes.json();
+
+            const variantsMap = {};
+
+            // 1. Initialize from Insert Masters
+            masters.forEach(m => {
+                const spec = (m.insert_spec || m.name || '').trim();
+                if (spec) {
+                    const key = spec.toUpperCase();
+                    if (!variantsMap[key]) {
+                        variantsMap[key] = {
+                            spec: spec,
+                            no_of_edges: m.no_of_edges || m.edges || '-',
+                            total_received: 0,
+                            total_issued: 0,
+                            current_stock: 0,
+                            total_value: 0,
+                            last_rate: parseFloat(m.rate || m.cost || m.price || 0) || 0
+                        };
+                    } else if (m.no_of_edges) {
+                        variantsMap[key].no_of_edges = m.no_of_edges;
+                    }
+                }
+            });
+
+            // 2. Aggregate Receipts (remaining batch stock & rate)
+            receipts.forEach(r => {
+                const spec = (r.insert_spec || '').trim();
+                if (!spec) return;
+                const key = spec.toUpperCase();
+                if (!variantsMap[key]) {
+                    variantsMap[key] = {
+                        spec: spec,
+                        no_of_edges: '-',
+                        total_received: 0,
+                        total_issued: 0,
+                        current_stock: 0,
+                        total_value: 0,
+                        last_rate: 0
+                    };
+                }
+                const rQty = parseInt(r.qty) || 0;
+                const rRate = parseFloat(r.rate) || 0;
+
+                if (rQty > 0) {
+                    variantsMap[key].current_stock += rQty;
+                    variantsMap[key].total_value += (rQty * rRate);
+                }
+                if (rRate > 0) {
+                    variantsMap[key].last_rate = rRate;
+                }
+            });
+
+            // 3. Aggregate Issues
+            issues.forEach(i => {
+                const spec = (i.insert_spec || '').trim();
+                if (!spec) return;
+                const key = spec.toUpperCase();
+                if (!variantsMap[key]) {
+                    variantsMap[key] = {
+                        spec: spec,
+                        no_of_edges: '-',
+                        total_received: 0,
+                        total_issued: 0,
+                        current_stock: 0,
+                        total_value: 0,
+                        last_rate: 0
+                    };
+                }
+                const iQty = parseInt(i.qty_issued) || 0;
+                variantsMap[key].total_issued += iQty;
+            });
+
+            // 4. Calculate total received & average rate
+            Object.values(variantsMap).forEach(v => {
+                v.total_received = v.current_stock + v.total_issued;
+                v.avg_rate = v.current_stock > 0 ? (v.total_value / v.current_stock) : v.last_rate;
+            });
+
+            allInsertStockCache = Object.values(variantsMap).sort((a, b) => a.spec.localeCompare(b.spec, undefined, { numeric: true, sensitivity: 'base' }));
+
+            renderInsertStockTable(allInsertStockCache);
+
+        } catch (err) {
+            console.error('Error fetching Insert Stock:', err);
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: #ef4444; padding: 1.5rem;">Error loading Insert Stock data</td></tr>';
+        }
+    }
+
+    function renderInsertStockTable(data) {
+        const tbody = document.getElementById('insertStockBody');
+        if (!tbody) return;
+        const searchVal = (document.getElementById('insertStockSearchInput')?.value || '').trim().toLowerCase();
+
+        let filtered = data;
+        if (searchVal) {
+            filtered = data.filter(d => d.spec.toLowerCase().includes(searchVal));
+        }
+
+        let grandTotalVariants = filtered.length;
+        let grandTotalStock = 0;
+        let grandTotalValue = 0;
+
+        tbody.innerHTML = '';
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--text-muted); padding: 1.5rem;">No insert variants found matching search.</td></tr>';
+        } else {
+            filtered.forEach(item => {
+                grandTotalStock += item.current_stock;
+                grandTotalValue += item.total_value;
+
+                const tr = document.createElement('tr');
+                const stockStyle = item.current_stock > 0 
+                    ? 'color: #10b981; font-weight: 700; background: rgba(16, 185, 129, 0.08); padding: 4px 8px; border-radius: 4px; display: inline-block;' 
+                    : 'color: #ef4444; font-weight: 600; background: rgba(239, 68, 68, 0.08); padding: 4px 8px; border-radius: 4px; display: inline-block;';
+
+                tr.innerHTML = `
+                    <td style="font-weight: 600; color: var(--text-main);">${item.spec}</td>
+                    <td style="text-align: center;">${item.no_of_edges}</td>
+                    <td style="text-align: center;">${item.total_received}</td>
+                    <td style="text-align: center;">${item.total_issued}</td>
+                    <td style="text-align: center;"><span style="${stockStyle}">${item.current_stock}</span></td>
+                    <td style="text-align: right;">Rs. ${item.avg_rate.toFixed(2)}</td>
+                    <td style="text-align: right; font-weight: 600;">Rs. ${item.total_value.toFixed(2)}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        const varEl = document.getElementById('insertStockTotalVariants');
+        const qtyEl = document.getElementById('insertStockTotalQty');
+        const valEl = document.getElementById('insertStockTotalValue');
+
+        if (varEl) varEl.textContent = grandTotalVariants;
+        if (qtyEl) qtyEl.textContent = grandTotalStock;
+        if (valEl) valEl.textContent = `Rs. ${grandTotalValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+
+    document.getElementById('insertStockSearchInput')?.addEventListener('input', () => {
+        renderInsertStockTable(allInsertStockCache);
+    });
+
+    document.getElementById('exportInsertStockBtn')?.addEventListener('click', () => {
+        const table = document.getElementById('insertStockTable');
+        if (!table) return;
+        const wb = XLSX.utils.table_to_book(table, { sheet: "Insert_Stock" });
+        XLSX.writeFile(wb, `Insert_Stock_Summary_${new Date().toISOString().slice(0, 10)}.xlsx`);
     });
 });
