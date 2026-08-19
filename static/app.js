@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'master': ['partmaster', 'machines', 'operators', 'dept', 'shift', 'vendors', 'setters', 'suppliers'],
                     'inventory': ['inventory', 'rawmaterial', 'ht', 'pc'],
                     'production': ['schedule', 'status', 'prodlog', 'debur'],
-                    'toolcrib': ['insertmaster', 'drillmaster', 'tapmaster', 'products', 'insertreceipt', 'tapreceipt', 'insertissue', 'tapissue', 'insertcpc'],
+                    'toolcrib': ['insertmaster', 'drillmaster', 'products', 'insertreceipt', 'insertissue', 'insertcpc'],
                     'reports': ['reports', 'rm_requirement', 'mc_util', 'oper_eff'],
                     'maintenance': ['maintenance', 'bdslip', 'servicedetails'],
                     'hr': ['hr', 'attendance']
