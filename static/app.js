@@ -322,10 +322,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (el) el.style.display = 'none';
         });
 
-        document.querySelectorAll('.table-container:not(.modal *)').forEach(el => {
-            el.style.display = 'none';
-        });
-        
         document.querySelectorAll('.main-tab').forEach(btn => btn.classList.remove('active'));
         document.querySelectorAll('.sub-tab').forEach(btn => btn.classList.remove('active'));
         importBtn.style.display = 'none';
@@ -490,7 +486,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }},
         'sidebarRmRequirement': { tab: 'rm_requirement', action: () => { 
             const rmReqSec = document.getElementById('rmRequirementSection');
-            if (rmReqSec) rmReqSec.style.display = 'block';
+            if (rmReqSec) {
+                rmReqSec.style.display = 'block';
+                rmReqSec.querySelectorAll('.table-container').forEach(tc => tc.style.display = 'block');
+            }
             addBtn.style.display = 'none';
             if (typeof fetchDepartments === 'function') fetchDepartments();
             fetchRmRequirement();
@@ -502,7 +501,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }},
         'sidebarMcUtil': { tab: 'mc_util', action: () => { 
             const mcUtilSec = document.getElementById('mcUtilSection');
-            if (mcUtilSec) mcUtilSec.style.display = 'block';
+            if (mcUtilSec) {
+                mcUtilSec.style.display = 'block';
+                mcUtilSec.querySelectorAll('.table-container').forEach(tc => tc.style.display = 'block');
+            }
             addBtn.style.display = 'none';
             if (typeof fetchDepartments === 'function') fetchDepartments();
             if (!document.getElementById('mcUtilToDate').value) {
@@ -570,7 +572,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }},
         'sidebarOperEff': { tab: 'oper_eff', action: () => {
             const operEffSec = document.getElementById('operEffSection');
-            if (operEffSec) operEffSec.style.display = 'block';
+            if (operEffSec) {
+                operEffSec.style.display = 'block';
+                operEffSec.querySelectorAll('.table-container').forEach(tc => tc.style.display = 'block');
+            }
             addBtn.style.display = 'none';
             if (typeof fetchDepartments === 'function') fetchDepartments();
             if (!document.getElementById('operEffDate').value) {
@@ -5529,7 +5534,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (currentVal && depts.find(d => d.name === currentVal)) {
                     el.value = currentVal;
                 }
-                makeSearchableSelect(id, '-- All Departments --');
             }
         });
     }
