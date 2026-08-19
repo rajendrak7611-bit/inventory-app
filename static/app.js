@@ -507,11 +507,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             addBtn.style.display = 'none';
             if (typeof fetchDepartments === 'function') fetchDepartments();
-            if (!document.getElementById('mcUtilToDate').value) {
-                const today = new Date().toISOString().split('T')[0];
-                document.getElementById('mcUtilToDate').value = today;
-                document.getElementById('mcUtilFromDate').value = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
-            }
+            const fromEl = document.getElementById('mcUtilFromDate');
+            const toEl = document.getElementById('mcUtilToDate');
+            const today = new Date().toISOString().split('T')[0];
+            if (toEl && !toEl.value) toEl.value = today;
+            if (fromEl && !fromEl.value) fromEl.value = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
             document.getElementById('generateMcUtilBtn')?.click();
         }},
         'sidebarInsertMaster': { tab: 'insertmaster', action: () => {
@@ -578,9 +578,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             addBtn.style.display = 'none';
             if (typeof fetchDepartments === 'function') fetchDepartments();
-            if (!document.getElementById('operEffDate').value) {
-                const today = new Date().toISOString().split('T')[0];
-                document.getElementById('operEffDate').value = today;
+            const dateEl = document.getElementById('operEffDate');
+            if (dateEl && !dateEl.value) {
+                dateEl.value = new Date().toISOString().split('T')[0];
             }
             if (typeof fetchOperEffReport === 'function') fetchOperEffReport();
         }},
