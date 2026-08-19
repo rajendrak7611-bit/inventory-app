@@ -2350,6 +2350,14 @@ document.addEventListener('DOMContentLoaded', () => {
         else localStorage.removeItem('saved_status_dept');
         fetchScheduleStatus();
     });
+
+    const statusCustSelect = document.getElementById('statusCustomerSelect');
+    if (statusCustSelect) {
+        statusCustSelect.addEventListener('change', () => {
+            fetchScheduleStatus();
+        });
+    }
+
     document.getElementById('exportStatusBtn').addEventListener('click', () => {
         const table = document.getElementById('statusTable');
         if (!table) return;
@@ -2357,12 +2365,34 @@ document.addEventListener('DOMContentLoaded', () => {
         XLSX.writeFile(wb, `Schedule_Status_${new Date().toISOString().slice(0,10)}.xlsx`);
     });
     
+    function populateStatusCustomerDropdown() {
+        const custSelect = document.getElementById('statusCustomerSelect');
+        if (!custSelect) return;
+        const currentVal = custSelect.value;
+        const custSet = new Set();
+        (statusAllParts || []).forEach(p => {
+            if (p.customer && p.customer.trim()) {
+                custSet.add(p.customer.trim());
+            }
+        });
+        const sortedCusts = Array.from(custSet).sort((a, b) => a.localeCompare(b));
+        let html = '<option value="">-- All Customers --</option>';
+        sortedCusts.forEach(c => {
+            html += `<option value="${c}">${c}</option>`;
+        });
+        custSelect.innerHTML = html;
+        if (currentVal && sortedCusts.includes(currentVal)) {
+            custSelect.value = currentVal;
+        }
+    }
+
     async function initScheduleStatus() {
         try {
             if (statusAllParts.length === 0) {
                 const partsRes = await fetch('/api/partmaster');
                 statusAllParts = await partsRes.json();
             }
+            populateStatusCustomerDropdown();
             
             const deptSelect = document.getElementById('statusDeptSelect');
             const savedDept = localStorage.getItem('saved_status_dept');
@@ -2379,6 +2409,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchScheduleStatus() {
         const dept = document.getElementById('statusDeptSelect').value;
+        const custFilter = (document.getElementById('statusCustomerSelect')?.value || '').trim().toUpperCase();
         const tbody = document.getElementById('statusBody');
         tbody.innerHTML = '';
         if (!dept) return;
@@ -2390,6 +2421,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     statusAllParts = await partsRes.json();
                 } catch(e) { statusAllParts = []; }
             }
+            populateStatusCustomerDropdown();
+
             const [schedRes, logRes, rmLogRes, htLogRes, htReceiptLogRes, pcLogRes, pcReceiptLogRes, rmRes] = await Promise.all([
                 fetch('/api/schedule'),
                 fetch('/api/prodlog'),
@@ -2415,6 +2448,11 @@ document.addEventListener('DOMContentLoaded', () => {
             
             for (const partno of uniqueParts) {
                 const partObj = (statusAllParts || []).find(p => (p.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase());
+                const cust = (partObj && partObj.customer) ? partObj.customer.trim() : '';
+
+                if (custFilter && cust.toUpperCase() !== custFilter) {
+                    continue;
+                }
                 
                 let operations = [];
                 if (partObj) {
@@ -2434,7 +2472,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const partSchedules = deptSchedules.filter(s => s.partno === partno);
                 const schedQty = partSchedules.reduce((sum, s) => sum + (s.qty || 0), 0);
                 
-                let rowHtml = `<td>${partno}</td><td>${schedQty}</td>`;
+                let rowHtml = `<td>${cust || '-'}</td><td>${partno}</td><td>${schedQty}</td>`;
                 
                 let opnBalances = [];
                 const group1Parts = ["C100", "RS120", "RVI", "Q109", "R149", "RS160"];
