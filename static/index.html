@@ -85,10 +85,10 @@
                 <button class="sub-tab" id="sidebarDebur" data-screen="debur">Debur</button>
             </div>
             <div class="sub-group" id="submenuToolcrib" style="display: none;">
-                <button class="sub-tab" id="sidebarInsertMaster" data-screen="insertmaster">Insert Master</button>
+                <button class="sub-tab" id="sidebarInsertMaster" data-screen="insertmaster">Insert/Tap Master</button>
                 <button class="sub-tab" id="sidebarDrillMaster" data-screen="drillmaster">Drill Master</button>
-                <button class="sub-tab" id="sidebarInsertReceipt" data-screen="insertreceipt">Insert Receipt</button>
-                <button class="sub-tab" id="sidebarInsertIssue" data-screen="insertissue">Insert Issue</button>
+                <button class="sub-tab" id="sidebarInsertReceipt" data-screen="insertreceipt">Insert/Tap Receipt</button>
+                <button class="sub-tab" id="sidebarInsertIssue" data-screen="insertissue">Insert/Tap Issue</button>
                 <button class="sub-tab" id="sidebarInsertCpc" data-screen="insertcpc">Insert CPC</button>
             </div>
             <div class="sub-group" id="submenuReports" style="display: none;">
@@ -109,7 +109,7 @@
         <!-- Insert Master Section -->
         <div class="table-container" id="insertMasterSection" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h2>Insert Master</h2>
+                <h2>Insert/Tap Master</h2>
                 <div style="display: flex; gap: 10px;">
                     <button id="deleteAllInsertMastersBtn" class="btn btn-outline delete-btn" style="color: #ef4444; border-color: #ef4444;">Clear All Entries</button>
                     <button id="importInsertMasterBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px;">
@@ -190,7 +190,7 @@
         <!-- Insert Receipt Section -->
         <div class="table-container" id="insertReceiptSection" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h2>Insert Receipt</h2>
+                <h2>Insert/Tap Receipt</h2>
                 <div style="display: flex; gap: 10px;">
                     <button id="deleteAllInsertReceiptsBtn" class="btn btn-outline delete-btn" style="color: #ef4444; border-color: #ef4444;">Clear All Entries</button>
                     <button id="importInsertReceiptBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px;">
@@ -270,7 +270,7 @@
         <!-- Insert Issue Section -->
         <div class="table-container" id="insertIssueSection" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h2>Insert Issue</h2>
+                <h2>Insert/Tap Issue</h2>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <button id="deleteAllInsertIssuesBtn" class="btn btn-outline delete-btn" style="color: #ef4444; border-color: #ef4444;">Clear All Entries</button>
                     <button id="importInsertIssueBtn" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px;">
@@ -1649,10 +1649,10 @@
                                 <div style="display: flex; flex-direction: column; gap: 8px;" id="userScreensList">
                                     <label><input type="checkbox" value="inventory"> Inventory</label>
                                     <label><input type="checkbox" value="products"> Tools</label>
-                                    <label><input type="checkbox" value="insertmaster"> Insert Master</label>
+                                    <label><input type="checkbox" value="insertmaster"> Insert/Tap Master</label>
                                     <label><input type="checkbox" value="drillmaster"> Drill Master</label>
-                                    <label><input type="checkbox" value="insertreceipt"> Insert Receipt</label>
-                                    <label><input type="checkbox" value="insertissue"> Insert Issue</label>
+                                    <label><input type="checkbox" value="insertreceipt"> Insert/Tap Receipt</label>
+                                    <label><input type="checkbox" value="insertissue"> Insert/Tap Issue</label>
                                     <label><input type="checkbox" value="partmaster"> Part Master</label>
                                     <label><input type="checkbox" value="machines"> Machines</label>
                                     <label><input type="checkbox" value="operators"> Operators</label>
@@ -3216,6 +3216,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=268"></script>
+    <script src="/static/app.js?v=269"></script>
 </body>
 </html>
