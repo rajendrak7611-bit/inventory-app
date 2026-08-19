@@ -2671,9 +2671,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         // If opn is PC, set currentProd to PC Received total
                         if (isPcOpn) {
                             const pcRec = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
-                            if (pcRec > 0 || currentProd === 0) {
-                                currentProd = pcRec;
-                            }
+                            currentProd = Math.max(currentProd, pcRec);
                         }
 
                         // Deduct HT sent for Turning (Opn 40 / OPN 3) for Group 1 HT parts

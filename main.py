@@ -1549,6 +1549,13 @@ def adjust_part_wip(payload: AdjustPartWipPayload, db: Session = Depends(get_db)
             
         all_logs = db.query(ProductionLog).filter(func.lower(ProductionLog.partno) == partno.lower()).all()
         all_rm_logs = db.query(RawMaterialLog).filter(func.lower(RawMaterialLog.finish_part_no) == partno.lower()).all()
+        all_ht_logs = db.query(HtLog).filter(func.lower(HtLog.partno) == partno.lower()).all()
+        all_ht_receipt_logs = db.query(HtReceiptLog).filter(func.lower(HtReceiptLog.partno) == partno.lower()).all()
+        all_pc_logs = db.query(PcLog).filter(func.lower(PcLog.partno) == partno.lower()).all()
+        all_pc_receipt_logs = db.query(PcReceiptLog).filter(func.lower(PcReceiptLog.partno) == partno.lower()).all()
+
+        group1_parts = ["C100", "RS120", "RVI", "Q109", "R149", "RS160"]
+        is_group1_ht = partno.upper() in group1_parts
         
         desp_prod = sum((l.qty or 0) for l in all_rm_logs if (l.type or "").lower() == "despatch")
         
@@ -1581,7 +1588,10 @@ def adjust_part_wip(payload: AdjustPartWipPayload, db: Session = Depends(get_db)
         for i in range(len(operations) - 1, -1, -1):
             op = operations[i]
             opn_clean = (op.opn_no or "").strip().lower()
-            
+            desc_clean = (op.description or "").strip().lower()
+            mach_clean = (op.machine or "").strip().lower()
+            is_pc_opn = opn_clean == 'pc' or desc_clean == 'pc' or 'powder coat' in desc_clean or mach_clean == 'pc'
+
             if opn_clean not in target_map:
                 continue
                 
@@ -1591,14 +1601,37 @@ def adjust_part_wip(payload: AdjustPartWipPayload, db: Session = Depends(get_db)
             next_prod = 0
             if next_op:
                 next_opn_clean = (next_op.opn_no or "").strip().lower()
-                next_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").strip().lower() == next_opn_clean)
+                if is_group1_ht and next_opn_clean in ['50', 'opn 50', 'opn50']:
+                    next_prod = 0
+                else:
+                    next_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").strip().lower() == next_opn_clean)
             else:
                 total_inspected = max(for_ins_total, rfd_prod + rework_prod + nc_prod + rejection_prod)
                 next_prod = max(debur_total, for_ins_total, total_inspected)
                 
-            req_curr_prod = target_bal + next_prod
-            curr_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").strip().lower() == opn_clean)
-            diff = req_curr_prod - curr_prod
+            req_eff_curr_prod = target_bal + next_prod
+
+            if next_op:
+                next_opn_clean = (next_op.opn_no or "").strip().lower()
+                next_desc_clean = (next_op.description or "").strip().lower()
+                next_mach_clean = (next_op.machine or "").strip().lower()
+                is_next_pc = next_opn_clean == 'pc' or next_desc_clean == 'pc' or 'powder coat' in next_desc_clean or next_mach_clean == 'pc'
+                if is_next_pc:
+                    pc_sent = sum((l.qty or 0) for l in all_pc_logs)
+                    req_eff_curr_prod += pc_sent
+            
+            if is_group1_ht and opn_clean in ['40', 'opn 40', 'opn40']:
+                ht_sent = sum((l.qty or 0) for l in all_ht_logs)
+                req_eff_curr_prod += ht_sent
+
+            curr_log_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").strip().lower() == opn_clean)
+            if is_pc_opn:
+                pc_rec = sum((l.qty or 0) for l in all_pc_receipt_logs)
+                curr_prod = max(curr_log_prod, pc_rec)
+            else:
+                curr_prod = curr_log_prod
+
+            diff = req_eff_curr_prod - curr_prod
             
             if diff != 0:
                 op_fix = ProductionLog(
