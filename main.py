@@ -540,12 +540,18 @@ def delete_partmaster(part_id: int, db: Session = Depends(get_db)):
     return {"message": "Part deleted successfully"}
 
 # --- Part Operations Routes ---
+@app.get("/api/parts", response_model=List[PartMasterResponse])
+def read_parts_alias(skip: int = 0, limit: int = 10000, db: Session = Depends(get_db)):
+    return read_partmaster(skip=skip, limit=limit, db=db)
+
 @app.get("/api/partmaster/{part_id}/operations", response_model=List[PartOperationResponse])
+@app.get("/api/parts/{part_id}/operations", response_model=List[PartOperationResponse])
 def get_part_operations(part_id: int, db: Session = Depends(get_db)):
     operations = db.query(PartOperation).filter(PartOperation.part_id == part_id).order_by(PartOperation.id).all()
     return operations
 
 @app.put("/api/partmaster/{part_id}/operations")
+@app.put("/api/parts/{part_id}/operations")
 def update_part_operations(part_id: int, operations: List[PartOperationCreate], db: Session = Depends(get_db)):
     db_part = db.query(PartMaster).filter(PartMaster.id == part_id).first()
     if not db_part:

@@ -1170,85 +1170,113 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMachineOptions = '';
     
     function addOperationRow(op = { opn_no: '', description: '', machine: '', cycle_time: '' }) {
-        const uniqueListId = 'machineList_' + Math.random().toString(36).substring(7);
+        let defaultOpn = (op && op.opn_no !== undefined && op.opn_no !== null) ? op.opn_no : '';
+        if (defaultOpn === '' && operationsBody) {
+            const existingRows = operationsBody.querySelectorAll('tr');
+            let maxOpn = 0;
+            existingRows.forEach(r => {
+                const inp = r.querySelector('.opn-no');
+                const val = inp ? parseInt(inp.value, 10) : NaN;
+                if (!isNaN(val) && val > maxOpn) maxOpn = val;
+            });
+            defaultOpn = maxOpn > 0 ? (maxOpn + 10) : 10;
+        }
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td><input type="text" class="opn-no" value="${op.opn_no}" style="width: 100%; padding: 8px;"></td>
-            <td><input type="text" class="op-desc" value="${op.description}" style="width: 100%; padding: 8px;"></td>
+            <td><input type="text" class="opn-no" value="${defaultOpn}" placeholder="10" style="width: 100%; padding: 6px 8px; border: 1px solid var(--border-color, #cbd5e1); border-radius: 4px;"></td>
+            <td><input type="text" class="op-desc" value="${op.description || ''}" placeholder="Operation description" style="width: 100%; padding: 6px 8px; border: 1px solid var(--border-color, #cbd5e1); border-radius: 4px;"></td>
             <td>
-                <select class="op-mach" style="width: 100%; padding: 8px;">
+                <select class="op-mach" style="width: 100%; padding: 6px 8px; border: 1px solid var(--border-color, #cbd5e1); border-radius: 4px;">
                     ${currentMachineOptions}
                 </select>
             </td>
-            <td><input type="number" step="0.01" class="op-time" value="${op.cycle_time || ''}" style="width: 100%; padding: 8px;"></td>
+            <td><input type="number" step="0.01" min="0" class="op-time" value="${op.cycle_time || ''}" placeholder="0.00" style="width: 100%; padding: 6px 8px; border: 1px solid var(--border-color, #cbd5e1); border-radius: 4px;"></td>
+            <td style="text-align: center;">
+                <button type="button" class="btn btn-outline remove-op-row-btn" style="padding: 2px 8px; color: #ef4444; border-color: #ef4444; font-size: 0.8rem;" title="Delete Operation">&times;</button>
+            </td>
         `;
         const selectEl = tr.querySelector('.op-mach');
         if (op.machine) selectEl.value = op.machine;
-        operationsBody.appendChild(tr);
-        new TomSelect(selectEl, {
-            create: true,
-            sortField: { field: "text", direction: "asc" }
+        
+        tr.querySelector('.remove-op-row-btn')?.addEventListener('click', () => {
+            tr.remove();
         });
+
+        if (operationsBody) operationsBody.appendChild(tr);
     }
 
-    document.getElementById('addOperationRowBtn').addEventListener('click', () => {
+    document.getElementById('addOperationRowBtn')?.addEventListener('click', () => {
         addOperationRow();
     });
 
     window.openOperations = async (partId) => {
+        if (!operationsPartId || !operationsModal) return;
         operationsPartId.value = partId;
         
-        // Get the part's department to filter machines
-        const pRes = await fetch('/api/partmaster');
-        const parts = await pRes.json();
-        const part = parts.find(p => p.id === partId);
-        const partDept = part ? (part.department || '').trim().toLowerCase() : '';
+        try {
+            // Get the part's department to filter machines
+            const pRes = await fetch('/api/partmaster');
+            const parts = await pRes.json();
+            const part = parts.find(p => p.id === partId);
+            const partDept = part ? (part.department || '').trim().toLowerCase() : '';
 
-        // Ensure machines are loaded for dropdown
-        if (availableMachines.length === 0) {
-            const mRes = await fetch('/api/machines');
-            availableMachines = await mRes.json();
-        }
-
-        // Fetch existing operations
-        const res = await fetch(`/api/partmaster/${partId}/operations`);
-        const existingOps = await res.json();
-
-        operationsBody.innerHTML = '';
-        currentMachineOptions = '<option value="">-- Select --</option>';
-        availableMachines.forEach(m => {
-            const mDept = (m.department || '').trim().toLowerCase();
-            // Show if part has no dept, machine has no dept, or depts match
-            if (!partDept || !mDept || mDept === partDept) {
-                currentMachineOptions += `<option value="${m.name}">${m.name}</option>`;
+            // Ensure machines are loaded for dropdown
+            if (!availableMachines || availableMachines.length === 0) {
+                const mRes = await fetch('/api/machines');
+                availableMachines = await mRes.json();
             }
-        });
 
-        if (existingOps.length > 0) {
-            existingOps.forEach(op => addOperationRow(op));
-        } else {
-            addOperationRow();
+            // Fetch existing operations
+            const res = await fetch(`/api/partmaster/${partId}/operations`);
+            const existingOps = await res.json();
+
+            if (operationsBody) operationsBody.innerHTML = '';
+            currentMachineOptions = '<option value="">-- Select Machine --</option>';
+            if (availableMachines && availableMachines.length > 0) {
+                availableMachines.forEach(m => {
+                    const mDept = (m.department || '').trim().toLowerCase();
+                    if (!partDept || !mDept || mDept === partDept) {
+                        currentMachineOptions += `<option value="${m.name}">${m.name}</option>`;
+                    }
+                });
+            }
+
+            if (existingOps && existingOps.length > 0) {
+                existingOps.forEach(op => addOperationRow(op));
+            } else {
+                addOperationRow();
+            }
+
+            operationsModal.classList.add('show');
+        } catch(e) {
+            console.error('Error opening operations modal:', e);
         }
-
-        operationsModal.classList.add('show');
     };
 
     function closeOperationsModal() {
-        operationsModal.classList.remove('show');
+        if (operationsModal) operationsModal.classList.remove('show');
     }
-    closeOperationsModalBtn.addEventListener('click', closeOperationsModal);
-    cancelOperationsBtn.addEventListener('click', closeOperationsModal);
+    closeOperationsModalBtn?.addEventListener('click', closeOperationsModal);
+    cancelOperationsBtn?.addEventListener('click', closeOperationsModal);
 
-    saveOperationsBtn.addEventListener('click', async () => {
-        const partId = operationsPartId.value;
+    saveOperationsBtn?.addEventListener('click', async () => {
+        const partId = operationsPartId ? operationsPartId.value : null;
+        if (!partId || !operationsBody) return;
+
         const rows = operationsBody.querySelectorAll('tr');
         const operationsData = [];
 
         rows.forEach(row => {
-            const opn_no = row.querySelector('.opn-no').value.trim();
-            const description = row.querySelector('.op-desc').value.trim();
-            const machine = row.querySelector('.op-mach').value;
-            const cycle_time = parseFloat(row.querySelector('.op-time').value) || 0;
+            const opnInp = row.querySelector('.opn-no');
+            const descInp = row.querySelector('.op-desc');
+            const machInp = row.querySelector('.op-mach');
+            const timeInp = row.querySelector('.op-time');
+
+            const opn_no = opnInp ? opnInp.value.trim() : '';
+            const description = descInp ? descInp.value.trim() : '';
+            const machine = machInp ? machInp.value : '';
+            const cycle_time = timeInp ? (parseFloat(timeInp.value) || 0) : 0;
 
             if (opn_no || description) {
                 operationsData.push({
@@ -1258,14 +1286,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         try {
-            await fetch(`/api/partmaster/${partId}/operations`, {
+            const res = await fetch(`/api/partmaster/${partId}/operations`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(operationsData)
             });
-            closeOperationsModal();
+            if (res.ok) {
+                closeOperationsModal();
+                if (typeof fetchPartMasters === 'function') fetchPartMasters();
+            } else {
+                alert('Error saving operations.');
+            }
         } catch (e) {
             console.error('Error saving operations:', e);
+            alert('Error saving operations.');
         }
     });
 
