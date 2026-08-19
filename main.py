@@ -1347,6 +1347,138 @@ def delete_prodlog(log_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Log deleted"}
 
+class AutofixWipPayload(BaseModel):
+    department: Optional[str] = ""
+
+@app.post("/api/schedule_status/autofix_wip")
+def autofix_schedule_status_wip(payload: AutofixWipPayload, db: Session = Depends(get_db)):
+    from datetime import datetime
+    dept = (payload.department or "").strip()
+    
+    query = db.query(Schedule).filter(or_(Schedule.status == "Pending", Schedule.status == None, Schedule.status == ""))
+    if dept:
+        query = query.filter(func.lower(Schedule.department) == dept.lower())
+    schedules = query.all()
+    
+    if not schedules:
+        return {"message": "No pending schedules found", "created_logs": 0}
+    
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    created_count = 0
+    
+    part_depts = set((s.department or "", s.partno or "") for s in schedules)
+    
+    for s_dept, partno in part_depts:
+        if not partno:
+            continue
+            
+        part_obj = db.query(PartMaster).filter(func.lower(PartMaster.partno) == partno.lower()).first()
+        operations = []
+        if part_obj:
+            ops = db.query(PartOperation).filter(PartOperation.part_master_id == part_obj.id).all()
+            def parse_opn(op):
+                try:
+                    return int(op.opn_no)
+                except:
+                    return 9999
+            operations = sorted(ops, key=parse_opn)
+            
+        all_logs = db.query(ProductionLog).filter(func.lower(ProductionLog.partno) == partno.lower()).all()
+        all_rm_logs = db.query(RawMaterialLog).filter(func.lower(RawMaterialLog.finish_part_no) == partno.lower()).all()
+        
+        desp_prod = sum((l.qty or 0) for l in all_rm_logs if (l.type or "").lower() == "despatch")
+        
+        rfd_logs = [l for l in all_logs if (l.opn_no or "").lower() == "rfd"]
+        rfd_prod = sum((l.prod_qty or 0) for l in rfd_logs)
+        
+        if desp_prod > rfd_prod:
+            shortfall = desp_prod - rfd_prod
+            rfd_fix = ProductionLog(
+                dept=s_dept,
+                date=today_str,
+                shift="1",
+                partno=partno,
+                opn_no="rfd",
+                description="RFD WIP Backlog Correction",
+                prod_qty=shortfall,
+                idle_reason="WIP Backlog Correction"
+            )
+            db.add(rfd_fix)
+            created_count += 1
+            rfd_prod += shortfall
+            all_logs.append(rfd_fix)
+            
+        rework_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "rework")
+        nc_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "nc")
+        rejection_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "rejection")
+        
+        for_ins_total = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "for ins")
+        total_inspected = max(for_ins_total, rfd_prod + rework_prod + nc_prod + rejection_prod)
+        
+        if total_inspected > for_ins_total:
+            shortfall = total_inspected - for_ins_total
+            ins_fix = ProductionLog(
+                dept=s_dept,
+                date=today_str,
+                shift="1",
+                partno=partno,
+                opn_no="for ins",
+                description="For Ins WIP Backlog Correction",
+                prod_qty=shortfall,
+                idle_reason="WIP Backlog Correction"
+            )
+            db.add(ins_fix)
+            created_count += 1
+            for_ins_total += shortfall
+            all_logs.append(ins_fix)
+            
+        debur_total = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "debur")
+        if debur_total > 0 and total_inspected > debur_total:
+            shortfall = total_inspected - debur_total
+            debur_fix = ProductionLog(
+                dept=s_dept,
+                date=today_str,
+                shift="1",
+                partno=partno,
+                opn_no="debur",
+                description="Debur WIP Backlog Correction",
+                prod_qty=shortfall,
+                idle_reason="WIP Backlog Correction"
+            )
+            db.add(debur_fix)
+            created_count += 1
+            debur_total += shortfall
+            all_logs.append(debur_fix)
+            
+        required_next = max(debur_total, for_ins_total, total_inspected)
+        
+        for i in range(len(operations) - 1, -1, -1):
+            op = operations[i]
+            opn_clean = (op.opn_no or "").strip().lower()
+            current_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").strip().lower() == opn_clean)
+            
+            if required_next > current_prod:
+                shortfall = required_next - current_prod
+                op_fix = ProductionLog(
+                    dept=s_dept,
+                    date=today_str,
+                    shift="1",
+                    partno=partno,
+                    opn_no=op.opn_no,
+                    description=f"Opn {op.opn_no} WIP Backlog Correction",
+                    prod_qty=shortfall,
+                    idle_reason="WIP Backlog Correction"
+                )
+                db.add(op_fix)
+                created_count += 1
+                current_prod += shortfall
+                all_logs.append(op_fix)
+                
+            required_next = current_prod
+            
+    db.commit()
+    return {"message": f"Successfully created {created_count} WIP backlog correction logs.", "created_logs": created_count}
+
 # --- RAW MATERIALS ENDPOINTS ---
 @app.get("/api/rawmaterials", response_model=List[RawMaterialResponse])
 def get_raw_materials(db: Session = Depends(get_db)):

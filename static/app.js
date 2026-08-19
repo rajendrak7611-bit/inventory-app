@@ -2371,6 +2371,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const wb = XLSX.utils.table_to_book(table, {sheet: "Status"});
         XLSX.writeFile(wb, `Schedule_Status_${new Date().toISOString().slice(0,10)}.xlsx`);
     });
+
+    document.getElementById('autofixWipBtn')?.addEventListener('click', async () => {
+        const dept = document.getElementById('statusDeptSelect').value;
+        const msg = dept 
+            ? `Are you sure you want to Auto-Fix all negative WIP balances for Department "${dept}"?\n\nThis will backfill missing production logs for preceding operations so all negative WIP quantities are corrected to zero/actuals.`
+            : `Are you sure you want to Auto-Fix all negative WIP balances for ALL Departments?\n\nThis will backfill missing production logs for preceding operations so all negative WIP quantities are corrected to zero/actuals.`;
+
+        if (!confirm(msg)) return;
+
+        const btn = document.getElementById('autofixWipBtn');
+        const origText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '⚡ Fixing WIP...';
+
+        try {
+            const res = await fetch('/api/schedule_status/autofix_wip', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ department: dept })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert(data.message || 'WIP Auto-Fix complete!');
+                fetchScheduleStatus();
+            } else {
+                alert('Error performing WIP Auto-Fix: ' + (data.detail || 'Unknown error'));
+            }
+        } catch (err) {
+            console.error('Error in Auto-Fix WIP:', err);
+            alert('Failed to execute WIP Auto-Fix.');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = origText;
+        }
+    });
     
     function populateStatusCustomerDropdown() {
         const custSelect = document.getElementById('statusCustomerSelect');
