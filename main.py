@@ -1549,8 +1549,8 @@ def adjust_part_wip(payload: AdjustPartWipPayload, db: Session = Depends(get_db)
             
         all_logs = db.query(ProductionLog).filter(func.lower(ProductionLog.partno) == partno.lower()).all()
         all_rm_logs = db.query(RawMaterialLog).filter(func.lower(RawMaterialLog.finish_part_no) == partno.lower()).all()
-        all_ht_logs = db.query(HtLog).filter(func.lower(HtLog.partno) == partno.lower()).all()
-        all_ht_receipt_logs = db.query(HtReceiptLog).filter(func.lower(HtReceiptLog.partno) == partno.lower()).all()
+        all_ht_logs = db.query(HTLog).filter(func.lower(HTLog.partno) == partno.lower()).all()
+        all_ht_receipt_logs = db.query(HTReceiptLog).filter(func.lower(HTReceiptLog.partno) == partno.lower()).all()
         all_pc_logs = db.query(PcLog).filter(func.lower(PcLog.partno) == partno.lower()).all()
         all_pc_receipt_logs = db.query(PcReceiptLog).filter(func.lower(PcReceiptLog.partno) == partno.lower()).all()
 
