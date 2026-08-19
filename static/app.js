@@ -2353,6 +2353,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let wipPartBalancesCache = {};
 
     function openEditWipModal(dept, partno) {
+        if (!userObj || (userObj.role !== 'admin' && (userObj.username || '').toLowerCase() !== 'admin')) {
+            alert('Access Denied: Only Admin users are authorized to adjust WIP balances.');
+            return;
+        }
         const modal = document.getElementById('editWipModal');
         const title = document.getElementById('editWipModalTitle');
         const list = document.getElementById('editWipOperationsList');
@@ -2491,6 +2495,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('autofixWipBtn')?.addEventListener('click', async () => {
+        if (!userObj || (userObj.role !== 'admin' && (userObj.username || '').toLowerCase() !== 'admin')) {
+            alert('Access Denied: Only Admin users are authorized to auto-fix WIP balances.');
+            return;
+        }
         const dept = document.getElementById('statusDeptSelect').value;
         const msg = dept 
             ? `Are you sure you want to Auto-Fix all negative WIP balances for Department "${dept}"?\n\nThis will backfill missing production logs for preceding operations so all negative WIP quantities are corrected to zero/actuals.`
@@ -2568,6 +2576,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchScheduleStatus() {
+        const isAdmin = userObj && (userObj.role === 'admin' || (userObj.username || '').toLowerCase() === 'admin');
+
+        const autofixBtn = document.getElementById('autofixWipBtn');
+        if (autofixBtn) autofixBtn.style.display = isAdmin ? 'flex' : 'none';
+
+        const actionsTh = document.getElementById('statusActionsTh');
+        if (actionsTh) actionsTh.style.display = isAdmin ? '' : 'none';
+
         const dept = document.getElementById('statusDeptSelect').value;
         const custFilter = (document.getElementById('statusCustomerSelect')?.value || '').trim().toUpperCase();
         const tbody = document.getElementById('statusBody');
@@ -2734,7 +2750,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 rowHtml += `<td>${ncProd}</td>`;
                 rowHtml += `<td>${rfdBal}</td>`;
                 rowHtml += `<td>${despProd}</td>`;
-                rowHtml += `<td><button class="btn btn-outline edit-wip-btn" data-partno="${partno}" data-dept="${dept}" style="padding: 2px 8px; font-size: 0.75rem; border-color: #0284c7; color: #0284c7;" title="Adjust WIP / Actual balances for this part">✏️ Edit WIP</button></td>`;
+                if (isAdmin) {
+                    rowHtml += `<td><button class="btn btn-outline edit-wip-btn" data-partno="${partno}" data-dept="${dept}" style="padding: 2px 8px; font-size: 0.75rem; border-color: #0284c7; color: #0284c7;" title="Adjust WIP / Actual balances for this part">✏️ Edit WIP</button></td>`;
+                }
                 
                 spiderStatusDataMap[(partno || '').trim().toUpperCase()] = {
                     schedQty,
