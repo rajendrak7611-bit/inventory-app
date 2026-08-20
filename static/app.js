@@ -2677,8 +2677,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             tbody.innerHTML = '';
 
-            const deptSchedules = allSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase() && (s.status === 'Pending' || !s.status));
-            const uniqueParts = [...new Set(deptSchedules.map(s => s.partno))];
+            const masterDeptParts = (statusAllParts || [])
+                .filter(p => (p.department || '').trim().toUpperCase() === dept.trim().toUpperCase() || (p.dept || '').trim().toUpperCase() === dept.trim().toUpperCase())
+                .map(p => (p.partno || '').trim());
+
+            const schedDeptParts = allSchedules
+                .filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase())
+                .map(s => (s.partno || '').trim());
+
+            const uniqueParts = [...new Set([...masterDeptParts, ...schedDeptParts])].filter(Boolean);
+            uniqueParts.sort((a, b) => a.localeCompare(b));
             
             for (const partno of uniqueParts) {
                 const partObj = (statusAllParts || []).find(p => (p.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase());
@@ -2707,8 +2715,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     return numA - numB;
                 });
                 
-                const partSchedules = deptSchedules.filter(s => s.partno === partno);
-                const schedQty = partSchedules.reduce((sum, s) => sum + (s.qty || 0), 0);
+                const allPartSchedules = allSchedules.filter(s => 
+                    (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase() && 
+                    (s.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()
+                );
+                const pendingSchedules = allPartSchedules.filter(s => s.status === 'Pending' || !s.status);
+                const schedQty = pendingSchedules.reduce((sum, s) => sum + (s.qty || 0), 0);
+                const isCompleted = allPartSchedules.length > 0 && (pendingSchedules.length === 0 || allPartSchedules.every(s => (s.status || '').trim().toLowerCase() === 'completed'));
                 
                 let rowHtml = `<td>${cust || '-'}</td><td>${partno}</td><td>${schedQty}</td>`;
                 
@@ -2836,6 +2849,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 
                 const tr = document.createElement('tr');
+                if (isCompleted) {
+                    tr.style.backgroundColor = 'rgba(34, 197, 94, 0.18)';
+                    tr.title = 'Schedule Completed';
+                }
                 tr.innerHTML = rowHtml;
                 tbody.appendChild(tr);
 
