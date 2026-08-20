@@ -2490,7 +2490,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const statusPartSearch = document.getElementById('statusPartSearch');
     if (statusPartSearch) {
         statusPartSearch.addEventListener('input', () => {
-            fetchScheduleStatus();
+            if (statusPartSearchDebounceTimer) clearTimeout(statusPartSearchDebounceTimer);
+            statusPartSearchDebounceTimer = setTimeout(() => {
+                fetchScheduleStatus();
+            }, 200);
         });
     }
 
@@ -2582,7 +2585,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let currentScheduleStatusRequestId = 0;
+    let statusPartSearchDebounceTimer = null;
+
     async function fetchScheduleStatus() {
+        const requestId = ++currentScheduleStatusRequestId;
+
         const isAdmin = userObj && (userObj.role === 'admin' || (userObj.username || '').toLowerCase() === 'admin');
 
         const autofixBtn = document.getElementById('autofixWipBtn');
@@ -2595,8 +2603,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const custFilter = (document.getElementById('statusCustomerSelect')?.value || '').trim().toUpperCase();
         const partSearchFilter = (document.getElementById('statusPartSearch')?.value || '').trim().toUpperCase();
         const tbody = document.getElementById('statusBody');
-        tbody.innerHTML = '';
-        if (!dept) return;
+        if (!dept) {
+            tbody.innerHTML = '';
+            return;
+        }
 
         try {
             if (!statusAllParts || statusAllParts.length === 0) {
@@ -2618,6 +2628,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 fetch('/api/rawmaterials')
             ]);
             
+            if (requestId !== currentScheduleStatusRequestId) {
+                return;
+            }
+
             const allSchedules = await schedRes.json();
             const allLogs = await logRes.json();
             const allRmLogs = await rmLogRes.json();
@@ -2626,6 +2640,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const allPcLogs = await pcLogRes.json();
             const allPcReceiptLogs = await pcReceiptLogRes.json();
             const allRawMaterials = await rmRes.json();
+
+            if (requestId !== currentScheduleStatusRequestId) {
+                return;
+            }
+
+            tbody.innerHTML = '';
 
             const deptSchedules = allSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase() && (s.status === 'Pending' || !s.status));
             const uniqueParts = [...new Set(deptSchedules.map(s => s.partno))];
