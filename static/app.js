@@ -2392,7 +2392,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const deburBal = cached.deburBal || 0;
-        const deburDefault = deburBal < 0 ? 0 : deburBal;
+        const deburDefault = deburBal;
         html += `
             <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(2, 132, 199, 0.05);">
                 <div style="flex: 1;">
@@ -2407,7 +2407,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         const forInsBal = cached.forInsBal || 0;
-        const forInsDefault = forInsBal < 0 ? 0 : forInsBal;
+        const forInsDefault = forInsBal;
         html += `
             <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(245, 158, 11, 0.05);">
                 <div style="flex: 1;">
@@ -2422,7 +2422,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         const rfdBal = cached.rfdBal || 0;
-        const rfdDefault = rfdBal < 0 ? 0 : rfdBal;
+        const rfdDefault = rfdBal;
         html += `
             <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(16, 185, 129, 0.05);">
                 <div style="flex: 1;">

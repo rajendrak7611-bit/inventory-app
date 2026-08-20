@@ -1585,9 +1585,9 @@ def adjust_part_wip(payload: AdjustPartWipPayload, db: Session = Depends(get_db)
         
         target_map = { (adj.opn_no or "").strip().lower(): adj.target_balance for adj in payload.adjustments }
         
-        rfd_clean = "rfd"
-        if rfd_clean in target_map:
-            target_rfd_bal = target_map[rfd_clean]
+        # 1. RFD adjustment
+        if "rfd" in target_map:
+            target_rfd_bal = target_map["rfd"]
             req_rfd_prod = target_rfd_bal + desp_prod
             curr_rfd_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "rfd")
             diff = req_rfd_prod - curr_rfd_prod
@@ -1602,60 +1602,56 @@ def adjust_part_wip(payload: AdjustPartWipPayload, db: Session = Depends(get_db)
                 created_count += 1
                 all_logs.append(fix_log)
 
+        # 2. DEBUR adjustment
         if "debur" in target_map:
             target_debur_bal = target_map["debur"]
             last_op_clean = (operations[-1].opn_no or "").strip().lower() if operations else None
             last_op_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").strip().lower() == last_op_clean) if last_op_clean else 0
-            req_debur_total = max(0, last_op_prod - target_debur_bal)
             curr_debur_total = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").strip().lower() == "debur")
-            diff = req_debur_total - curr_debur_total
-            if diff != 0:
-                fix_log = ProductionLog(
-                    dept=dept, date=today_str, shift="1", setter="-", machine="-", operator="-",
-                    partno=partno, opn_no="debur", description="Manual WIP Adjustment",
-                    runtime=0.0, target_qty=diff, prod_qty=diff, efficiency=100.0,
-                    idle_hours=0.0, idle_reason="Manual WIP Adjustment", cycle_time=0.0
-                )
-                db.add(fix_log)
-                created_count += 1
-                all_logs.append(fix_log)
+            curr_debur_bal = max(0, last_op_prod - curr_debur_total)
+            if target_debur_bal != curr_debur_bal:
+                req_debur_total = max(0, last_op_prod - target_debur_bal)
+                diff = req_debur_total - curr_debur_total
+                if diff != 0:
+                    fix_log = ProductionLog(
+                        dept=dept, date=today_str, shift="1", setter="-", machine="-", operator="-",
+                        partno=partno, opn_no="debur", description="Manual WIP Adjustment",
+                        runtime=0.0, target_qty=diff, prod_qty=diff, efficiency=100.0,
+                        idle_hours=0.0, idle_reason="Manual WIP Adjustment", cycle_time=0.0
+                    )
+                    db.add(fix_log)
+                    created_count += 1
+                    all_logs.append(fix_log)
 
-        for_ins_key = None
-        if "for ins" in target_map:
-            for_ins_key = "for ins"
-        elif "ins" in target_map:
-            for_ins_key = "ins"
-
+        # 3. FOR INS adjustment
+        for_ins_key = "for ins" if "for ins" in target_map else ("ins" if "ins" in target_map else None)
         if for_ins_key:
             target_for_ins_bal = target_map[for_ins_key]
             rfd_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "rfd")
             rework_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "rework")
             nc_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "nc")
             rejection_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "rejection")
-            total_inspected = max(sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "for ins"), rfd_prod + rework_prod + nc_prod + rejection_prod)
-            req_for_ins_total = target_for_ins_bal + total_inspected
-            curr_for_ins_total = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").strip().lower() == "for ins")
-            diff = req_for_ins_total - curr_for_ins_total
-            if diff != 0:
-                fix_log = ProductionLog(
-                    dept=dept, date=today_str, shift="1", setter="-", machine="-", operator="-",
-                    partno=partno, opn_no="for ins", description="Manual WIP Adjustment",
-                    runtime=0.0, target_qty=diff, prod_qty=diff, efficiency=100.0,
-                    idle_hours=0.0, idle_reason="Manual WIP Adjustment", cycle_time=0.0
-                )
-                db.add(fix_log)
-                created_count += 1
-                all_logs.append(fix_log)
+            for_ins_log_total = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "for ins")
+            deburred_total = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "debur")
+            effective_for_ins = deburred_total if deburred_total > 0 else for_ins_log_total
+            total_inspected = max(for_ins_log_total, rfd_prod + rework_prod + nc_prod + rejection_prod)
+            curr_for_ins_bal = max(0, effective_for_ins - total_inspected)
+            if target_for_ins_bal != curr_for_ins_bal:
+                req_for_ins_total = target_for_ins_bal + total_inspected
+                diff = req_for_ins_total - for_ins_log_total
+                if diff != 0:
+                    fix_log = ProductionLog(
+                        dept=dept, date=today_str, shift="1", setter="-", machine="-", operator="-",
+                        partno=partno, opn_no="for ins", description="Manual WIP Adjustment",
+                        runtime=0.0, target_qty=diff, prod_qty=diff, efficiency=100.0,
+                        idle_hours=0.0, idle_reason="Manual WIP Adjustment", cycle_time=0.0
+                    )
+                    db.add(fix_log)
+                    created_count += 1
+                    all_logs.append(fix_log)
                 
-        rfd_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "rfd")
-        rework_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "rework")
-        nc_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "nc")
-        rejection_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "rejection")
-        for_ins_total = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "for ins")
-        debur_total = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "debur")
-        
-        for i in range(len(operations) - 1, -1, -1):
-            op = operations[i]
+        # 4. Operations adjustment (independent per operation)
+        for i, op in enumerate(operations):
             opn_clean = (op.opn_no or "").strip().lower()
             desc_clean = (op.description or "").strip().lower()
             mach_clean = (op.machine or "").strip().lower()
@@ -1675,8 +1671,10 @@ def adjust_part_wip(payload: AdjustPartWipPayload, db: Session = Depends(get_db)
                 else:
                     next_prod = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").strip().lower() == next_opn_clean)
             else:
-                total_inspected = max(for_ins_total, rfd_prod + rework_prod + nc_prod + rejection_prod)
-                next_prod = max(debur_total, for_ins_total, total_inspected)
+                deburred_total = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "debur")
+                for_ins_log_total = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "for ins")
+                rfd_prod_val = sum((l.prod_qty or 0) for l in all_logs if (l.opn_no or "").lower() == "rfd")
+                next_prod = max(deburred_total, for_ins_log_total, rfd_prod_val)
                 
             req_eff_curr_prod = target_bal + next_prod
 
