@@ -2487,6 +2487,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const statusPartSearch = document.getElementById('statusPartSearch');
+    if (statusPartSearch) {
+        statusPartSearch.addEventListener('input', () => {
+            fetchScheduleStatus();
+        });
+    }
+
     document.getElementById('exportStatusBtn').addEventListener('click', () => {
         const table = document.getElementById('statusTable');
         if (!table) return;
@@ -2586,6 +2593,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const dept = document.getElementById('statusDeptSelect').value;
         const custFilter = (document.getElementById('statusCustomerSelect')?.value || '').trim().toUpperCase();
+        const partSearchFilter = (document.getElementById('statusPartSearch')?.value || '').trim().toUpperCase();
         const tbody = document.getElementById('statusBody');
         tbody.innerHTML = '';
         if (!dept) return;
@@ -2627,6 +2635,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const cust = (partObj && partObj.customer) ? partObj.customer.trim() : '';
 
                 if (custFilter && cust.toUpperCase() !== custFilter) {
+                    continue;
+                }
+
+                if (partSearchFilter && !(partno || '').toUpperCase().includes(partSearchFilter)) {
                     continue;
                 }
                 
