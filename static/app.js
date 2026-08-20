@@ -2566,6 +2566,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    function updateToggleExtraOpnsBtnLabel() {
+        const btn = document.getElementById('toggleExtraOpnsBtn');
+        if (!btn) return;
+        const isHidden = document.body.classList.contains('hide-opn-extra');
+        btn.innerHTML = isHidden ? '👁️ Show OPN 8-10' : '👁️ Hide OPN 8-10';
+        btn.title = isHidden ? 'Show OPN 8, OPN 9, and OPN 10 columns' : 'Hide OPN 8, OPN 9, and OPN 10 columns';
+    }
+
+    document.getElementById('toggleExtraOpnsBtn')?.addEventListener('click', () => {
+        const isHidden = document.body.classList.toggle('hide-opn-extra');
+        localStorage.setItem('hide_opn_extra', isHidden ? 'true' : 'false');
+        updateToggleExtraOpnsBtnLabel();
+    });
+
+    if (localStorage.getItem('hide_opn_extra') === 'true') {
+        document.body.classList.add('hide-opn-extra');
+    }
+    updateToggleExtraOpnsBtnLabel();
+
     document.getElementById('autofixWipBtn')?.addEventListener('click', async () => {
         if (!userObj || (userObj.role !== 'admin' && (userObj.username || '').toLowerCase() !== 'admin')) {
             alert('Access Denied: Only Admin users are authorized to auto-fix WIP balances.');
@@ -2828,10 +2847,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         let balance = currentProd - nextProd;
                         opnBalances.push(balance);
-                        rowHtml += `<td>${balance}</td>`;
+                        const extraClass = i >= 7 ? ' class="col-opn-extra"' : '';
+                        rowHtml += `<td${extraClass}>${balance}</td>`;
                     } else {
                         opnBalances.push(0);
-                        rowHtml += `<td></td>`;
+                        const extraClass = i >= 7 ? ' class="col-opn-extra"' : '';
+                        rowHtml += `<td${extraClass}></td>`;
                     }
                 }
                 

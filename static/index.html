@@ -973,6 +973,9 @@
                         <input type="text" id="statusPartSearch" placeholder="🔍 Filter Part No..." style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif; width: 160px;">
                     </div>
                     <div style="display: flex; gap: 10px; align-items: center;">
+                        <button id="toggleExtraOpnsBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; display: flex; align-items: center; gap: 4px;" title="Hide or show OPN 8, OPN 9, and OPN 10 columns">
+                            👁️ Hide OPN 8-10
+                        </button>
                         <button id="clearBacklogBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; border-color: #ef4444; color: #ef4444; display: flex; align-items: center; gap: 4px;" title="Remove all automated backlog correction / WIP adjustment logs">
                             🗑️ Clear Backlog Corrections
                         </button>
@@ -997,9 +1000,9 @@
                                 <th>opn 5</th>
                                 <th>opn 6</th>
                                 <th>opn 7</th>
-                                <th>opn 8</th>
-                                <th>opn 9</th>
-                                <th>opn 10</th>
+                                <th class="col-opn-extra">opn 8</th>
+                                <th class="col-opn-extra">opn 9</th>
+                                <th class="col-opn-extra">opn 10</th>
                                 <th>debur</th>
                                 <th>for ins</th>
                                 <th>rework</th>
@@ -3304,6 +3307,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=282"></script>
+    <script src="/static/app.js?v=283"></script>
 </body>
 </html>

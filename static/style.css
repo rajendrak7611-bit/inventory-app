@@ -401,3 +401,7 @@ input:focus {
     gap: 1rem;
     margin-top: 2rem;
 }
+
+body.hide-opn-extra .col-opn-extra {
+    display: none !important;
+}
