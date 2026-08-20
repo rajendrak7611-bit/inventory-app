@@ -2391,6 +2391,36 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         });
 
+        const deburBal = cached.deburBal || 0;
+        const deburDefault = deburBal < 0 ? 0 : deburBal;
+        html += `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(2, 132, 199, 0.05);">
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; font-size: 0.9rem; color: #0284c7;">DEBUR (Deburring)</div>
+                    <div style="font-size: 0.78rem; color: var(--text-muted);">Current System Balance: <strong style="${deburBal < 0 ? 'color:#ef4444;' : 'color:#10b981;'}">${deburBal}</strong></div>
+                </div>
+                <div style="width: 130px;">
+                    <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 2px;">Target Actual</label>
+                    <input type="number" class="wip-target-input" data-opn="debur" value="${deburDefault}" style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: 600;">
+                </div>
+            </div>
+        `;
+
+        const forInsBal = cached.forInsBal || 0;
+        const forInsDefault = forInsBal < 0 ? 0 : forInsBal;
+        html += `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(245, 158, 11, 0.05);">
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; font-size: 0.9rem; color: #d97706;">FOR INS (For Inspection)</div>
+                    <div style="font-size: 0.78rem; color: var(--text-muted);">Current System Balance: <strong style="${forInsBal < 0 ? 'color:#ef4444;' : 'color:#10b981;'}">${forInsBal}</strong></div>
+                </div>
+                <div style="width: 130px;">
+                    <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 2px;">Target Actual</label>
+                    <input type="number" class="wip-target-input" data-opn="for ins" value="${forInsDefault}" style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: 600;">
+                </div>
+            </div>
+        `;
+
         const rfdBal = cached.rfdBal || 0;
         const rfdDefault = rfdBal < 0 ? 0 : rfdBal;
         html += `
@@ -2800,6 +2830,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         description: op.description || `OPN ${op.opn_no}`,
                         current_balance: opnBalances[idx] !== undefined ? opnBalances[idx] : 0
                     })),
+                    deburBal: deburBal,
+                    forInsBal: forInsBal,
                     rfdBal: rfdBal
                 };
                 
