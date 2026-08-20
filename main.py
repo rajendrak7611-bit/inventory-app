@@ -77,6 +77,10 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
     except Exception:
         pass
     try:
+        conn.execute(text("DELETE FROM production_logs WHERE LOWER(description) LIKE '%backlog correction%' OR LOWER(description) LIKE '%manual wip adjustment%' OR LOWER(idle_reason) LIKE '%backlog correction%' OR LOWER(idle_reason) LIKE '%wip adjustment%' OR idle_reason = 'Auto Fix Negative WIP';"))
+    except Exception:
+        pass
+    try:
         conn.execute(text("ALTER TABLE production_logs ADD COLUMN idle_hours_2 FLOAT;"))
         conn.execute(text("ALTER TABLE production_logs ADD COLUMN idle_reason_2 VARCHAR;"))
         conn.execute(text("ALTER TABLE production_logs ADD COLUMN idle_hours_3 FLOAT;"))
@@ -1511,6 +1515,26 @@ def autofix_schedule_status_wip(payload: AutofixWipPayload, db: Session = Depend
                 
         db.commit()
         return {"message": f"Successfully created {created_count} WIP backlog correction logs.", "created_logs": created_count}
+    except Exception as e:
+        db.rollback()
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/schedule_status/clear_backlog_corrections")
+def clear_backlog_corrections(db: Session = Depends(get_db)):
+    try:
+        deleted_count = db.query(ProductionLog).filter(
+            or_(
+                ProductionLog.description.ilike("%Backlog Correction%"),
+                ProductionLog.description.ilike("%Manual WIP Adjustment%"),
+                ProductionLog.idle_reason.ilike("%Backlog Correction%"),
+                ProductionLog.idle_reason.ilike("%WIP Adjustment%"),
+                ProductionLog.idle_reason == "Auto Fix Negative WIP"
+            )
+        ).delete(synchronize_session=False)
+        db.commit()
+        return {"message": f"Successfully deleted {deleted_count} backlog correction entries.", "deleted_count": deleted_count}
     except Exception as e:
         db.rollback()
         import traceback

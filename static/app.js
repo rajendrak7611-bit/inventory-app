@@ -2534,6 +2534,38 @@ document.addEventListener('DOMContentLoaded', () => {
         XLSX.writeFile(wb, `Schedule_Status_${new Date().toISOString().slice(0,10)}.xlsx`);
     });
 
+    document.getElementById('clearBacklogBtn')?.addEventListener('click', async () => {
+        if (!userObj || (userObj.role !== 'admin' && (userObj.username || '').toLowerCase() !== 'admin')) {
+            alert('Access Denied: Only Admin users are authorized to clear backlog corrections.');
+            return;
+        }
+        if (!confirm('Are you sure you want to remove ALL backlog correction entries? This will delete all automated WIP correction logs so you can update actual WIP part by part using Edit WIP.')) {
+            return;
+        }
+
+        const btn = document.getElementById('clearBacklogBtn');
+        const origText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '🗑️ Clearing...';
+
+        try {
+            const res = await fetch('/api/schedule_status/clear_backlog_corrections', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                alert(data.message || 'Backlog correction entries removed successfully!');
+                fetchScheduleStatus();
+            } else {
+                alert('Error clearing backlog corrections: ' + (data.detail || data.message || 'Unknown server error'));
+            }
+        } catch (err) {
+            console.error('Error in clearing backlog corrections:', err);
+            alert('Failed to clear backlog corrections: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = origText;
+        }
+    });
+
     document.getElementById('autofixWipBtn')?.addEventListener('click', async () => {
         if (!userObj || (userObj.role !== 'admin' && (userObj.username || '').toLowerCase() !== 'admin')) {
             alert('Access Denied: Only Admin users are authorized to auto-fix WIP balances.');
@@ -2625,6 +2657,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const autofixBtn = document.getElementById('autofixWipBtn');
         if (autofixBtn) autofixBtn.style.display = isAdmin ? 'flex' : 'none';
+
+        const clearBtn = document.getElementById('clearBacklogBtn');
+        if (clearBtn) clearBtn.style.display = isAdmin ? 'flex' : 'none';
 
         const actionsTh = document.getElementById('statusActionsTh');
         if (actionsTh) actionsTh.style.display = isAdmin ? '' : 'none';

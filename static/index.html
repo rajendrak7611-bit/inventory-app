@@ -973,8 +973,8 @@
                         <input type="text" id="statusPartSearch" placeholder="🔍 Filter Part No..." style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif; width: 160px;">
                     </div>
                     <div style="display: flex; gap: 10px; align-items: center;">
-                        <button id="autofixWipBtn" class="btn btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; background-color: #10b981; border-color: #10b981; display: flex; align-items: center; gap: 4px;" title="Auto-fix negative WIP quantities by backfilling upstream operations">
-                            ⚡ Auto-Fix Negative WIP
+                        <button id="clearBacklogBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; border-color: #ef4444; color: #ef4444; display: flex; align-items: center; gap: 4px;" title="Remove all automated backlog correction / WIP adjustment logs">
+                            🗑️ Clear Backlog Corrections
                         </button>
                         <button id="exportStatusBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -3304,6 +3304,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=281"></script>
+    <script src="/static/app.js?v=282"></script>
 </body>
 </html>
