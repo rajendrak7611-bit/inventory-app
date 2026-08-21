@@ -12313,16 +12313,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (dSelect && dSelect.options.length <= 1) {
             try {
-                const deptRes = await fetch('/api/departments');
-                if (deptRes.ok) {
+                const [deptRes, opRes] = await Promise.all([
+                    fetch('/api/departments').catch(() => null),
+                    fetch('/api/operators').catch(() => null)
+                ]);
+                const deptSet = new Set();
+                if (deptRes && deptRes.ok) {
                     const depts = await deptRes.json();
-                    depts.forEach(d => {
-                        const opt = document.createElement('option');
-                        opt.value = d.name;
-                        opt.textContent = d.name;
-                        dSelect.appendChild(opt);
-                    });
+                    depts.forEach(d => { if (d.name) deptSet.add(d.name.trim()); });
                 }
+                if (opRes && opRes.ok) {
+                    const ops = await opRes.json();
+                    ops.forEach(o => { if (o.department) deptSet.add(o.department.trim()); });
+                }
+                Array.from(deptSet).sort().forEach(dName => {
+                    const opt = document.createElement('option');
+                    opt.value = dName;
+                    opt.textContent = dName;
+                    dSelect.appendChild(opt);
+                });
             } catch(e) {}
         }
         const deptVal = dSelect ? dSelect.value : '';

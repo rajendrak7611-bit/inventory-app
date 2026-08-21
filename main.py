@@ -2683,28 +2683,104 @@ def get_att_vs_login_report(
 
     days_in_month = calendar.monthrange(year, month)[1]
 
-    # 1. Operators Query (designated as operator / OPERATOR or default)
-    op_query = db.query(Operator).filter(
-        or_(
-            Operator.designation.ilike("%operator%"),
-            Operator.designation == None,
-            Operator.designation == ""
-        )
-    )
-    if dept and dept.strip():
-        op_query = op_query.filter(func.lower(func.trim(Operator.department)) == dept.strip().lower())
+    # 1. Attendance Query for this month
+    att_records = db.query(Attendance).filter(Attendance.month_year == month_year).all()
+
+    # 2. Production Logs Query (Login Hours) for this month
+    start_date = f"{month_year}-01"
+    end_date = f"{month_year}-{days_in_month:02d}"
     
-    operators_list = op_query.order_by(Operator.department, Operator.name).all()
+    pl_records = db.query(ProductionLog).filter(
+        ProductionLog.date >= start_date,
+        ProductionLog.date <= end_date
+    ).all()
 
-    # 2. Attendance Query
-    att_query = db.query(Attendance).filter(Attendance.month_year == month_year)
-    if dept and dept.strip():
-        att_query = att_query.filter(func.lower(func.trim(Attendance.dept)) == dept.strip().lower())
-    att_records = att_query.all()
+    # 3. Operators Master Query
+    all_ops_master = db.query(Operator).all()
 
+    # Create dictionary of operators
+    operators_dict = {}
+
+    for op in all_ops_master:
+        c_name = (op.name or "").strip()
+        if not c_name:
+            continue
+        desig = (op.designation or "").strip().lower()
+        if desig and ("setter" in desig or "manager" in desig or "admin" in desig):
+            continue
+
+        key = c_name.lower()
+        operators_dict[key] = {
+            "id": op.id,
+            "name": c_name,
+            "dept": (op.department or "").strip(),
+            "designation": op.designation or "Operator",
+            "att_depts": set(),
+            "log_depts": set()
+        }
+
+    for att in att_records:
+        emp_name = (att.employee_name or "").strip()
+        if not emp_name:
+            continue
+        key = emp_name.lower()
+        dept_name = (att.dept or "").strip()
+        if key not in operators_dict:
+            att_desig = (att.designation or "").strip().lower()
+            if att_desig and ("setter" in att_desig or "manager" in att_desig):
+                continue
+            operators_dict[key] = {
+                "id": 0,
+                "name": emp_name,
+                "dept": dept_name,
+                "designation": att.designation or "Operator",
+                "att_depts": set(),
+                "log_depts": set()
+            }
+        if dept_name:
+            operators_dict[key]["att_depts"].add(dept_name.lower())
+
+    for pl in pl_records:
+        op_name = (pl.operator or "").strip()
+        if not op_name or op_name.lower() in ["-", "none", "null"]:
+            continue
+        key = op_name.lower()
+        dept_name = (pl.dept or "").strip()
+        if key not in operators_dict:
+            operators_dict[key] = {
+                "id": 0,
+                "name": op_name,
+                "dept": dept_name,
+                "designation": "Operator",
+                "att_depts": set(),
+                "log_depts": set()
+            }
+        if dept_name:
+            operators_dict[key]["log_depts"].add(dept_name.lower())
+
+    target_dept_clean = (dept or "").strip().lower()
+
+    filtered_operators = []
+    for key, op_info in operators_dict.items():
+        if target_dept_clean:
+            master_dept = op_info["dept"].lower()
+            in_master_dept = (master_dept == target_dept_clean)
+            in_att_dept = (target_dept_clean in op_info["att_depts"])
+            in_log_dept = (target_dept_clean in op_info["log_depts"])
+
+            if not (in_master_dept or in_att_dept or in_log_dept):
+                continue
+        filtered_operators.append(op_info)
+
+    filtered_operators.sort(key=lambda x: (x["dept"].lower(), x["name"].lower()))
+
+    # Build Attendance Lookup Map
     att_map = {}
     for att in att_records:
-        emp_name = (att.employee_name or "").strip().lower()
+        emp_key = (att.employee_name or "").strip().lower()
+        att_d_name = (att.dept or "").strip().lower()
+        if target_dept_clean and att_d_name and att_d_name != target_dept_clean:
+            continue
         d = att.day
         val_str = (att.hours or "").strip().upper()
         h_val = 0.0
@@ -2714,27 +2790,20 @@ def get_att_vs_login_report(
             except ValueError:
                 if val_str in ['P', 'PRESENT']:
                     h_val = 8.0
+                elif val_str in ['HD', 'HALF', 'HALF DAY', 'HALF-DAY']:
+                    h_val = 4.0
                 else:
                     h_val = 0.0
-        att_map[(emp_name, d)] = h_val
+        att_map[(emp_key, d)] = att_map.get((emp_key, d), 0.0) + h_val
 
-    # 3. Production Logs Query (Login Hours)
-    start_date = f"{month_year}-01"
-    end_date = f"{month_year}-{days_in_month:02d}"
-    
-    pl_query = db.query(ProductionLog).filter(
-        ProductionLog.date >= start_date,
-        ProductionLog.date <= end_date
-    )
-    if dept and dept.strip():
-        pl_query = pl_query.filter(func.lower(func.trim(ProductionLog.dept)) == dept.strip().lower())
-    
-    pl_records = pl_query.all()
-
+    # Build Login Hours Lookup Map
     login_map = {}
     for pl in pl_records:
-        op_name = (pl.operator or "").strip().lower()
-        if not op_name or op_name in ["-", "none", "null"]:
+        op_key = (pl.operator or "").strip().lower()
+        pl_d_name = (pl.dept or "").strip().lower()
+        if target_dept_clean and pl_d_name and pl_d_name != target_dept_clean:
+            continue
+        if not op_key or op_key.lower() in ["-", "none", "null"]:
             continue
         try:
             p_date_str = (pl.date or "").strip()
@@ -2743,23 +2812,24 @@ def get_att_vs_login_report(
             continue
 
         r_time = float(pl.runtime or 0.0)
-        key = (op_name, p_day)
+        key = (op_key, p_day)
         login_map[key] = login_map.get(key, 0.0) + r_time
 
-    # 4. Build Matrix Response
+    # Build Matrix Output Rows
     report_rows = []
-    for op in operators_list:
-        clean_name = (op.name or "").strip()
-        op_lower = clean_name.lower()
-        dept_name = (op.department or "").strip()
+    for op in filtered_operators:
+        op_key = op["name"].lower()
+        display_dept = op["dept"]
+        if target_dept_clean:
+            display_dept = dept.strip()
 
         days_data = {}
         row_att_total = 0.0
         row_login_total = 0.0
 
         for d in range(1, days_in_month + 1):
-            att_h = round(att_map.get((op_lower, d), 0.0), 2)
-            login_h = round(login_map.get((op_lower, d), 0.0), 2)
+            att_h = round(att_map.get((op_key, d), 0.0), 2)
+            login_h = round(login_map.get((op_key, d), 0.0), 2)
 
             days_data[str(d)] = {
                 "att_hours": att_h,
@@ -2769,10 +2839,10 @@ def get_att_vs_login_report(
             row_login_total += login_h
 
         report_rows.append({
-            "id": op.id,
-            "dept": dept_name,
-            "operators": clean_name,
-            "designation": op.designation or "Operator",
+            "id": op["id"],
+            "dept": display_dept,
+            "operators": op["name"],
+            "designation": op["designation"],
             "days": days_data,
             "total_att": round(row_att_total, 2),
             "total_login": round(row_login_total, 2),
