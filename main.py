@@ -76,10 +76,7 @@ with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         conn.execute(text("UPDATE schedules SET status = 'Completed' WHERE qty <= (SELECT COALESCE(SUM(prod_qty), 0) FROM production_logs WHERE production_logs.partno = schedules.partno AND opn_no = 'rfd');"))
     except Exception:
         pass
-    try:
-        conn.execute(text("DELETE FROM production_logs WHERE LOWER(description) LIKE '%backlog correction%' OR LOWER(description) LIKE '%manual wip adjustment%' OR LOWER(idle_reason) LIKE '%backlog correction%' OR LOWER(idle_reason) LIKE '%wip adjustment%' OR idle_reason = 'Auto Fix Negative WIP';"))
-    except Exception:
-        pass
+
     try:
         conn.execute(text("ALTER TABLE production_logs ADD COLUMN idle_hours_2 FLOAT;"))
         conn.execute(text("ALTER TABLE production_logs ADD COLUMN idle_reason_2 VARCHAR;"))
