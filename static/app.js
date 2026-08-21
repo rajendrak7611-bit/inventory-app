@@ -11938,46 +11938,77 @@ document.addEventListener('DOMContentLoaded', () => {
         printBcProdReport();
     });
 
+    function normDateStr(dStr) {
+        if (!dStr) return '';
+        let s = dStr.toString().split('T')[0].split(' ')[0].trim();
+        let match = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+        if (match) {
+            return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+        }
+        match = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+        if (match) {
+            let p1 = parseInt(match[1], 10);
+            let p2 = parseInt(match[2], 10);
+            let y = match[3];
+            if (p1 > 12) {
+                return `${y}-${p2.toString().padStart(2, '0')}-${p1.toString().padStart(2, '0')}`;
+            } else {
+                return `${y}-${p1.toString().padStart(2, '0')}-${p2.toString().padStart(2, '0')}`;
+            }
+        }
+        return s;
+    }
+
+    function normMachineName(mName) {
+        if (!mName) return '';
+        return mName.toString().replace(/[\s\-_]+/g, '').toLowerCase();
+    }
+
     async function fetchBcProdReport() {
         const dateInput = document.getElementById('bcProdDate');
         const selectedDate = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
+        const targetDateNorm = normDateStr(selectedDate);
 
         try {
-            const [prodRes, pcRes, pcReceiptRes, machinesRes] = await Promise.all([
+            const [prodRes, pcRes, pcReceiptRes] = await Promise.all([
                 fetch('/api/production_logs'),
                 fetch('/api/pc_logs'),
-                fetch('/api/pc_receipt_logs'),
-                fetch('/api/machines')
+                fetch('/api/pc_receipt_logs')
             ]);
 
             const allProdLogs = prodRes.ok ? await prodRes.json() : [];
             const allPcLogs = pcRes.ok ? await pcRes.json() : [];
             const allPcReceiptLogs = pcReceiptRes.ok ? await pcReceiptRes.json() : [];
-            const allMachines = machinesRes.ok ? await machinesRes.json() : [];
 
-            // 1. Table 1: BC Machine Production
-            const requiredBcMachines = [
-                "AMS1", "AMS2", "AMS3", "AMS4",
-                "HASS BC 1", "HASS BC 2", "HASS BC 3",
-                "MILLWAKE", "CINCINATI", "WMW"
+            // 1. Table 1: BC Machine Production (STRICTLY RESTRICTED TO 10 MACHINES)
+            const machineList = [
+                "AMS 1",
+                "AMS 2",
+                "AMS 3",
+                "AMS 4",
+                "HASS BC 1",
+                "HASS BC 2",
+                "HASS BC 3",
+                "MILLWAKE",
+                "CINCINATI",
+                "WMW"
             ];
 
-            const extraBcMachines = allMachines.filter(m => 
-                m.department && m.department.trim().toUpperCase() === 'BC' &&
-                !requiredBcMachines.some(rm => rm.toLowerCase() === (m.name || '').trim().toLowerCase())
-            ).map(m => m.name.trim());
-
-            const machineList = [...requiredBcMachines, ...extraBcMachines];
-
-            const bcLogsToday = allProdLogs.filter(l => 
-                l.date === selectedDate && 
-                l.dept && l.dept.trim().toUpperCase() === 'BC'
-            );
+            const logsToday = allProdLogs.filter(l => {
+                if (!l.date) return false;
+                const logDateNorm = normDateStr(l.date);
+                if (logDateNorm && logDateNorm === targetDateNorm) return true;
+                if (l.date === selectedDate) return true;
+                return false;
+            });
 
             let bcMachineHtml = '';
             machineList.forEach(machName => {
-                const machClean = machName.trim().toLowerCase();
-                const machLogs = bcLogsToday.filter(l => (l.machine || '').trim().toLowerCase() === machClean);
+                const targetMachNorm = normMachineName(machName);
+                const machLogs = logsToday.filter(l => {
+                    const logMachNorm = normMachineName(l.machine);
+                    return logMachNorm && logMachNorm === targetMachNorm;
+                });
 
                 if (machLogs.length > 0) {
                     machLogs.forEach((l, idx) => {
@@ -12007,7 +12038,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (bcBody) bcBody.innerHTML = bcMachineHtml;
 
             // 2. Table 2: To PC
-            const toPcLogsToday = allPcLogs.filter(l => l.date === selectedDate);
+            const toPcLogsToday = allPcLogs.filter(l => {
+                if (!l.date) return false;
+                const logDateNorm = normDateStr(l.date);
+                return logDateNorm === targetDateNorm || l.date === selectedDate;
+            });
             const toPcGrouped = {};
             toPcLogsToday.forEach(l => {
                 const part = (l.partno || '').trim();
@@ -12046,7 +12081,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (toPcBody) toPcBody.innerHTML = toPcHtml;
 
             // 3. Table 3: From PC
-            const fromPcLogsToday = allPcReceiptLogs.filter(l => l.date === selectedDate);
+            const fromPcLogsToday = allPcReceiptLogs.filter(l => {
+                if (!l.date) return false;
+                const logDateNorm = normDateStr(l.date);
+                return logDateNorm === targetDateNorm || l.date === selectedDate;
+            });
             const fromPcGrouped = {};
             fromPcLogsToday.forEach(l => {
                 const part = (l.partno || '').trim();
