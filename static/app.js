@@ -2859,15 +2859,27 @@ document.addEventListener('DOMContentLoaded', () => {
                         let nextProd = 0;
                         if (nextOp) {
                             const nextOpClean = (nextOp.opn_no || '').trim().toLowerCase();
+                            const nextDescClean = (nextOp.description || '').trim().toLowerCase();
+                            const nextMachClean = (nextOp.machine || '').trim().toLowerCase();
+                            const isNextPc = nextOpClean === 'pc' || nextDescClean === 'pc' || nextDescClean.includes('powder coat') || nextDescClean.includes('pc') || nextMachClean === 'pc';
+                            const isNextHt = nextOpClean === 'ht' || nextOpClean === '50' || nextDescClean === 'ht' || nextDescClean.includes('heat treat') || nextMachClean === 'ht';
+
                             if (isGroup1HT && (nextOpClean === '50' || nextOpClean === 'opn 50' || nextOpClean === 'opn50')) {
                                 nextProd = 0; // Opn 50 is HT Received, do not deduct from Opn 40 for Group 1
                             } else {
-                                nextProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === nextOpClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                                nextProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === nextOpClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                                if (isNextPc || nextOpClean.includes('pc')) {
+                                    const pcRec = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                                    nextProd = Math.max(nextProd, pcRec);
+                                } else if (isNextHt) {
+                                    const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                                    nextProd = Math.max(nextProd, htRec);
+                                }
                             }
                         } else {
-                            const deburredTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                            const forInsLogTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                            const lastOpProdVal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === opnClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                            const deburredTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                            const forInsLogTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                            const lastOpProdVal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === opnClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                             
                             nextProd = Math.max(deburredTotal, forInsLogTotal, lastOpProdVal);
                         }
@@ -2884,15 +2896,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 // fixed columns: debur, for ins, rework, nc, rfd, desp
-                const deburredTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const forInsLogTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const reworkProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const ncProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const rejectionProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rejection').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const rfdProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const despProd = allRmLogs.filter(l => l.finish_part_no === partno && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
+                const deburredTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const forInsLogTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const reworkProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const ncProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const rejectionProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rejection').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const rfdProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const despProd = allRmLogs.filter(l => (l.finish_part_no || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && l.type === 'despatch').reduce((sum, l) => sum + (l.qty || 0), 0);
 
-                const lastOpProd = operations.length > 0 ? allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === (operations[operations.length - 1].opn_no || '').trim().toLowerCase()).reduce((sum, l) => sum + (l.prod_qty || 0), 0) : 0;
+                let lastOpProd = 0;
+                if (operations.length > 0) {
+                    const lastOp = operations[operations.length - 1];
+                    const lastOpnClean = (lastOp.opn_no || '').trim().toLowerCase();
+                    const lastDescClean = (lastOp.description || '').trim().toLowerCase();
+                    const lastMachClean = (lastOp.machine || '').trim().toLowerCase();
+                    const isLastPc = lastOpnClean === 'pc' || lastDescClean === 'pc' || lastDescClean.includes('powder coat') || lastDescClean.includes('pc') || lastMachClean === 'pc';
+                    const isLastHt = lastOpnClean === 'ht' || lastOpnClean === '50' || lastDescClean === 'ht' || lastDescClean.includes('heat treat') || lastMachClean === 'ht';
+
+                    lastOpProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === lastOpnClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+
+                    if (isLastPc || lastOpnClean.includes('pc')) {
+                        const pcRec = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                        lastOpProd = Math.max(lastOpProd, pcRec);
+                    } else if (isLastHt) {
+                        const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                        lastOpProd = Math.max(lastOpProd, htRec);
+                    }
+                }
+                const pcRecTotal = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                if (pcRecTotal > lastOpProd) {
+                    lastOpProd = pcRecTotal;
+                }
 
                 const deburBal = Math.max(0, lastOpProd - deburredTotal);
                 const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
@@ -3739,13 +3773,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const [schedRes, logRes] = await Promise.all([
+            const [schedRes, logRes, pcReceiptRes, htReceiptRes] = await Promise.all([
                 fetch('/api/schedule'),
-                fetch('/api/prodlog')
+                fetch('/api/prodlog'),
+                fetch('/api/pc_receipt_logs').catch(() => null),
+                fetch('/api/ht_receipt_logs').catch(() => null)
             ]);
             
             const allSchedules = await schedRes.json();
             const allLogs = await logRes.json();
+            const allPcReceiptLogs = (pcReceiptRes && pcReceiptRes.ok) ? await pcReceiptRes.json() : [];
+            const allHtReceiptLogs = (htReceiptRes && htReceiptRes.ok) ? await htReceiptRes.json() : [];
             
             const deptSchedules = allSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase() && (s.status === 'Pending' || !s.status));
             const uniqueParts = [...new Set(deptSchedules.map(s => s.partno))];
@@ -3766,11 +3804,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 operations.sort((a, b) => (parseInt(a.opn_no) || 0) - (parseInt(b.opn_no) || 0));
                 const lastOp = operations[operations.length - 1];
+                const lastOpnClean = (lastOp.opn_no || '').trim().toLowerCase();
+                const lastDescClean = (lastOp.description || '').trim().toLowerCase();
+                const lastMachClean = (lastOp.machine || '').trim().toLowerCase();
+
+                const isLastPc = lastOpnClean === 'pc' || lastDescClean === 'pc' || lastDescClean.includes('powder coat') || lastDescClean.includes('pc') || lastMachClean === 'pc';
+                const isLastHt = lastOpnClean === 'ht' || lastOpnClean === '50' || lastDescClean === 'ht' || lastDescClean.includes('heat treat') || lastMachClean === 'ht';
+
+                let lastOpProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === lastOpnClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+
+                if (isLastPc || lastOpnClean.includes('pc')) {
+                    const pcRec = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                    lastOpProd = Math.max(lastOpProd, pcRec);
+                } else if (isLastHt) {
+                    const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                    lastOpProd = Math.max(lastOpProd, htRec);
+                }
+
+                const pcRecTotal = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                if (pcRecTotal > lastOpProd) {
+                    lastOpProd = pcRecTotal;
+                }
+
+                const deburredProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 
-                const lastOpProd = allLogs.filter(l => l.partno === partno && l.opn_no === lastOp.opn_no).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const deburredProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                
-                const balance = lastOpProd - deburredProd;
+                const balance = Math.max(0, lastOpProd - deburredProd);
                 
                 if (balance <= 0) continue;
                 
