@@ -310,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function hideAllSections() {
         const sections = [
-            'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection',
+            'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection', 'bcProdSection',
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
             'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'insertStockSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'scheduleRunSection',
@@ -513,6 +513,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (toEl && !toEl.value) toEl.value = today;
             if (fromEl && !fromEl.value) fromEl.value = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
             document.getElementById('generateMcUtilBtn')?.click();
+        }},
+        'sidebarBcProd': { tab: 'bc_prod', action: () => {
+            const sec = document.getElementById('bcProdSection');
+            if (sec) sec.style.display = 'block';
+            addBtn.style.display = 'none';
+            initBcProdReport();
         }},
         'sidebarInsertMaster': { tab: 'insertmaster', action: () => {
             const sec = document.getElementById('insertMasterSection');
@@ -11910,4 +11916,244 @@ document.addEventListener('DOMContentLoaded', () => {
         const wb = XLSX.utils.table_to_book(table, { sheet: "Insert_Stock" });
         XLSX.writeFile(wb, `Insert_Stock_Summary_${new Date().toISOString().slice(0, 10)}.xlsx`);
     });
+
+    // --- BC PRODUCTION REPORT ---
+    function initBcProdReport() {
+        const dateInput = document.getElementById('bcProdDate');
+        if (dateInput && !dateInput.value) {
+            dateInput.value = new Date().toISOString().split('T')[0];
+        }
+        fetchBcProdReport();
+    }
+
+    document.getElementById('bcProdDate')?.addEventListener('change', () => {
+        fetchBcProdReport();
+    });
+
+    document.getElementById('exportBcProdBtn')?.addEventListener('click', () => {
+        exportBcProdExcel();
+    });
+
+    document.getElementById('printBcProdBtn')?.addEventListener('click', () => {
+        printBcProdReport();
+    });
+
+    async function fetchBcProdReport() {
+        const dateInput = document.getElementById('bcProdDate');
+        const selectedDate = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
+
+        try {
+            const [prodRes, pcRes, pcReceiptRes, machinesRes] = await Promise.all([
+                fetch('/api/production_logs'),
+                fetch('/api/pc_logs'),
+                fetch('/api/pc_receipt_logs'),
+                fetch('/api/machines')
+            ]);
+
+            const allProdLogs = prodRes.ok ? await prodRes.json() : [];
+            const allPcLogs = pcRes.ok ? await pcRes.json() : [];
+            const allPcReceiptLogs = pcReceiptRes.ok ? await pcReceiptRes.json() : [];
+            const allMachines = machinesRes.ok ? await machinesRes.json() : [];
+
+            // 1. Table 1: BC Machine Production
+            const requiredBcMachines = [
+                "AMS1", "AMS2", "AMS3", "AMS4",
+                "HASS BC 1", "HASS BC 2", "HASS BC 3",
+                "MILLWAKE", "CINCINATI", "WMW"
+            ];
+
+            const extraBcMachines = allMachines.filter(m => 
+                m.department && m.department.trim().toUpperCase() === 'BC' &&
+                !requiredBcMachines.some(rm => rm.toLowerCase() === (m.name || '').trim().toLowerCase())
+            ).map(m => m.name.trim());
+
+            const machineList = [...requiredBcMachines, ...extraBcMachines];
+
+            const bcLogsToday = allProdLogs.filter(l => 
+                l.date === selectedDate && 
+                l.dept && l.dept.trim().toUpperCase() === 'BC'
+            );
+
+            let bcMachineHtml = '';
+            machineList.forEach(machName => {
+                const machClean = machName.trim().toLowerCase();
+                const machLogs = bcLogsToday.filter(l => (l.machine || '').trim().toLowerCase() === machClean);
+
+                if (machLogs.length > 0) {
+                    machLogs.forEach((l, idx) => {
+                        const mCol = idx === 0 ? `<td style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700;">${machName}</td>` : `<td style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700;"></td>`;
+                        bcMachineHtml += `
+                            <tr>
+                                ${mCol}
+                                <td style="border: 1px solid #000000; padding: 6px 10px;">${l.partno || ''}</td>
+                                <td style="border: 1px solid #000000; padding: 6px 10px;">${l.opn_no || ''}</td>
+                                <td style="border: 1px solid #000000; padding: 6px 10px; text-align: right; font-weight: 600;">${l.prod_qty || 0}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    bcMachineHtml += `
+                        <tr>
+                            <td style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700;">${machName}</td>
+                            <td style="border: 1px solid #000000; padding: 6px 10px;"></td>
+                            <td style="border: 1px solid #000000; padding: 6px 10px;"></td>
+                            <td style="border: 1px solid #000000; padding: 6px 10px; text-align: right;"></td>
+                        </tr>
+                    `;
+                }
+            });
+
+            const bcBody = document.getElementById('bcMachineBody');
+            if (bcBody) bcBody.innerHTML = bcMachineHtml;
+
+            // 2. Table 2: To PC
+            const toPcLogsToday = allPcLogs.filter(l => l.date === selectedDate);
+            const toPcGrouped = {};
+            toPcLogsToday.forEach(l => {
+                const part = (l.partno || '').trim();
+                if (part) {
+                    toPcGrouped[part] = (toPcGrouped[part] || 0) + (l.qty || 0);
+                }
+            });
+
+            let toPcHtml = '';
+            const toPcParts = Object.keys(toPcGrouped).sort();
+            if (toPcParts.length > 0) {
+                toPcParts.forEach((part, idx) => {
+                    const labelCol = idx === 0 ? `<td style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700;">To PC</td>` : `<td style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700;"></td>`;
+                    toPcHtml += `
+                        <tr>
+                            ${labelCol}
+                            <td style="border: 1px solid #000000; padding: 6px 10px;">${part}</td>
+                            <td style="border: 1px solid #000000; padding: 6px 10px; text-align: right; font-weight: 600;">${toPcGrouped[part]}</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                for (let i = 0; i < 4; i++) {
+                    const labelCol = i === 0 ? `<td style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700;">To PC</td>` : `<td style="border: 1px solid #000000; padding: 6px 10px;"></td>`;
+                    toPcHtml += `
+                        <tr>
+                            ${labelCol}
+                            <td style="border: 1px solid #000000; padding: 6px 10px;"></td>
+                            <td style="border: 1px solid #000000; padding: 6px 10px;"></td>
+                        </tr>
+                    `;
+                }
+            }
+
+            const toPcBody = document.getElementById('toPcBody');
+            if (toPcBody) toPcBody.innerHTML = toPcHtml;
+
+            // 3. Table 3: From PC
+            const fromPcLogsToday = allPcReceiptLogs.filter(l => l.date === selectedDate);
+            const fromPcGrouped = {};
+            fromPcLogsToday.forEach(l => {
+                const part = (l.partno || '').trim();
+                if (part) {
+                    fromPcGrouped[part] = (fromPcGrouped[part] || 0) + (l.qty || 0);
+                }
+            });
+
+            let fromPcHtml = '';
+            const fromPcParts = Object.keys(fromPcGrouped).sort();
+            if (fromPcParts.length > 0) {
+                fromPcParts.forEach((part, idx) => {
+                    const labelCol = idx === 0 ? `<td style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700;">From PC</td>` : `<td style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700;"></td>`;
+                    fromPcHtml += `
+                        <tr>
+                            ${labelCol}
+                            <td style="border: 1px solid #000000; padding: 6px 10px;">${part}</td>
+                            <td style="border: 1px solid #000000; padding: 6px 10px; text-align: right; font-weight: 600;">${fromPcGrouped[part]}</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                for (let i = 0; i < 4; i++) {
+                    const labelCol = i === 0 ? `<td style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700;">From PC</td>` : `<td style="border: 1px solid #000000; padding: 6px 10px;"></td>`;
+                    fromPcHtml += `
+                        <tr>
+                            ${labelCol}
+                            <td style="border: 1px solid #000000; padding: 6px 10px;"></td>
+                            <td style="border: 1px solid #000000; padding: 6px 10px;"></td>
+                        </tr>
+                    `;
+                }
+            }
+
+            const fromPcBody = document.getElementById('fromPcBody');
+            if (fromPcBody) fromPcBody.innerHTML = fromPcHtml;
+
+        } catch (e) {
+            console.error('Error fetching BC Prod report:', e);
+        }
+    }
+
+    function exportBcProdExcel() {
+        const dateVal = document.getElementById('bcProdDate')?.value || new Date().toISOString().split('T')[0];
+        if (typeof XLSX === 'undefined') {
+            alert('Excel library not loaded');
+            return;
+        }
+
+        const wb = XLSX.utils.book_new();
+        const wsData = [];
+        wsData.push(["BC Production Report - Date: " + dateVal]);
+        wsData.push([]);
+
+        // Table 1: BC Production
+        wsData.push(["Machine", "Part no", "Opn no", "Qty"]);
+        const bcRows = document.querySelectorAll('#bcMachineTable tbody tr');
+        bcRows.forEach(tr => {
+            const tds = tr.querySelectorAll('td');
+            wsData.push([tds[0]?.innerText || '', tds[1]?.innerText || '', tds[2]?.innerText || '', tds[3]?.innerText || '']);
+        });
+
+        wsData.push([]);
+        wsData.push([]);
+
+        // Table 2: To PC
+        wsData.push(["To PC", "Part no", "qty"]);
+        const toPcRows = document.querySelectorAll('#toPcTable tbody tr');
+        toPcRows.forEach(tr => {
+            const tds = tr.querySelectorAll('td');
+            wsData.push([tds[0]?.innerText || '', tds[1]?.innerText || '', tds[2]?.innerText || '']);
+        });
+
+        wsData.push([]);
+        wsData.push([]);
+
+        // Table 3: From PC
+        wsData.push(["From PC", "Part no", "qty"]);
+        const fromPcRows = document.querySelectorAll('#fromPcTable tbody tr');
+        fromPcRows.forEach(tr => {
+            const tds = tr.querySelectorAll('td');
+            wsData.push([tds[0]?.innerText || '', tds[1]?.innerText || '', tds[2]?.innerText || '']);
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        XLSX.utils.book_append_sheet(wb, ws, "BC Prod");
+        XLSX.writeFile(wb, `BC_Production_Report_${dateVal}.xlsx`);
+    }
+
+    function printBcProdReport() {
+        const printContents = document.getElementById('bcProdPrintContainer')?.innerHTML;
+        const dateVal = document.getElementById('bcProdDate')?.value || new Date().toISOString().split('T')[0];
+        if (!printContents) return;
+
+        const printWindow = window.open('', '', 'height=700,width=900');
+        printWindow.document.write('<html><head><title>BC Production Report - ' + dateVal + '</title>');
+        printWindow.document.write('<style>');
+        printWindow.document.write('body { font-family: sans-serif; padding: 20px; }');
+        printWindow.document.write('table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }');
+        printWindow.document.write('th, td { border: 1px solid #000; padding: 6px 10px; font-size: 13px; }');
+        printWindow.document.write('th { font-weight: bold; }');
+        printWindow.document.write('</style></head><body>');
+        printWindow.document.write('<h2 style="margin-bottom: 15px;">BC Production Report - Date: ' + dateVal + '</h2>');
+        printWindow.document.write(printContents);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => { printWindow.print(); }, 250);
+    }
 });

@@ -96,6 +96,7 @@
                 <button class="sub-tab" id="sidebarRmRequirement" data-screen="rm_requirement">RM Requirement</button>
                 <button class="sub-tab" id="sidebarMcUtil" data-screen="mc_util">M/c Util</button>
                 <button class="sub-tab" id="sidebarOperEff" data-screen="oper_eff">Oper Eff</button>
+                <button class="sub-tab" id="sidebarBcProd" data-screen="bc_prod">BC Prod</button>
             </div>
             <div class="sub-group" id="submenuMaintenance" style="display: none;">
                 <button class="sub-tab" id="sidebarBdSlip" data-screen="bdslip">Breakdown Slip</button>
@@ -1730,6 +1731,7 @@
                                     <label><input type="checkbox" value="debur"> Debur</label>
                                     <label><input type="checkbox" value="inspection"> Inspection</label>
                                     <label><input type="checkbox" value="reports"> Reports</label>
+                                    <label><input type="checkbox" value="bc_prod"> BC Prod</label>
                                     <label><input type="checkbox" value="maintenance"> Maintenance</label>
                                     <label><input type="checkbox" value="bdslip"> Breakdown Slip</label>
                                     <label><input type="checkbox" value="servicedetails"> Service Details</label>
@@ -2030,6 +2032,80 @@
                         </thead>
                         <tbody id="pcReceiptBody"></tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- BC Prod Section -->
+            <div class="table-container" id="bcProdSection" style="display: none; padding: 1.5rem; color: var(--text-main);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                    <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                        <h2 style="margin: 0; font-size: 1.3rem; color: var(--text-main);"><i class="fas fa-industry" style="margin-right: 8px; color: var(--primary);"></i>BC Production Report</h2>
+                        <div style="display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.04); padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <label for="bcProdDate" style="font-weight: 600; font-size: 0.88rem; margin: 0; color: var(--text-main);">Select Date:</label>
+                            <input type="date" id="bcProdDate" style="padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem; font-weight: 600; color: var(--text-main); background: var(--card-bg);">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button id="exportBcProdBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; display: flex; align-items: center; gap: 5px;">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            Export Excel
+                        </button>
+                        <button id="printBcProdBtn" class="btn btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; display: flex; align-items: center; gap: 5px; background-color: #0284c7; border-color: #0284c7;">
+                            <i class="fas fa-print"></i>
+                            Print Report
+                        </button>
+                    </div>
+                </div>
+
+                <div id="bcProdPrintContainer" style="max-width: 600px; background: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                    <!-- Table 1: BC Department Production By Machine -->
+                    <div style="margin-bottom: 25px;">
+                        <table id="bcMachineTable" class="compact-table" style="width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif;">
+                            <thead>
+                                <tr style="background-color: #ffffff; text-align: left;">
+                                    <th style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700; width: 140px;"></th>
+                                    <th style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700;">Part no</th>
+                                    <th style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700; width: 90px;">Opn no</th>
+                                    <th style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700; width: 80px;">Qty</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bcMachineBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Table 2: To PC -->
+                    <div style="margin-bottom: 25px;">
+                        <table id="toPcTable" class="compact-table" style="width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif;">
+                            <thead>
+                                <tr style="background-color: #ffffff; text-align: left;">
+                                    <th style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700; width: 140px;"></th>
+                                    <th style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700;">Part no</th>
+                                    <th style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700; width: 170px;">qty</th>
+                                </tr>
+                            </thead>
+                            <tbody id="toPcBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Table 3: From PC -->
+                    <div>
+                        <table id="fromPcTable" class="compact-table" style="width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif;">
+                            <thead>
+                                <tr style="background-color: #ffffff; text-align: left;">
+                                    <th style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700; width: 140px;"></th>
+                                    <th style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700;">Part no</th>
+                                    <th style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700; width: 170px;">qty</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fromPcBody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </main>
@@ -3307,6 +3383,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=285"></script>
+    <script src="/static/app.js?v=286"></script>
 </body>
 </html>
