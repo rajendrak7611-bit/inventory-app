@@ -1376,13 +1376,10 @@ def autofix_schedule_status_wip(payload: AutofixWipPayload, db: Session = Depend
         # 2. From PartMaster
         pm_query = db.query(PartMaster)
         if dept:
-            pm_query = pm_query.filter(or_(
-                func.lower(func.trim(PartMaster.department)) == dept.lower(),
-                func.lower(func.trim(PartMaster.dept)) == dept.lower()
-            ))
+            pm_query = pm_query.filter(func.lower(func.trim(PartMaster.department)) == dept.lower())
         for p in pm_query.all():
             if p.partno and p.partno.strip():
-                p_dept = p.department or p.dept or dept or ""
+                p_dept = p.department or dept or ""
                 part_depts.add((p_dept, p.partno.strip()))
 
         # 3. From ProductionLog
