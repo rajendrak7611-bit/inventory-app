@@ -1360,22 +1360,46 @@ def autofix_schedule_status_wip(payload: AutofixWipPayload, db: Session = Depend
     try:
         dept = (payload.department or "").strip()
         
-        query = db.query(Schedule).filter(or_(Schedule.status == "Pending", Schedule.status == None, Schedule.status == ""))
-        if dept:
-            query = query.filter(func.lower(func.trim(Schedule.department)) == dept.lower())
-        schedules = query.all()
-        
-        if not schedules:
-            return {"message": "No pending schedules found", "created_logs": 0}
-        
         today_str = datetime.now().strftime("%Y-%m-%d")
         created_count = 0
         
-        part_depts = set((s.department or "", s.partno or "") for s in schedules)
+        part_depts = set()
         
+        # 1. From Schedule
+        sched_query = db.query(Schedule)
+        if dept:
+            sched_query = sched_query.filter(func.lower(func.trim(Schedule.department)) == dept.lower())
+        for s in sched_query.all():
+            if s.partno and s.partno.strip():
+                part_depts.add((s.department or dept or "", s.partno.strip()))
+
+        # 2. From PartMaster
+        pm_query = db.query(PartMaster)
+        if dept:
+            pm_query = pm_query.filter(or_(
+                func.lower(func.trim(PartMaster.department)) == dept.lower(),
+                func.lower(func.trim(PartMaster.dept)) == dept.lower()
+            ))
+        for p in pm_query.all():
+            if p.partno and p.partno.strip():
+                p_dept = p.department or p.dept or dept or ""
+                part_depts.add((p_dept, p.partno.strip()))
+
+        # 3. From ProductionLog
+        if dept:
+            pl_query = db.query(ProductionLog).filter(func.lower(func.trim(ProductionLog.dept)) == dept.lower())
+            for pl in pl_query.all():
+                if pl.partno and pl.partno.strip():
+                    part_depts.add((pl.dept or dept or "", pl.partno.strip()))
+
+        if not part_depts:
+            return {"message": "No parts found for WIP backlog correction", "created_logs": 0}
+        
+        parts_processed = 0
         for s_dept, partno in part_depts:
             if not partno:
                 continue
+            parts_processed += 1
                 
             part_obj = db.query(PartMaster).filter(func.lower(PartMaster.partno) == partno.lower()).first()
             operations = []
@@ -1399,7 +1423,7 @@ def autofix_schedule_status_wip(payload: AutofixWipPayload, db: Session = Depend
             if desp_prod > rfd_prod:
                 shortfall = desp_prod - rfd_prod
                 rfd_fix = ProductionLog(
-                    dept=s_dept,
+                    dept=s_dept or "GENERAL",
                     date=today_str,
                     shift="1",
                     setter="-",
@@ -1431,7 +1455,7 @@ def autofix_schedule_status_wip(payload: AutofixWipPayload, db: Session = Depend
             if total_inspected > for_ins_total:
                 shortfall = total_inspected - for_ins_total
                 ins_fix = ProductionLog(
-                    dept=s_dept,
+                    dept=s_dept or "GENERAL",
                     date=today_str,
                     shift="1",
                     setter="-",
@@ -1457,7 +1481,7 @@ def autofix_schedule_status_wip(payload: AutofixWipPayload, db: Session = Depend
             if debur_total > 0 and total_inspected > debur_total:
                 shortfall = total_inspected - debur_total
                 debur_fix = ProductionLog(
-                    dept=s_dept,
+                    dept=s_dept or "GENERAL",
                     date=today_str,
                     shift="1",
                     setter="-",
@@ -1489,7 +1513,7 @@ def autofix_schedule_status_wip(payload: AutofixWipPayload, db: Session = Depend
                 if required_next > current_prod:
                     shortfall = required_next - current_prod
                     op_fix = ProductionLog(
-                        dept=s_dept,
+                        dept=s_dept or "GENERAL",
                         date=today_str,
                         shift="1",
                         setter="-",
@@ -1511,10 +1535,10 @@ def autofix_schedule_status_wip(payload: AutofixWipPayload, db: Session = Depend
                     current_prod += shortfall
                     all_logs.append(op_fix)
                     
-                required_next = current_prod
+                required_next = max(required_next, current_prod)
                 
         db.commit()
-        return {"message": f"Successfully created {created_count} WIP backlog correction logs.", "created_logs": created_count}
+        return {"message": f"Successfully processed {parts_processed} parts for WIP backlog correction ({created_count} correction entries created).", "created_logs": created_count, "parts_processed": parts_processed}
     except Exception as e:
         db.rollback()
         import traceback

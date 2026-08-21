@@ -2593,20 +2593,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('autofixWipBtn')?.addEventListener('click', async () => {
         if (!userObj || (userObj.role !== 'admin' && (userObj.username || '').toLowerCase() !== 'admin')) {
-            alert('Access Denied: Only Admin users are authorized to auto-fix WIP balances.');
+            alert('Access Denied: Only Admin users are authorized to run backlog correction.');
             return;
         }
         const dept = document.getElementById('statusDeptSelect').value;
         const msg = dept 
-            ? `Are you sure you want to Auto-Fix all negative WIP balances for Department "${dept}"?\n\nThis will backfill missing production logs for preceding operations so all negative WIP quantities are corrected to zero/actuals.`
-            : `Are you sure you want to Auto-Fix all negative WIP balances for ALL Departments?\n\nThis will backfill missing production logs for preceding operations so all negative WIP quantities are corrected to zero/actuals.`;
+            ? `Are you sure you want to run Backlog Correction for ALL parts in Department "${dept}"?\n\nThis will backfill missing upstream production logs across all parts using the same cumulative concept as Edit WIP.`
+            : `Are you sure you want to run Backlog Correction for ALL parts across ALL Departments?\n\nThis will backfill missing upstream production logs across all parts using the same cumulative concept as Edit WIP.`;
 
         if (!confirm(msg)) return;
 
         const btn = document.getElementById('autofixWipBtn');
         const origText = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '⚡ Fixing WIP...';
+        btn.innerHTML = '⚡ Correcting Backlog...';
 
         try {
             const res = await fetch('/api/schedule_status/autofix_wip', {
@@ -2616,14 +2616,14 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await res.json();
             if (res.ok) {
-                alert(data.message || 'WIP Auto-Fix complete!');
+                alert(data.message || 'Backlog correction complete for all parts!');
                 fetchScheduleStatus();
             } else {
-                alert('Error performing WIP Auto-Fix: ' + (data.detail || data.message || 'Unknown server error'));
+                alert('Error performing Backlog Correction: ' + (data.detail || data.message || 'Unknown server error'));
             }
         } catch (err) {
-            console.error('Error in Auto-Fix WIP:', err);
-            alert('Failed to execute WIP Auto-Fix: ' + err.message);
+            console.error('Error in Backlog Correction:', err);
+            alert('Failed to execute Backlog Correction: ' + err.message);
         } finally {
             btn.disabled = false;
             btn.innerHTML = origText;
