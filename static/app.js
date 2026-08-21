@@ -11979,7 +11979,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const [prodRes, pcRes, pcReceiptRes] = await Promise.all([
-                fetch('/api/production_logs'),
+                fetch('/api/prodlog'),
                 fetch('/api/pc_logs'),
                 fetch('/api/pc_receipt_logs')
             ]);
@@ -12009,14 +12009,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 const machLogs = logsToday.filter(l => matchMachine(l.machine, machName));
 
                 if (machLogs.length > 0) {
-                    machLogs.forEach((l, idx) => {
+                    // Group by partno + opn_no to get cumulative qty operation-wise
+                    const grouped = {};
+                    machLogs.forEach(l => {
+                        const part = (l.partno || '').trim();
+                        const opn = (l.opn_no || '').trim();
+                        const key = `${part}___${opn}`;
+                        if (!grouped[key]) {
+                            grouped[key] = { partno: part, opn_no: opn, qty: 0 };
+                        }
+                        grouped[key].qty += (l.prod_qty || 0);
+                    });
+
+                    const groupKeys = Object.keys(grouped);
+                    groupKeys.forEach((k, idx) => {
+                        const item = grouped[k];
                         const mCol = idx === 0 ? `<td style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700;">${machName}</td>` : `<td style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700;"></td>`;
                         bcMachineHtml += `
                             <tr>
                                 ${mCol}
-                                <td style="border: 1px solid #000000; padding: 6px 10px;">${l.partno || ''}</td>
-                                <td style="border: 1px solid #000000; padding: 6px 10px;">${l.opn_no || ''}</td>
-                                <td style="border: 1px solid #000000; padding: 6px 10px; text-align: right; font-weight: 600;">${l.prod_qty || 0}</td>
+                                <td style="border: 1px solid #000000; padding: 6px 10px;">${item.partno}</td>
+                                <td style="border: 1px solid #000000; padding: 6px 10px;">${item.opn_no}</td>
+                                <td style="border: 1px solid #000000; padding: 6px 10px; text-align: right; font-weight: 600;">${item.qty}</td>
                             </tr>
                         `;
                     });
