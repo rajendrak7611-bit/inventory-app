@@ -313,7 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection', 'bcProdSection',
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
             'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'insertStockSection', 'partMasterSection', 'machinesSection',
-            'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'scheduleRunSection',
+            'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'dbBackupSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
             'inspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'hrSection', 'attendanceSection'
         ];
