@@ -11938,36 +11938,44 @@ document.addEventListener('DOMContentLoaded', () => {
         printBcProdReport();
     });
 
-    function normDateStr(dStr) {
-        if (!dStr) return '';
-        let s = dStr.toString().split('T')[0].split(' ')[0].trim();
-        let match = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
-        if (match) {
-            return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
-        }
-        match = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-        if (match) {
-            let p1 = parseInt(match[1], 10);
-            let p2 = parseInt(match[2], 10);
-            let y = match[3];
-            if (p1 > 12) {
-                return `${y}-${p2.toString().padStart(2, '0')}-${p1.toString().padStart(2, '0')}`;
-            } else {
-                return `${y}-${p1.toString().padStart(2, '0')}-${p2.toString().padStart(2, '0')}`;
+    function sameDate(d1, d2) {
+        if (!d1 || !d2) return false;
+        let s1 = d1.toString().split('T')[0].split(' ')[0].trim();
+        let s2 = d2.toString().split('T')[0].split(' ')[0].trim();
+        if (s1 === s2) return true;
+        
+        let p1 = s1.split(/[\/\-]/);
+        let p2 = s2.split(/[\/\-]/);
+        if (p1.length === 3 && p2.length === 3) {
+            let set1 = new Set(p1.map(x => parseInt(x, 10)));
+            let set2 = new Set(p2.map(x => parseInt(x, 10)));
+            if (set1.size === set2.size && [...set1].every(x => set2.has(x))) {
+                return true;
             }
         }
-        return s;
+        return false;
     }
 
-    function normMachineName(mName) {
-        if (!mName) return '';
-        return mName.toString().replace(/[\s\-_]+/g, '').toLowerCase();
+    function matchMachine(logMach, targetMach) {
+        if (!logMach || !targetMach) return false;
+        let a = logMach.toString().toLowerCase().replace(/[\s\-_0]+/g, '');
+        let b = targetMach.toString().toLowerCase().replace(/[\s\-_0]+/g, '');
+        if (a === b) return true;
+        a = a.replace(/haas/g, 'hass');
+        b = b.replace(/haas/g, 'hass');
+        if (a === b) return true;
+        a = a.replace(/cincinnati/g, 'cincinati');
+        b = b.replace(/cincinnati/g, 'cincinati');
+        if (a === b) return true;
+        a = a.replace(/milwaukee/g, 'millwake');
+        b = b.replace(/milwaukee/g, 'millwake');
+        if (a === b) return true;
+        return false;
     }
 
     async function fetchBcProdReport() {
         const dateInput = document.getElementById('bcProdDate');
         const selectedDate = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
-        const targetDateNorm = normDateStr(selectedDate);
 
         try {
             const [prodRes, pcRes, pcReceiptRes] = await Promise.all([
@@ -11994,21 +12002,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 "WMW"
             ];
 
-            const logsToday = allProdLogs.filter(l => {
-                if (!l.date) return false;
-                const logDateNorm = normDateStr(l.date);
-                if (logDateNorm && logDateNorm === targetDateNorm) return true;
-                if (l.date === selectedDate) return true;
-                return false;
-            });
+            const logsToday = allProdLogs.filter(l => sameDate(l.date, selectedDate));
 
             let bcMachineHtml = '';
             machineList.forEach(machName => {
-                const targetMachNorm = normMachineName(machName);
-                const machLogs = logsToday.filter(l => {
-                    const logMachNorm = normMachineName(l.machine);
-                    return logMachNorm && logMachNorm === targetMachNorm;
-                });
+                const machLogs = logsToday.filter(l => matchMachine(l.machine, machName));
 
                 if (machLogs.length > 0) {
                     machLogs.forEach((l, idx) => {
@@ -12038,11 +12036,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (bcBody) bcBody.innerHTML = bcMachineHtml;
 
             // 2. Table 2: To PC
-            const toPcLogsToday = allPcLogs.filter(l => {
-                if (!l.date) return false;
-                const logDateNorm = normDateStr(l.date);
-                return logDateNorm === targetDateNorm || l.date === selectedDate;
-            });
+            const toPcLogsToday = allPcLogs.filter(l => sameDate(l.date, selectedDate));
             const toPcGrouped = {};
             toPcLogsToday.forEach(l => {
                 const part = (l.partno || '').trim();
@@ -12081,11 +12075,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (toPcBody) toPcBody.innerHTML = toPcHtml;
 
             // 3. Table 3: From PC
-            const fromPcLogsToday = allPcReceiptLogs.filter(l => {
-                if (!l.date) return false;
-                const logDateNorm = normDateStr(l.date);
-                return logDateNorm === targetDateNorm || l.date === selectedDate;
-            });
+            const fromPcLogsToday = allPcReceiptLogs.filter(l => sameDate(l.date, selectedDate));
             const fromPcGrouped = {};
             fromPcLogsToday.forEach(l => {
                 const part = (l.partno || '').trim();
