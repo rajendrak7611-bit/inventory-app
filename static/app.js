@@ -12352,6 +12352,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderAttVsLoginTable() {
         if (!currentAttVsLoginData) return;
+        const escapeHtml = (str) => {
+            if (str === null || str === undefined) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
         const body = document.getElementById('attVsLoginBody');
         const hRow1 = document.getElementById('attVsLoginHeaderRow1');
         const hRow2 = document.getElementById('attVsLoginHeaderRow2');
