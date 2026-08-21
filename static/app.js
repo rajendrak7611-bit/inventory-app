@@ -2682,6 +2682,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (savedDept && deptSelect) {
                 deptSelect.value = savedDept;
             }
+            document.getElementById('generateStatusReportBtn')?.addEventListener('click', () => {
+                fetchScheduleStatus();
+            });
             if (deptSelect.value) {
                 fetchScheduleStatus();
             }
