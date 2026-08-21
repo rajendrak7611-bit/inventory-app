@@ -2660,7 +2660,55 @@ def delete_service_detail(sd_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Service Detail not found")
     db.delete(db_sd)
     db.commit()
-    return {"message": "Service Detail deleted successfully"}
+# --- DATABASE BACKUP ENDPOINTS ---
+@app.get("/api/admin/export_db_backup")
+def export_db_backup(db: Session = Depends(get_db)):
+    from datetime import datetime
+    
+    def model_to_dict(model_obj):
+        d = {}
+        for column in model_obj.__table__.columns:
+            val = getattr(model_obj, column.name)
+            if isinstance(val, (datetime,)):
+                val = val.isoformat()
+            d[column.name] = val
+        return d
+
+    backup_data = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "version": "1.0",
+        "tables": {
+            "part_masters": [model_to_dict(x) for x in db.query(PartMaster).all()],
+            "part_operations": [model_to_dict(x) for x in db.query(PartOperation).all()],
+            "machines": [model_to_dict(x) for x in db.query(Machine).all()],
+            "operators": [model_to_dict(x) for x in db.query(Operator).all()],
+            "setters": [model_to_dict(x) for x in db.query(Setter).all()],
+            "departments": [model_to_dict(x) for x in db.query(Department).all()],
+            "shifts": [model_to_dict(x) for x in db.query(Shift).all()],
+            "vendors": [model_to_dict(x) for x in db.query(Vendor).all()],
+            "suppliers": [model_to_dict(x) for x in db.query(Supplier).all()],
+            "schedules": [model_to_dict(x) for x in db.query(Schedule).all()],
+            "production_logs": [model_to_dict(x) for x in db.query(ProductionLog).all()],
+            "raw_materials": [model_to_dict(x) for x in db.query(RawMaterial).all()],
+            "raw_material_logs": [model_to_dict(x) for x in db.query(RawMaterialLog).all()],
+            "ht_logs": [model_to_dict(x) for x in db.query(HTLog).all()],
+            "ht_receipt_logs": [model_to_dict(x) for x in db.query(HTReceiptLog).all()],
+            "pc_logs": [model_to_dict(x) for x in db.query(PcLog).all()],
+            "pc_receipt_logs": [model_to_dict(x) for x in db.query(PcReceiptLog).all()],
+            "insert_masters": [model_to_dict(x) for x in db.query(InsertMaster).all()],
+            "drill_masters": [model_to_dict(x) for x in db.query(DrillMaster).all()],
+            "tap_masters": [model_to_dict(x) for x in db.query(TapMaster).all()],
+            "insert_receipts": [model_to_dict(x) for x in db.query(InsertReceipt).all()],
+            "tap_receipts": [model_to_dict(x) for x in db.query(TapReceipt).all()],
+            "insert_issues": [model_to_dict(x) for x in db.query(InsertIssue).all()],
+            "tap_issues": [model_to_dict(x) for x in db.query(TapIssue).all()],
+            "breakdown_slips": [model_to_dict(x) for x in db.query(BreakdownSlip).all()],
+            "service_details": [model_to_dict(x) for x in db.query(ServiceDetail).all()],
+            "attendances": [model_to_dict(x) for x in db.query(Attendance).all()],
+            "users": [model_to_dict(x) for x in db.query(User).all()]
+        }
+    }
+    return backup_data
 
 # Serve static files (frontend)
 app.mount("/static", StaticFiles(directory="static"), name="static")

@@ -69,6 +69,7 @@
                 <button class="sub-tab" id="sidebarVendors" data-screen="vendors">Vendors</button>
                 <button class="sub-tab" id="sidebarSetters" data-screen="setters">Setters</button>
                 <button class="sub-tab" id="sidebarSuppliers" data-screen="suppliers">Suppliers</button>
+                <button class="sub-tab" id="sidebarDbBackup" data-screen="db_backup">DB Backup</button>
             </div>
             <div class="sub-group" id="submenuInventory" style="display: none;">
                 <button class="sub-tab" id="sidebarRmReceipt" data-screen="rawmaterial">Receipt</button>
@@ -671,6 +672,60 @@
                         <!-- Data will be populated here by JavaScript -->
                     </tbody>
                 </table>
+            <!-- DB Backup Section (Master Submenu - Admin Rights) -->
+            <div class="table-container" id="dbBackupSection" style="display: none; padding: 2rem; color: var(--text-main);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 15px;">
+                    <div>
+                        <h2 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+                            <i class="fas fa-database" style="color: var(--primary);"></i>
+                            Database Backup & Contingency
+                            <span style="font-size: 0.75rem; background: #0284c7; color: #ffffff; padding: 3px 8px; border-radius: 12px; font-weight: 600;">Admin Access Only</span>
+                        </h2>
+                        <p style="margin: 6px 0 0 0; color: var(--text-muted); font-size: 0.88rem;">
+                            Export full timestamped backups of all system tables to your local computer as a contingency archive.
+                        </p>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem;">
+                    <!-- Card 1: Full JSON Backup -->
+                    <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
+                            <div style="width: 42px; height: 42px; border-radius: 8px; background: rgba(2, 132, 199, 0.1); color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">
+                                <i class="fas fa-file-code"></i>
+                            </div>
+                            <div>
+                                <h3 style="margin: 0; font-size: 1.05rem; font-weight: 600;">Full System Backup (JSON)</h3>
+                                <span style="font-size: 0.78rem; color: var(--text-muted);">Complete database snapshot</span>
+                            </div>
+                        </div>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.25rem;">
+                            Downloads all 28 database tables (Part Master, Operations, Production Logs, Inventory, Raw Materials, Tool Crib, Maintenance, Attendance, Users) in a single timestamped JSON backup file.
+                        </p>
+                        <button id="downloadJsonDbBackupBtn" class="btn btn-primary" style="width: 100%; padding: 0.6rem; font-size: 0.9rem; background-color: #0284c7; border-color: #0284c7; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <i class="fas fa-download"></i> Download JSON Backup
+                        </button>
+                    </div>
+
+                    <!-- Card 2: Multi-Sheet Excel Backup -->
+                    <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
+                            <div style="width: 42px; height: 42px; border-radius: 8px; background: rgba(22, 163, 74, 0.1); color: #16a34a; display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">
+                                <i class="fas fa-file-excel"></i>
+                            </div>
+                            <div>
+                                <h3 style="margin: 0; font-size: 1.05rem; font-weight: 600;">Multi-Sheet Excel Backup</h3>
+                                <span style="font-size: 0.78rem; color: var(--text-muted);">Excel Workbook with all tables</span>
+                            </div>
+                        </div>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.25rem;">
+                            Exports all system tables directly into an Excel workbook where each database table is saved in its own tab for easy viewing and offline record keeping.
+                        </p>
+                        <button id="downloadExcelDbBackupBtn" class="btn btn-primary" style="width: 100%; padding: 0.6rem; font-size: 0.9rem; background-color: #16a34a; border-color: #16a34a; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <i class="fas fa-file-excel"></i> Export Excel Backup
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div class="table-container" id="machinesSection" style="display: none;">
@@ -3386,6 +3441,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=291"></script>
+    <script src="/static/app.js?v=292"></script>
 </body>
 </html>

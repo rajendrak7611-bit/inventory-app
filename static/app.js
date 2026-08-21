@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 tab.style.display = 'inline-block';
             } else {
                 const groupScreens = {
-                    'master': ['partmaster', 'machines', 'operators', 'dept', 'shift', 'vendors', 'setters', 'suppliers'],
+                    'master': ['partmaster', 'machines', 'operators', 'dept', 'shift', 'vendors', 'setters', 'suppliers', 'db_backup'],
                     'inventory': ['inventory', 'rawmaterial', 'ht', 'pc'],
                     'production': ['schedule', 'status', 'prodlog', 'debur'],
                     'toolcrib': ['insertmaster', 'drillmaster', 'products', 'insertreceipt', 'insertissue', 'insertcpc', 'insertstock'],
@@ -450,6 +450,12 @@ document.addEventListener('DOMContentLoaded', () => {
             addBtn.style.display = 'inline-flex';
             addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Supplier';
             fetchSuppliers();
+        }},
+        'sidebarDbBackup': { tab: 'db_backup', action: () => {
+            const sec = document.getElementById('dbBackupSection');
+            if (sec) sec.style.display = 'block';
+            addBtn.style.display = 'none';
+            if (importBtn) importBtn.style.display = 'none';
         }},
         'sidebarHt': { tab: 'ht', action: () => {
             if (htSection) htSection.style.display = 'block';
@@ -12199,4 +12205,80 @@ document.addEventListener('DOMContentLoaded', () => {
         printWindow.focus();
         setTimeout(() => { printWindow.print(); }, 250);
     }
+
+    // --- DB BACKUP LOGIC (ADMIN ONLY) ---
+    document.getElementById('downloadJsonDbBackupBtn')?.addEventListener('click', async () => {
+        if (!userObj || (userObj.role !== 'admin' && (userObj.username || '').toLowerCase() !== 'admin')) {
+            alert('Access Denied: Only Admin users can download database backups.');
+            return;
+        }
+        const btn = document.getElementById('downloadJsonDbBackupBtn');
+        const origText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing JSON Backup...';
+
+        try {
+            const res = await fetch('/api/admin/export_db_backup');
+            if (!res.ok) throw new Error('Failed to fetch DB backup data');
+            const data = await res.json();
+
+            const dateStr = new Date().toISOString().slice(0, 10);
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `GRS_Factory_Database_Full_Backup_${dateStr}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            alert('Database JSON backup downloaded successfully to your local machine!');
+        } catch (err) {
+            console.error('Error downloading DB backup:', err);
+            alert('Failed to download database backup: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = origText;
+        }
+    });
+
+    document.getElementById('downloadExcelDbBackupBtn')?.addEventListener('click', async () => {
+        if (!userObj || (userObj.role !== 'admin' && (userObj.username || '').toLowerCase() !== 'admin')) {
+            alert('Access Denied: Only Admin users can download database backups.');
+            return;
+        }
+        if (typeof XLSX === 'undefined') {
+            alert('Excel generator library is loading. Please try again in a moment.');
+            return;
+        }
+        const btn = document.getElementById('downloadExcelDbBackupBtn');
+        const origText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating Excel Backup...';
+
+        try {
+            const res = await fetch('/api/admin/export_db_backup');
+            if (!res.ok) throw new Error('Failed to fetch DB backup data');
+            const data = await res.json();
+            const tables = data.tables || {};
+
+            const wb = XLSX.utils.book_new();
+            Object.keys(tables).forEach(tName => {
+                const rows = tables[tName] || [];
+                const ws = XLSX.utils.json_to_sheet(rows);
+                const sheetName = tName.slice(0, 31);
+                XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            });
+
+            const dateStr = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(wb, `GRS_Factory_Database_Excel_Backup_${dateStr}.xlsx`);
+            alert('Multi-Sheet Excel Database backup downloaded successfully!');
+        } catch (err) {
+            console.error('Error exporting Excel DB backup:', err);
+            alert('Failed to export Excel backup: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = origText;
+        }
+    });
 });
