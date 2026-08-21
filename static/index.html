@@ -98,6 +98,7 @@
                 <button class="sub-tab" id="sidebarMcUtil" data-screen="mc_util">M/c Util</button>
                 <button class="sub-tab" id="sidebarOperEff" data-screen="oper_eff">Oper Eff</button>
                 <button class="sub-tab" id="sidebarBcProd" data-screen="bc_prod">BC Prod</button>
+                <button class="sub-tab" id="sidebarAttVsLogin" data-screen="att_vs_login">Att vs Login</button>
             </div>
             <div class="sub-group" id="submenuMaintenance" style="display: none;">
                 <button class="sub-tab" id="sidebarBdSlip" data-screen="bdslip">Breakdown Slip</button>
@@ -1729,6 +1730,49 @@
                             </tr>
                         </thead>
                         <tbody id="operEffBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Attendance vs Login Hours Report Section -->
+            <div class="table-container" id="attVsLoginSection" style="display: none; padding: 2rem; color: var(--text-main);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                    <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                        <h2 style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-clock" style="color: var(--primary-color);"></i> Attendance vs Login Hours Report
+                        </h2>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <label for="attVsLoginMonth" style="font-weight: 600; font-size: 0.85rem;">Month:</label>
+                            <input type="month" id="attVsLoginMonth" style="padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
+                        </div>
+                        <select id="attVsLoginDeptSelect" style="padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
+                            <option value="">-- All Departments --</option>
+                        </select>
+                        <input type="text" id="attVsLoginSearch" placeholder="🔍 Search Operator..." style="padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif; width: 180px;">
+                        <button id="generateAttVsLoginBtn" class="btn btn-primary" style="padding: 0.4rem 0.9rem; font-size: 0.85rem; display: flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-sync-alt"></i> Generate Report
+                        </button>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button id="exportAttVsLoginBtn" class="btn btn-outline" style="padding: 0.4rem 0.9rem; font-size: 0.85rem; border-color: #10b981; color: #10b981; display: flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </button>
+                    </div>
+                </div>
+
+                <div style="max-height: calc(100vh - 220px); overflow: auto; border: 1px solid var(--border-color); border-radius: 8px;">
+                    <table id="attVsLoginTable" style="width: 100%; white-space: nowrap; border-collapse: collapse; font-size: 0.82rem;">
+                        <thead>
+                            <tr id="attVsLoginHeaderRow1" style="background-color: #f1f5f9; text-align: center; font-weight: bold; border-bottom: 1px solid #cbd5e1;">
+                                <!-- Populated dynamically by JS -->
+                            </tr>
+                            <tr id="attVsLoginHeaderRow2" style="background-color: #e2e8f0; font-weight: bold; border-bottom: 2px solid #cbd5e1;">
+                                <!-- Populated dynamically by JS -->
+                            </tr>
+                        </thead>
+                        <tbody id="attVsLoginBody">
+                            <tr><td colspan="100" style="text-align: center; color: var(--text-muted); padding: 2rem;">Select Month and Department, then click Generate Report</td></tr>
+                        </tbody>
                     </table>
                 </div>
             </div>
@@ -3443,6 +3487,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=293"></script>
+    <script src="/static/app.js?v=294"></script>
 </body>
 </html>

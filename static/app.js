@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'inventory': ['inventory', 'rawmaterial', 'ht', 'pc'],
                     'production': ['schedule', 'status', 'prodlog', 'debur'],
                     'toolcrib': ['insertmaster', 'drillmaster', 'products', 'insertreceipt', 'insertissue', 'insertcpc', 'insertstock'],
-                    'reports': ['reports', 'rm_requirement', 'mc_util', 'oper_eff'],
+                    'reports': ['reports', 'rm_requirement', 'mc_util', 'oper_eff', 'bc_prod', 'att_vs_login'],
                     'maintenance': ['maintenance', 'bdslip', 'servicedetails'],
                     'hr': ['hr', 'attendance']
                 };
@@ -310,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function hideAllSections() {
         const sections = [
-            'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection', 'bcProdSection',
+            'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection', 'bcProdSection', 'attVsLoginSection',
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
             'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'insertStockSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'dbBackupSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'scheduleRunSection',
@@ -525,6 +525,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (sec) sec.style.display = 'block';
             addBtn.style.display = 'none';
             initBcProdReport();
+        }},
+        'sidebarAttVsLogin': { tab: 'att_vs_login', action: () => {
+            const sec = document.getElementById('attVsLoginSection');
+            if (sec) sec.style.display = 'block';
+            addBtn.style.display = 'none';
+            if (importBtn) importBtn.style.display = 'none';
+            const mInput = document.getElementById('attVsLoginMonth');
+            if (mInput && !mInput.value) {
+                mInput.value = new Date().toISOString().slice(0, 7);
+            }
+            if (typeof fetchDepartments === 'function') fetchDepartments();
+            fetchAttVsLoginReport();
         }},
         'sidebarInsertMaster': { tab: 'insertmaster', action: () => {
             const sec = document.getElementById('insertMasterSection');
@@ -12280,5 +12292,169 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.disabled = false;
             btn.innerHTML = origText;
         }
+    });
+
+    // --- ATTENDANCE VS LOGIN HOURS REPORT LOGIC ---
+    let currentAttVsLoginData = null;
+
+    async function fetchAttVsLoginReport() {
+        const mInput = document.getElementById('attVsLoginMonth');
+        const dSelect = document.getElementById('attVsLoginDeptSelect');
+        const body = document.getElementById('attVsLoginBody');
+        const hRow1 = document.getElementById('attVsLoginHeaderRow1');
+        const hRow2 = document.getElementById('attVsLoginHeaderRow2');
+
+        if (!mInput || !body || !hRow1 || !hRow2) return;
+
+        let monthVal = mInput.value;
+        if (!monthVal) {
+            monthVal = new Date().toISOString().slice(0, 7);
+            mInput.value = monthVal;
+        }
+        if (dSelect && dSelect.options.length <= 1) {
+            try {
+                const deptRes = await fetch('/api/departments');
+                if (deptRes.ok) {
+                    const depts = await deptRes.json();
+                    depts.forEach(d => {
+                        const opt = document.createElement('option');
+                        opt.value = d.name;
+                        opt.textContent = d.name;
+                        dSelect.appendChild(opt);
+                    });
+                }
+            } catch(e) {}
+        }
+        const deptVal = dSelect ? dSelect.value : '';
+
+        body.innerHTML = `<tr><td colspan="100" style="text-align: center; padding: 2rem; color: var(--text-muted);"><i class="fas fa-spinner fa-spin"></i> Fetching Attendance vs Login data...</td></tr>`;
+
+        try {
+            const res = await fetch(`/api/reports/att_vs_login?month_year=${encodeURIComponent(monthVal)}&dept=${encodeURIComponent(deptVal)}`);
+            if (!res.ok) throw new Error('Failed to load Attendance vs Login report');
+            const data = await res.json();
+            currentAttVsLoginData = data;
+            renderAttVsLoginTable();
+        } catch (err) {
+            console.error('Error fetching Att vs Login report:', err);
+            body.innerHTML = `<tr><td colspan="100" style="text-align: center; color: #ef4444; padding: 2rem;">Error: ${err.message}</td></tr>`;
+        }
+    }
+
+    function renderAttVsLoginTable() {
+        if (!currentAttVsLoginData) return;
+        const body = document.getElementById('attVsLoginBody');
+        const hRow1 = document.getElementById('attVsLoginHeaderRow1');
+        const hRow2 = document.getElementById('attVsLoginHeaderRow2');
+        const searchInput = document.getElementById('attVsLoginSearch');
+
+        const searchVal = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        const daysInMonth = currentAttVsLoginData.days_in_month || 31;
+        const allData = currentAttVsLoginData.data || [];
+
+        const filtered = allData.filter(row => {
+            if (!searchVal) return true;
+            return (row.operators || '').toLowerCase().includes(searchVal) || (row.dept || '').toLowerCase().includes(searchVal);
+        });
+
+        // Build Header Row 1 (Top Level Days)
+        let r1Html = `<th style="padding: 8px; border: 1px solid #cbd5e1; background: #e2e8f0; position: sticky; left: 0; z-index: 10;"></th><th style="padding: 8px; border: 1px solid #cbd5e1; background: #e2e8f0; position: sticky; left: 100px; z-index: 10;"></th>`;
+        for (let d = 1; d <= daysInMonth; d++) {
+            r1Html += `<th colspan="2" style="padding: 6px; border: 1px solid #cbd5e1; text-align: center; background: #f8fafc; font-weight: bold; font-size: 0.9rem;">${d}</th>`;
+        }
+        r1Html += `<th colspan="3" style="padding: 6px; border: 1px solid #cbd5e1; text-align: center; background: #e2e8f0; font-weight: bold;">TOTAL SUMMARY</th>`;
+        hRow1.innerHTML = r1Html;
+
+        // Build Header Row 2 (Sub-columns)
+        let r2Html = `<th style="padding: 8px; border: 1px solid #cbd5e1; background: #f1f5f9; text-align: left; min-width: 100px; position: sticky; left: 0; z-index: 10;">dept</th><th style="padding: 8px; border: 1px solid #cbd5e1; background: #f1f5f9; text-align: left; min-width: 140px; position: sticky; left: 100px; z-index: 10;">operators</th>`;
+        for (let d = 1; d <= daysInMonth; d++) {
+            r2Html += `<th style="padding: 6px; border: 1px solid #cbd5e1; text-align: right; min-width: 75px; background: #fff;">att hours</th><th style="padding: 6px; border: 1px solid #cbd5e1; text-align: right; min-width: 75px; background: #f0fdf4;">login hours</th>`;
+        }
+        r2Html += `<th style="padding: 6px; border: 1px solid #cbd5e1; text-align: right; min-width: 85px; background: #e0f2fe; font-weight: bold;">Total Att</th><th style="padding: 6px; border: 1px solid #cbd5e1; text-align: right; min-width: 85px; background: #dcfce7; font-weight: bold;">Total Login</th><th style="padding: 6px; border: 1px solid #cbd5e1; text-align: right; min-width: 80px; background: #fef3c7; font-weight: bold;">Diff</th>`;
+        hRow2.innerHTML = r2Html;
+
+        if (filtered.length === 0) {
+            body.innerHTML = `<tr><td colspan="${daysInMonth * 2 + 5}" style="text-align: center; color: var(--text-muted); padding: 2rem;">No operator attendance vs login records found for this selection.</td></tr>`;
+            return;
+        }
+
+        let bodyHtml = '';
+        filtered.forEach((row, idx) => {
+            const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+            bodyHtml += `<tr style="background-color: ${bg}; border-bottom: 1px solid #e2e8f0;">`;
+            bodyHtml += `<td style="padding: 6px 10px; border: 1px solid #e2e8f0; font-weight: 500; position: sticky; left: 0; background: ${bg}; z-index: 5;">${escapeHtml(row.dept)}</td>`;
+            bodyHtml += `<td style="padding: 6px 10px; border: 1px solid #e2e8f0; font-weight: 600; position: sticky; left: 100px; background: ${bg}; z-index: 5;">${escapeHtml(row.operators)}</td>`;
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dayObj = (row.days && row.days[String(d)]) || { att_hours: 0, login_hours: 0 };
+                const attH = dayObj.att_hours || 0;
+                const loginH = dayObj.login_hours || 0;
+
+                const attDisp = attH > 0 ? attH.toFixed(1) : '-';
+                const loginDisp = loginH > 0 ? loginH.toFixed(1) : '-';
+
+                bodyHtml += `<td style="padding: 6px; border: 1px solid #e2e8f0; text-align: right; ${attH > 0 ? 'color: #0369a1; font-weight: 500;' : 'color: #94a3b8;'}">${attDisp}</td>`;
+                bodyHtml += `<td style="padding: 6px; border: 1px solid #e2e8f0; text-align: right; ${loginH > 0 ? 'color: #15803d; font-weight: 600;' : 'color: #94a3b8;'}">${loginDisp}</td>`;
+            }
+
+            const diffColor = row.diff > 0 ? '#b45309' : (row.diff < 0 ? '#dc2626' : '#16a34a');
+
+            bodyHtml += `<td style="padding: 6px 10px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold; color: #0369a1; background: #f0f9ff;">${row.total_att.toFixed(1)}</td>`;
+            bodyHtml += `<td style="padding: 6px 10px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold; color: #15803d; background: #f0fdf4;">${row.total_login.toFixed(1)}</td>`;
+            bodyHtml += `<td style="padding: 6px 10px; border: 1px solid #e2e8f0; text-align: right; font-weight: bold; color: ${diffColor}; background: #fffbeb;">${row.diff.toFixed(1)}</td>`;
+            bodyHtml += `</tr>`;
+        });
+
+        body.innerHTML = bodyHtml;
+    }
+
+    // Attach Event Listeners
+    document.getElementById('generateAttVsLoginBtn')?.addEventListener('click', fetchAttVsLoginReport);
+    document.getElementById('attVsLoginMonth')?.addEventListener('change', fetchAttVsLoginReport);
+    document.getElementById('attVsLoginDeptSelect')?.addEventListener('change', fetchAttVsLoginReport);
+    document.getElementById('attVsLoginSearch')?.addEventListener('input', renderAttVsLoginTable);
+
+    // Export to Excel
+    document.getElementById('exportAttVsLoginBtn')?.addEventListener('click', () => {
+        if (!currentAttVsLoginData || !currentAttVsLoginData.data || currentAttVsLoginData.data.length === 0) {
+            alert('No data available to export');
+            return;
+        }
+        if (typeof XLSX === 'undefined') {
+            alert('Excel library loading. Please try again.');
+            return;
+        }
+
+        const daysInMonth = currentAttVsLoginData.days_in_month || 31;
+        const monthVal = currentAttVsLoginData.month_year || 'report';
+
+        const row1 = ['', ''];
+        for (let d = 1; d <= daysInMonth; d++) {
+            row1.push(d, '');
+        }
+        row1.push('TOTAL SUMMARY', '', '');
+
+        const row2 = ['dept', 'operators'];
+        for (let d = 1; d <= daysInMonth; d++) {
+            row2.push('att hours', 'login hours');
+        }
+        row2.push('Total Att', 'Total Login', 'Diff');
+
+        const exportRows = [row1, row2];
+
+        currentAttVsLoginData.data.forEach(row => {
+            const r = [row.dept, row.operators];
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dayObj = (row.days && row.days[String(d)]) || { att_hours: 0, login_hours: 0 };
+                r.push(dayObj.att_hours || 0, dayObj.login_hours || 0);
+            }
+            r.push(row.total_att, row.total_login, row.diff);
+            exportRows.push(r);
+        });
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(exportRows);
+        XLSX.utils.book_append_sheet(wb, ws, "Att_vs_Login");
+        XLSX.writeFile(wb, `Attendance_vs_Login_Report_${monthVal}.xlsx`);
     });
 });

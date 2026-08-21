@@ -2656,7 +2656,135 @@ def delete_service_detail(sd_id: int, db: Session = Depends(get_db)):
     if not db_sd:
         raise HTTPException(status_code=404, detail="Service Detail not found")
     db.delete(db_sd)
-    db.commit()
+    return {"message": "Service Detail deleted successfully"}
+
+# --- ATT VS LOGIN REPORT API ---
+@app.get("/api/reports/att_vs_login")
+def get_att_vs_login_report(
+    month_year: Optional[str] = None,
+    dept: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    import calendar
+    from datetime import datetime
+
+    if not month_year:
+        month_year = datetime.now().strftime("%Y-%m")
+
+    try:
+        year_str, month_str = month_year.split("-")
+        year = int(year_str)
+        month = int(month_str)
+    except Exception:
+        today = datetime.now()
+        year = today.year
+        month = today.month
+        month_year = f"{year:04d}-{month:02d}"
+
+    days_in_month = calendar.monthrange(year, month)[1]
+
+    # 1. Operators Query (designated as operator / OPERATOR or default)
+    op_query = db.query(Operator).filter(
+        or_(
+            Operator.designation.ilike("%operator%"),
+            Operator.designation == None,
+            Operator.designation == ""
+        )
+    )
+    if dept and dept.strip():
+        op_query = op_query.filter(func.lower(func.trim(Operator.department)) == dept.strip().lower())
+    
+    operators_list = op_query.order_by(Operator.department, Operator.name).all()
+
+    # 2. Attendance Query
+    att_query = db.query(Attendance).filter(Attendance.month_year == month_year)
+    if dept and dept.strip():
+        att_query = att_query.filter(func.lower(func.trim(Attendance.dept)) == dept.strip().lower())
+    att_records = att_query.all()
+
+    att_map = {}
+    for att in att_records:
+        emp_name = (att.employee_name or "").strip().lower()
+        d = att.day
+        val_str = (att.hours or "").strip().upper()
+        h_val = 0.0
+        if val_str:
+            try:
+                h_val = float(val_str)
+            except ValueError:
+                if val_str in ['P', 'PRESENT']:
+                    h_val = 8.0
+                else:
+                    h_val = 0.0
+        att_map[(emp_name, d)] = h_val
+
+    # 3. Production Logs Query (Login Hours)
+    start_date = f"{month_year}-01"
+    end_date = f"{month_year}-{days_in_month:02d}"
+    
+    pl_query = db.query(ProductionLog).filter(
+        ProductionLog.date >= start_date,
+        ProductionLog.date <= end_date
+    )
+    if dept and dept.strip():
+        pl_query = pl_query.filter(func.lower(func.trim(ProductionLog.dept)) == dept.strip().lower())
+    
+    pl_records = pl_query.all()
+
+    login_map = {}
+    for pl in pl_records:
+        op_name = (pl.operator or "").strip().lower()
+        if not op_name or op_name in ["-", "none", "null"]:
+            continue
+        try:
+            p_date_str = (pl.date or "").strip()
+            p_day = int(p_date_str.split("-")[2])
+        except Exception:
+            continue
+
+        r_time = float(pl.runtime or 0.0)
+        key = (op_name, p_day)
+        login_map[key] = login_map.get(key, 0.0) + r_time
+
+    # 4. Build Matrix Response
+    report_rows = []
+    for op in operators_list:
+        clean_name = (op.name or "").strip()
+        op_lower = clean_name.lower()
+        dept_name = (op.department or "").strip()
+
+        days_data = {}
+        row_att_total = 0.0
+        row_login_total = 0.0
+
+        for d in range(1, days_in_month + 1):
+            att_h = round(att_map.get((op_lower, d), 0.0), 2)
+            login_h = round(login_map.get((op_lower, d), 0.0), 2)
+
+            days_data[str(d)] = {
+                "att_hours": att_h,
+                "login_hours": login_h
+            }
+            row_att_total += att_h
+            row_login_total += login_h
+
+        report_rows.append({
+            "id": op.id,
+            "dept": dept_name,
+            "operators": clean_name,
+            "designation": op.designation or "Operator",
+            "days": days_data,
+            "total_att": round(row_att_total, 2),
+            "total_login": round(row_login_total, 2),
+            "diff": round(row_att_total - row_login_total, 2)
+        })
+
+    return {
+        "month_year": month_year,
+        "days_in_month": days_in_month,
+        "data": report_rows
+    }
+
 # --- DATABASE BACKUP ENDPOINTS ---
 @app.get("/api/admin/export_db_backup")
 def export_db_backup(db: Session = Depends(get_db)):
