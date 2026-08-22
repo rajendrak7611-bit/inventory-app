@@ -18,6 +18,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return true;
     }
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+    window.escapeHtml = escapeHtml;
+
     function formatExcelDate(val) {
         if (!val) return new Date().toISOString().slice(0, 10);
         const str = String(val).trim();
@@ -2998,7 +3009,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let resourceReqdCacheData = null;
 
-    function initResourceReqd() {
+    async function populateResourceDeptDropdown() {
+        const deptSelect = document.getElementById('resourceDeptSelect');
+        if (!deptSelect) return;
+        const currentVal = deptSelect.value;
+        try {
+            const res = await fetch('/api/dept');
+            const depts = await res.json();
+            let deptNames = (depts || []).map(d => (d.name || d.department || '').trim().toUpperCase()).filter(Boolean);
+            ['WIPRO', 'BC', 'GEAR', 'SPIDER'].forEach(d => {
+                if (!deptNames.includes(d)) deptNames.push(d);
+            });
+            deptNames.sort();
+            
+            let html = '';
+            deptNames.forEach(d => {
+                html += `<option value="${d}">${d}</option>`;
+            });
+            deptSelect.innerHTML = html;
+            if (currentVal && deptNames.includes(currentVal.toUpperCase())) {
+                deptSelect.value = currentVal.toUpperCase();
+            }
+        } catch(e) {
+            console.error('Error populating resource dept dropdown:', e);
+        }
+    }
+
+    async function initResourceReqd() {
+        await populateResourceDeptDropdown();
+
         const deptSelect = document.getElementById('resourceDeptSelect');
         if (deptSelect && !deptSelect.dataset.hasListener) {
             deptSelect.dataset.hasListener = 'true';
