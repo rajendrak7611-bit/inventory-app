@@ -313,7 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection', 'bcProdSection', 'attVsLoginSection',
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
             'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'insertStockSection', 'partMasterSection', 'machinesSection',
-            'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'dbBackupSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'scheduleRunSection',
+            'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'dbBackupSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'resourceReqdSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
             'inspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'hrSection', 'attendanceSection'
         ];
@@ -504,6 +504,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (scheduleCreateSection) scheduleCreateSection.style.display = 'block';
             addBtn.style.display = 'none';
             fetchSchedulesForList();
+        }},
+        'sidebarResourceReqd': { tab: 'resource_reqd', action: () => {
+            const sec = document.getElementById('resourceReqdSection');
+            if (sec) sec.style.display = 'block';
+            addBtn.style.display = 'none';
+            if (importBtn) importBtn.style.display = 'none';
+            initResourceReqd();
         }},
         'sidebarMcUtil': { tab: 'mc_util', action: () => { 
             const mcUtilSec = document.getElementById('mcUtilSection');
@@ -2987,6 +2994,243 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error('Error fetching schedule status:', e);
         }
+    }
+
+    let resourceReqdCacheData = null;
+
+    function initResourceReqd() {
+        const deptSelect = document.getElementById('resourceDeptSelect');
+        if (deptSelect && !deptSelect.dataset.hasListener) {
+            deptSelect.dataset.hasListener = 'true';
+            deptSelect.addEventListener('change', () => {
+                fetchResourceReqd();
+            });
+        }
+
+        const exportBtn = document.getElementById('exportResourceReqdBtn');
+        if (exportBtn && !exportBtn.dataset.hasListener) {
+            exportBtn.dataset.hasListener = 'true';
+            exportBtn.addEventListener('click', () => {
+                exportResourceReqdExcel();
+            });
+        }
+
+        fetchResourceReqd();
+    }
+
+    async function fetchResourceReqd() {
+        const deptSelect = document.getElementById('resourceDeptSelect');
+        const dept = (deptSelect?.value || 'WIPRO').trim().toUpperCase();
+        
+        const headEl = document.getElementById('resourceReqdHead');
+        const bodyEl = document.getElementById('resourceReqdBody');
+        const footEl = document.getElementById('resourceReqdFoot');
+
+        if (!bodyEl) return;
+        bodyEl.innerHTML = `<tr><td colspan="15" style="text-align: center; padding: 2rem; color: var(--text-muted);">⏳ Calculating Resource Requirements for department <strong>${dept}</strong>...</td></tr>`;
+        if (headEl) headEl.innerHTML = '';
+        if (footEl) footEl.innerHTML = '';
+
+        try {
+            const [schedRes, partsRes] = await Promise.all([
+                fetch('/api/schedule'),
+                fetch('/api/partmaster')
+            ]);
+            
+            const schedules = await schedRes.json();
+            const allParts = await partsRes.json();
+
+            // Filter active schedules for chosen department
+            const deptSchedules = (schedules || []).filter(s => 
+                (s.department || '').trim().toUpperCase() === dept &&
+                ((s.status || '').trim().toLowerCase() === 'pending' || !s.status)
+            );
+
+            // Group schedule qty by partno
+            const partSchedMap = {};
+            deptSchedules.forEach(s => {
+                const partno = (s.partno || '').trim();
+                if (!partno) return;
+                const upperNo = partno.toUpperCase();
+                partSchedMap[upperNo] = (partSchedMap[upperNo] || 0) + (parseFloat(s.qty) || 0);
+            });
+
+            const uniquePartNos = Object.keys(partSchedMap).sort();
+
+            if (uniquePartNos.length === 0) {
+                bodyEl.innerHTML = `<tr><td colspan="15" style="text-align: center; padding: 2rem; color: var(--text-muted);">No active pending schedules found for department <strong>${dept}</strong>.</td></tr>`;
+                resourceReqdCacheData = null;
+                return;
+            }
+
+            // Fetch operations for each part
+            const partDetailsList = [];
+            const machineSet = new Set();
+
+            for (const upperNo of uniquePartNos) {
+                const partObj = allParts.find(p => (p.partno || '').trim().toUpperCase() === upperNo);
+                const cust = partObj?.customer || '-';
+                const schedQty = partSchedMap[upperNo] || 0;
+                let operations = [];
+
+                if (partObj && partObj.id) {
+                    try {
+                        const opsRes = await fetch(`/api/partmaster/${partObj.id}/operations`);
+                        operations = await opsRes.json();
+                    } catch(e) { operations = []; }
+                }
+
+                // Map machine hours for this part
+                const machineHoursMap = {};
+                let partTotalHours = 0;
+
+                (operations || []).forEach(op => {
+                    const mName = (op.machine || 'Unassigned').trim();
+                    const cycTime = parseFloat(op.cycle_time) || 0;
+                    if (cycTime > 0) {
+                        const hrs = (schedQty * cycTime) / 60.0;
+                        machineHoursMap[mName] = (machineHoursMap[mName] || 0) + hrs;
+                        partTotalHours += hrs;
+                        machineSet.add(mName);
+                    }
+                });
+
+                partDetailsList.push({
+                    customer: cust,
+                    partno: upperNo,
+                    schedQty,
+                    machineHoursMap,
+                    totalHours: partTotalHours
+                });
+            }
+
+            // Sorted list of machines
+            const machineList = Array.from(machineSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+            resourceReqdCacheData = {
+                dept,
+                machineList,
+                partDetailsList
+            };
+
+            renderResourceReqdTable(dept, machineList, partDetailsList);
+        } catch (e) {
+            console.error('Error fetching resource requirements:', e);
+            bodyEl.innerHTML = `<tr><td colspan="15" style="text-align: center; padding: 2rem; color: #ef4444;">⚠️ Error loading Resource Requirements: ${e.message}</td></tr>`;
+        }
+    }
+
+    function renderResourceReqdTable(dept, machineList, partDetailsList) {
+        const headEl = document.getElementById('resourceReqdHead');
+        const bodyEl = document.getElementById('resourceReqdBody');
+        const footEl = document.getElementById('resourceReqdFoot');
+
+        // Header
+        let headHtml = `
+            <tr style="background-color: var(--card-bg); border-bottom: 2px solid var(--border-color);">
+                <th style="padding: 10px; text-align: left; position: sticky; top: 0; background: var(--card-bg); z-index: 2;">Customer</th>
+                <th style="padding: 10px; text-align: left; position: sticky; top: 0; background: var(--card-bg); z-index: 2;">Part No</th>
+                <th style="padding: 10px; text-align: right; position: sticky; top: 0; background: var(--card-bg); z-index: 2;">Schedule Qty</th>
+        `;
+
+        machineList.forEach(m => {
+            headHtml += `<th style="padding: 10px; text-align: right; position: sticky; top: 0; background: var(--card-bg); z-index: 2; min-width: 90px; color: #0284c7;">${escapeHtml(m)} (hrs)</th>`;
+        });
+
+        headHtml += `<th style="padding: 10px; text-align: right; position: sticky; top: 0; background: var(--card-bg); z-index: 2; font-weight: bold; color: var(--text-main);">Total Hours</th></tr>`;
+        headEl.innerHTML = headHtml;
+
+        // Body
+        let bodyHtml = '';
+        let grandSchedQty = 0;
+        let grandTotalHours = 0;
+        const machineGrandTotals = {};
+        machineList.forEach(m => machineGrandTotals[m] = 0);
+
+        partDetailsList.forEach(item => {
+            grandSchedQty += item.schedQty;
+            grandTotalHours += item.totalHours;
+
+            bodyHtml += `<tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="padding: 8px 10px;">${escapeHtml(item.customer)}</td>
+                <td style="padding: 8px 10px; font-weight: 600;">${escapeHtml(item.partno)}</td>
+                <td style="padding: 8px 10px; text-align: right;">${item.schedQty.toLocaleString()}</td>
+            `;
+
+            machineList.forEach(m => {
+                const hrs = item.machineHoursMap[m] || 0;
+                machineGrandTotals[m] += hrs;
+                bodyHtml += `<td style="padding: 8px 10px; text-align: right; ${hrs > 0 ? 'font-weight: 600; color: var(--text-main);' : 'color: var(--text-muted);'}">
+                    ${hrs > 0 ? hrs.toFixed(2) : '-'}
+                </td>`;
+            });
+
+            bodyHtml += `<td style="padding: 8px 10px; text-align: right; font-weight: 700; color: #0284c7;">${item.totalHours.toFixed(2)}</td></tr>`;
+        });
+
+        bodyEl.innerHTML = bodyHtml;
+
+        // Footer Totals
+        let footHtml = `
+            <tr>
+                <td style="padding: 10px;" colspan="2">TOTAL REQUIREMENT (${dept})</td>
+                <td style="padding: 10px; text-align: right;">${grandSchedQty.toLocaleString()}</td>
+        `;
+
+        machineList.forEach(m => {
+            const totalM = machineGrandTotals[m] || 0;
+            footHtml += `<td style="padding: 10px; text-align: right; font-weight: 700; color: #0284c7;">${totalM.toFixed(2)}</td>`;
+        });
+
+        footHtml += `<td style="padding: 10px; text-align: right; font-weight: 800; font-size: 1.05rem; color: #0284c7;">${grandTotalHours.toFixed(2)}</td></tr>`;
+        footEl.innerHTML = footHtml;
+    }
+
+    function exportResourceReqdExcel() {
+        if (!resourceReqdCacheData || !resourceReqdCacheData.partDetailsList || resourceReqdCacheData.partDetailsList.length === 0) {
+            alert('No Resource Requirement data available to export.');
+            return;
+        }
+
+        const { dept, machineList, partDetailsList } = resourceReqdCacheData;
+        const excelRows = [];
+
+        partDetailsList.forEach(item => {
+            const row = {
+                'Customer': item.customer,
+                'Part No': item.partno,
+                'Schedule Qty': item.schedQty
+            };
+
+            machineList.forEach(m => {
+                const hrs = item.machineHoursMap[m] || 0;
+                row[`${m} (hrs)`] = hrs > 0 ? parseFloat(hrs.toFixed(2)) : 0;
+            });
+
+            row['Total Hours'] = parseFloat(item.totalHours.toFixed(2));
+            excelRows.push(row);
+        });
+
+        // Totals row
+        const totalsRow = {
+            'Customer': 'TOTAL',
+            'Part No': dept,
+            'Schedule Qty': partDetailsList.reduce((sum, i) => sum + i.schedQty, 0)
+        };
+
+        let grandHours = 0;
+        machineList.forEach(m => {
+            const mTotal = partDetailsList.reduce((sum, i) => sum + (i.machineHoursMap[m] || 0), 0);
+            totalsRow[`${m} (hrs)`] = parseFloat(mTotal.toFixed(2));
+            grandHours += mTotal;
+        });
+        totalsRow['Total Hours'] = parseFloat(grandHours.toFixed(2));
+        excelRows.push(totalsRow);
+
+        const ws = XLSX.utils.json_to_sheet(excelRows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, `Resource_Reqd_${dept}`);
+        XLSX.writeFile(wb, `Resource_Requirement_${dept}_${new Date().toISOString().slice(0, 10)}.xlsx`);
     }
 
     function findRmStock(targetFpn, targetPartno, allRms) {

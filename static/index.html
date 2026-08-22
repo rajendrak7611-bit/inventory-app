@@ -80,6 +80,7 @@
             </div>
             <div class="sub-group" id="submenuProduction" style="display: none;">
                 <button class="sub-tab" id="sidebarScheduleCreate" data-screen="schedule">Schedule Create</button>
+                <button class="sub-tab" id="sidebarResourceReqd" data-screen="resource_reqd">Resource Reqd</button>
                 <button class="sub-tab" id="sidebarScheduleRun" data-screen="schedule">Schedule Run</button>
                 <button class="sub-tab" id="sidebarStatus" data-screen="status">Status</button>
                 <button class="sub-tab" id="sidebarProdLog" data-screen="prodlog">Prod Log</button>
@@ -991,6 +992,49 @@
                             </table>
                         </div>
                     </div>
+                </div>
+            </div>
+            
+            <!-- Resource Requirement Section -->
+            <div class="table-container" id="resourceReqdSection" style="display: none; padding: 1rem; color: var(--text-main);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                        <h2 style="margin: 0; font-size: 1.3rem;">Resource Requirement</h2>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label for="resourceDeptSelect" style="font-weight: 600; font-size: 0.9rem; margin: 0; color: var(--text-main);">Select Dept:</label>
+                            <select id="resourceDeptSelect" style="padding: 0.4rem 0.8rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem; font-weight: 600; color: var(--text-main); background-color: var(--card-bg);">
+                                <option value="WIPRO">WIPRO</option>
+                                <option value="BC">BC</option>
+                                <option value="GEAR">GEAR</option>
+                            </select>
+                        </div>
+                        <span id="resourceReqdBadge" style="background-color: #0284c7; color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">
+                            Machine-wise Calculation
+                        </span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="font-size: 0.8rem; color: var(--text-muted); background: rgba(0,0,0,0.03); padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+                            Formula: <strong>Hours = (Schedule Qty × Cycle Time) / 60</strong>
+                        </div>
+                        <button id="exportResourceReqdBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; display: flex; align-items: center; gap: 4px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            Export Excel
+                        </button>
+                    </div>
+                </div>
+
+                <div style="max-height: calc(100vh - 170px); overflow-y: auto;">
+                    <table id="resourceReqdTable" style="width: 100%; border-collapse: collapse;">
+                        <thead id="resourceReqdHead">
+                            <!-- Dynamic Table Header -->
+                        </thead>
+                        <tbody id="resourceReqdBody">
+                            <!-- Dynamic Table Body -->
+                        </tbody>
+                        <tfoot id="resourceReqdFoot" style="font-weight: bold; background: rgba(2, 132, 199, 0.08); border-top: 2px solid var(--border-color);">
+                            <!-- Dynamic Table Foot -->
+                        </tfoot>
+                    </table>
                 </div>
             </div>
             
@@ -3498,6 +3542,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=301"></script>
+    <script src="/static/app.js?v=302"></script>
 </body>
 </html>
