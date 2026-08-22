@@ -902,51 +902,51 @@
             </div>
 
             <!-- Schedule Sections -->
-            <div class="table-container" id="scheduleCreateSection" style="display: none; padding: 2rem; color: var(--text-main);">
-                <div style="display: flex; gap: 3rem; flex-wrap: wrap;">
-                    <div style="flex: 0 0 350px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                            <h2 style="margin: 0;">Create Schedule</h2>
-                            <button id="clearScheduleBtn" class="btn btn-outline" style="color: #ef4444; border-color: #ef4444; padding: 0.4rem 0.8rem; font-size: 0.9rem;">Clear All</button>
+            <div class="table-container" id="scheduleCreateSection" style="display: none; padding: 0.75rem 1rem; color: var(--text-main);">
+                <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start;">
+                    <div style="flex: 0 0 340px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <h2 style="margin: 0; font-size: 1.2rem;">Create Schedule</h2>
+                            <button id="clearScheduleBtn" class="btn btn-outline" style="color: #ef4444; border-color: #ef4444; padding: 0.3rem 0.7rem; font-size: 0.85rem;">Clear All</button>
                         </div>
-                        <form id="scheduleCreateForm">
-                            <div class="form-group">
-                                <label for="scheduleDept">Dept</label>
-                                <select id="scheduleDept" required style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif; font-size: 0.95rem;">
+                        <form id="scheduleCreateForm" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label for="scheduleDept" style="font-size: 0.85rem;">Dept</label>
+                                <select id="scheduleDept" required style="width: 100%; padding: 0.35rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif; font-size: 0.9rem;">
                                     <option value="">-- Select Dept --</option>
                                 </select>
                             </div>
-                            <div class="form-group">
-                                <label for="schedulePartNo">Part No</label>
-                                <select id="schedulePartNo" required style="width: 100%; padding: 0.4rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif; font-size: 0.95rem;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label for="schedulePartNo" style="font-size: 0.85rem;">Part No</label>
+                                <select id="schedulePartNo" required style="width: 100%; padding: 0.35rem 0.6rem; background-color: rgba(0, 0, 0, 0.05); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-main); font-family: 'Inter', sans-serif; font-size: 0.9rem;">
                                     <option value="">Type or select a Part No</option>
                                 </select>
                             </div>
-                            <div class="form-group">
-                                <label for="scheduleTargetDate">Target Date</label>
-                                <input type="date" id="scheduleTargetDate" required>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label for="scheduleTargetDate" style="font-size: 0.85rem;">Target Date</label>
+                                <input type="date" id="scheduleTargetDate" required style="padding: 0.35rem 0.6rem; font-size: 0.9rem;">
                             </div>
-                            <div class="form-group">
-                                <label for="scheduleQty">Qty</label>
-                                <input type="number" id="scheduleQty" required min="1" placeholder="e.g. 100">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label for="scheduleQty" style="font-size: 0.85rem;">Qty</label>
+                                <input type="number" id="scheduleQty" required min="1" placeholder="e.g. 100" style="padding: 0.35rem 0.6rem; font-size: 0.9rem;">
                             </div>
-                            <div style="margin-top: 1.5rem;">
-                                <button type="submit" class="btn btn-primary">Create Schedule</button>
+                            <div style="margin-top: 0.6rem;">
+                                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.5rem; font-size: 0.95rem;">Create Schedule</button>
                             </div>
                         </form>
 
-                        <div id="scheduleSummaryContainer" style="margin-top: 1.75rem; padding-top: 1.25rem; border-top: 1px dashed var(--border-color);">
-                            <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 0.95rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">
+                        <div id="scheduleSummaryContainer" style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px dashed var(--border-color);">
+                            <h3 style="margin-top: 0; margin-bottom: 8px; font-size: 0.9rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">
                                 Schedule Summary Report
                             </h3>
-                            <div style="max-height: 280px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.01);">
+                            <div style="max-height: calc(100vh - 430px); min-height: 250px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.01);">
                                 <table id="scheduleSummaryTable" style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
                                     <thead>
                                         <tr style="background: rgba(0, 0, 0, 0.05); text-align: left; border-bottom: 1px solid var(--border-color);">
-                                            <th style="padding: 6px 8px; font-weight: 600;">Dept</th>
-                                            <th style="padding: 6px 8px; font-weight: 600;">Customer</th>
-                                            <th style="padding: 6px 8px; text-align: right; font-weight: 600;">Qty</th>
-                                            <th style="padding: 6px 8px; text-align: right; font-weight: 600;">Value (₹)</th>
+                                            <th style="padding: 5px 8px; font-weight: 600;">Dept</th>
+                                            <th style="padding: 5px 8px; font-weight: 600;">Customer</th>
+                                            <th style="padding: 5px 8px; text-align: right; font-weight: 600;">Qty</th>
+                                            <th style="padding: 5px 8px; text-align: right; font-weight: 600;">Value (₹)</th>
                                         </tr>
                                     </thead>
                                     <tbody id="scheduleSummaryBody">
@@ -960,9 +960,9 @@
                         </div>
                     </div>
                     
-                    <div style="flex: 1.5; min-width: 550px; border-left: 1px solid var(--border-color); padding-left: 2rem;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
-                            <h2 style="margin: 0;">Existing Schedules</h2>
+                    <div style="flex: 1 1 500px; min-width: 500px; border-left: 1px solid var(--border-color); padding-left: 1.5rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+                            <h2 style="margin: 0; font-size: 1.2rem;">Existing Schedules</h2>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <label for="scheduleFilterDept" style="font-weight: 600; font-size: 0.85rem; margin: 0; color: var(--text-main);">Dept Filter:</label>
                                 <select id="scheduleFilterDept" style="padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; font-weight: 500; color: var(--text-main); background-color: var(--card-bg);">
@@ -970,7 +970,7 @@
                                 </select>
                             </div>
                         </div>
-                        <div style="max-height: 450px; overflow-y: auto; padding-right: 10px;">
+                        <div style="max-height: calc(100vh - 160px); min-height: 550px; overflow-y: auto; padding-right: 5px;">
                             <table id="scheduleListTable" style="width: 100%;">
                                 <thead>
                                     <tr>
@@ -3498,6 +3498,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=300"></script>
+    <script src="/static/app.js?v=301"></script>
 </body>
 </html>
