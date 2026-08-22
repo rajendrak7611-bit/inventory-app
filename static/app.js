@@ -11445,23 +11445,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/service_details');
             const data = await res.json();
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 0.75rem;">No service detail history recorded yet.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; color: var(--text-muted); padding: 0.75rem;">No service detail history recorded yet.</td></tr>';
                 return;
             }
 
             data.forEach(item => {
                 let spareNames = '-';
+                let spareSuppliers = '-';
                 try {
                     const spares = JSON.parse(item.spares_data || '[]');
                     const names = spares.map(s => s.part_name ? s.part_name.trim() : '').filter(Boolean);
                     if (names.length > 0) spareNames = names.join(', ');
+                    const suppliers = spares.map(s => s.remarks ? s.remarks.trim() : (s.supplier ? s.supplier.trim() : '')).filter(Boolean);
+                    if (suppliers.length > 0) spareSuppliers = suppliers.join(', ');
                 } catch(e) {}
 
                 let actionsTaken = '-';
+                let vendorTechs = '-';
                 try {
                     const services = JSON.parse(item.service_data || '[]');
                     const actions = services.map(s => s.work_done ? s.work_done.trim() : '').filter(Boolean);
                     if (actions.length > 0) actionsTaken = actions.join(', ');
+                    const techs = services.map(s => s.technician ? s.technician.trim() : (s.vendor ? s.vendor.trim() : '')).filter(Boolean);
+                    if (techs.length > 0) vendorTechs = techs.join(', ');
                 } catch(e) {}
 
                 const tr = document.createElement('tr');
@@ -11469,12 +11475,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${item.id}</td>
                     <td>${item.breakdown_slip_id || '-'}</td>
                     <td><strong>${item.machine || '-'}</strong></td>
-                    <td style="max-width: 200px; white-space: pre-wrap; font-size: 0.85rem; font-weight: 500; color: #0284c7;">${spareNames}</td>
-                    <td style="max-width: 220px; white-space: pre-wrap; font-size: 0.85rem; font-weight: 500; color: #15803d;">${actionsTaken}</td>
+                    <td style="max-width: 180px; white-space: pre-wrap; font-size: 0.85rem; font-weight: 500; color: #0284c7;">${spareNames}</td>
+                    <td style="max-width: 150px; white-space: pre-wrap; font-size: 0.85rem; font-weight: 500; color: #475569;">${spareSuppliers}</td>
+                    <td style="max-width: 200px; white-space: pre-wrap; font-size: 0.85rem; font-weight: 500; color: #15803d;">${actionsTaken}</td>
+                    <td style="max-width: 150px; white-space: pre-wrap; font-size: 0.85rem; font-weight: 500; color: #0f766e;">${vendorTechs}</td>
                     <td>₹${(item.spares_cost || 0).toFixed(2)}</td>
                     <td>₹${(item.service_cost || 0).toFixed(2)}</td>
                     <td><strong style="color: #0369a1;">₹${(item.total_cost || 0).toFixed(2)}</strong></td>
-                    <td style="max-width: 180px; white-space: pre-wrap; font-size: 0.85rem;">${item.remarks || '-'}</td>
+                    <td style="max-width: 160px; white-space: pre-wrap; font-size: 0.85rem;">${item.remarks || '-'}</td>
                     <td class="actions-cell">
                         <button class="btn btn-outline delete-sd-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; color: #ef4444; border-color: #ef4444;">Delete</button>
                     </td>
