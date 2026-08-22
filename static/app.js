@@ -12006,16 +12006,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- BC PRODUCTION REPORT ---
     function initBcProdReport() {
-        const dateInput = document.getElementById('bcProdDate');
-        if (dateInput && !dateInput.value) {
-            dateInput.value = new Date().toISOString().split('T')[0];
-        }
+        const fromInput = document.getElementById('bcProdFromDate');
+        const toInput = document.getElementById('bcProdToDate');
+        const today = new Date().toISOString().split('T')[0];
+        if (fromInput && !fromInput.value) fromInput.value = today;
+        if (toInput && !toInput.value) toInput.value = today;
         fetchBcProdReport();
     }
 
-    document.getElementById('bcProdDate')?.addEventListener('change', () => {
-        fetchBcProdReport();
-    });
+    document.getElementById('bcProdFromDate')?.addEventListener('change', fetchBcProdReport);
+    document.getElementById('bcProdToDate')?.addEventListener('change', fetchBcProdReport);
 
     document.getElementById('exportBcProdBtn')?.addEventListener('click', () => {
         exportBcProdExcel();
@@ -12025,22 +12025,38 @@ document.addEventListener('DOMContentLoaded', () => {
         printBcProdReport();
     });
 
-    function sameDate(d1, d2) {
-        if (!d1 || !d2) return false;
-        let s1 = d1.toString().split('T')[0].split(' ')[0].trim();
-        let s2 = d2.toString().split('T')[0].split(' ')[0].trim();
-        if (s1 === s2) return true;
-        
-        let p1 = s1.split(/[\/\-]/);
-        let p2 = s2.split(/[\/\-]/);
-        if (p1.length === 3 && p2.length === 3) {
-            let set1 = new Set(p1.map(x => parseInt(x, 10)));
-            let set2 = new Set(p2.map(x => parseInt(x, 10)));
-            if (set1.size === set2.size && [...set1].every(x => set2.has(x))) {
-                return true;
+    function parseLocalDateStr(dStr) {
+        if (!dStr) return null;
+        let s = dStr.toString().split('T')[0].split(' ')[0].trim();
+        if (!s) return null;
+        let parts = s.split(/[\/\-]/);
+        if (parts.length === 3) {
+            let y, m, d;
+            if (parts[0].length === 4) {
+                y = parseInt(parts[0], 10);
+                m = parseInt(parts[1], 10) - 1;
+                d = parseInt(parts[2], 10);
+            } else if (parts[2].length === 4) {
+                let p1 = parseInt(parts[0], 10);
+                let p2 = parseInt(parts[1], 10);
+                y = parseInt(parts[2], 10);
+                d = p1; m = p2 - 1;
+            } else {
+                return null;
             }
+            return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
         }
-        return false;
+        return s;
+    }
+
+    function isDateInRange(logDate, fromDate, toDate) {
+        if (!logDate) return false;
+        const formattedLog = parseLocalDateStr(logDate);
+        if (!formattedLog) return false;
+
+        if (fromDate && formattedLog < fromDate) return false;
+        if (toDate && formattedLog > toDate) return false;
+        return true;
     }
 
     function matchMachine(logMach, targetMach) {
@@ -12061,8 +12077,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchBcProdReport() {
-        const dateInput = document.getElementById('bcProdDate');
-        const selectedDate = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
+        const fromInput = document.getElementById('bcProdFromDate');
+        const toInput = document.getElementById('bcProdToDate');
+        const today = new Date().toISOString().split('T')[0];
+        const fromDate = fromInput && fromInput.value ? fromInput.value : today;
+        const toDate = toInput && toInput.value ? toInput.value : today;
 
         try {
             const [prodRes, pcRes, pcReceiptRes] = await Promise.all([
@@ -12089,11 +12108,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 "WMW"
             ];
 
-            const logsToday = allProdLogs.filter(l => sameDate(l.date, selectedDate));
+            const logsInPeriod = allProdLogs.filter(l => isDateInRange(l.date, fromDate, toDate));
 
             let bcMachineHtml = '';
+            let grandTotalBcProd = 0;
+
             machineList.forEach(machName => {
-                const machLogs = logsToday.filter(l => matchMachine(l.machine, machName));
+                const machLogs = logsInPeriod.filter(l => matchMachine(l.machine, machName));
 
                 if (machLogs.length > 0) {
                     // Group by partno + opn_no to get cumulative qty operation-wise
@@ -12105,7 +12126,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (!grouped[key]) {
                             grouped[key] = { partno: part, opn_no: opn, qty: 0 };
                         }
-                        grouped[key].qty += (l.prod_qty || 0);
+                        const pQty = (l.prod_qty || 0);
+                        grouped[key].qty += pQty;
+                        grandTotalBcProd += pQty;
                     });
 
                     const groupKeys = Object.keys(grouped);
@@ -12133,16 +12156,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
+            // Summary Row for Table 1
+            bcMachineHtml += `
+                <tr style="background-color: #f1f5f9;">
+                    <td colspan="3" style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700; text-align: right; color: var(--text-main);">Total BC Production Qty:</td>
+                    <td style="border: 1px solid #000000; padding: 6px 10px; text-align: right; font-weight: 700; color: #0284c7;">${grandTotalBcProd}</td>
+                </tr>
+            `;
+
             const bcBody = document.getElementById('bcMachineBody');
             if (bcBody) bcBody.innerHTML = bcMachineHtml;
 
             // 2. Table 2: To PC
-            const toPcLogsToday = allPcLogs.filter(l => sameDate(l.date, selectedDate));
+            const toPcLogsInPeriod = allPcLogs.filter(l => isDateInRange(l.date, fromDate, toDate));
             const toPcGrouped = {};
-            toPcLogsToday.forEach(l => {
+            let grandTotalToPc = 0;
+
+            toPcLogsInPeriod.forEach(l => {
                 const part = (l.partno || '').trim();
                 if (part) {
-                    toPcGrouped[part] = (toPcGrouped[part] || 0) + (l.qty || 0);
+                    const q = (l.qty || 0);
+                    toPcGrouped[part] = (toPcGrouped[part] || 0) + q;
+                    grandTotalToPc += q;
                 }
             });
 
@@ -12172,16 +12207,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // Summary Row for Table 2
+            toPcHtml += `
+                <tr style="background-color: #f1f5f9;">
+                    <td colspan="2" style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700; text-align: right; color: var(--text-main);">Total Sent to PC Qty:</td>
+                    <td style="border: 1px solid #000000; padding: 6px 10px; text-align: right; font-weight: 700; color: #0284c7;">${grandTotalToPc}</td>
+                </tr>
+            `;
+
             const toPcBody = document.getElementById('toPcBody');
             if (toPcBody) toPcBody.innerHTML = toPcHtml;
 
             // 3. Table 3: From PC
-            const fromPcLogsToday = allPcReceiptLogs.filter(l => sameDate(l.date, selectedDate));
+            const fromPcLogsInPeriod = allPcReceiptLogs.filter(l => isDateInRange(l.date, fromDate, toDate));
             const fromPcGrouped = {};
-            fromPcLogsToday.forEach(l => {
+            let grandTotalFromPc = 0;
+
+            fromPcLogsInPeriod.forEach(l => {
                 const part = (l.partno || '').trim();
                 if (part) {
-                    fromPcGrouped[part] = (fromPcGrouped[part] || 0) + (l.qty || 0);
+                    const q = (l.qty || 0);
+                    fromPcGrouped[part] = (fromPcGrouped[part] || 0) + q;
+                    grandTotalFromPc += q;
                 }
             });
 
@@ -12211,6 +12258,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // Summary Row for Table 3
+            fromPcHtml += `
+                <tr style="background-color: #f1f5f9;">
+                    <td colspan="2" style="border: 1px solid #000000; padding: 6px 10px; font-weight: 700; text-align: right; color: var(--text-main);">Total Received from PC Qty:</td>
+                    <td style="border: 1px solid #000000; padding: 6px 10px; text-align: right; font-weight: 700; color: #0284c7;">${grandTotalFromPc}</td>
+                </tr>
+            `;
+
             const fromPcBody = document.getElementById('fromPcBody');
             if (fromPcBody) fromPcBody.innerHTML = fromPcHtml;
 
@@ -12220,7 +12275,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function exportBcProdExcel() {
-        const dateVal = document.getElementById('bcProdDate')?.value || new Date().toISOString().split('T')[0];
+        const fromDate = document.getElementById('bcProdFromDate')?.value || new Date().toISOString().split('T')[0];
+        const toDate = document.getElementById('bcProdToDate')?.value || new Date().toISOString().split('T')[0];
+        const dateStr = fromDate === toDate ? fromDate : `${fromDate}_to_${toDate}`;
+
         if (typeof XLSX === 'undefined') {
             alert('Excel library not loaded');
             return;
@@ -12228,7 +12286,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const wb = XLSX.utils.book_new();
         const wsData = [];
-        wsData.push(["BC Production Report - Date: " + dateVal]);
+        wsData.push([`BC Production Report - Period: ${fromDate} to ${toDate}`]);
         wsData.push([]);
 
         // Table 1: BC Production
@@ -12263,23 +12321,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const ws = XLSX.utils.aoa_to_sheet(wsData);
         XLSX.utils.book_append_sheet(wb, ws, "BC Prod");
-        XLSX.writeFile(wb, `BC_Production_Report_${dateVal}.xlsx`);
+        XLSX.writeFile(wb, `BC_Production_Report_${dateStr}.xlsx`);
     }
 
     function printBcProdReport() {
         const printContents = document.getElementById('bcProdPrintContainer')?.innerHTML;
-        const dateVal = document.getElementById('bcProdDate')?.value || new Date().toISOString().split('T')[0];
+        const fromDate = document.getElementById('bcProdFromDate')?.value || new Date().toISOString().split('T')[0];
+        const toDate = document.getElementById('bcProdToDate')?.value || new Date().toISOString().split('T')[0];
+        const dateStr = fromDate === toDate ? fromDate : `${fromDate} to ${toDate}`;
+
         if (!printContents) return;
 
         const printWindow = window.open('', '', 'height=700,width=900');
-        printWindow.document.write('<html><head><title>BC Production Report - ' + dateVal + '</title>');
+        printWindow.document.write('<html><head><title>BC Production Report - ' + dateStr + '</title>');
         printWindow.document.write('<style>');
         printWindow.document.write('body { font-family: sans-serif; padding: 20px; }');
         printWindow.document.write('table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }');
         printWindow.document.write('th, td { border: 1px solid #000; padding: 6px 10px; font-size: 13px; }');
         printWindow.document.write('th { font-weight: bold; }');
         printWindow.document.write('</style></head><body>');
-        printWindow.document.write('<h2 style="margin-bottom: 15px;">BC Production Report - Date: ' + dateVal + '</h2>');
+        printWindow.document.write('<h2 style="margin-bottom: 15px;">BC Production Report - Period: ' + dateStr + '</h2>');
         printWindow.document.write(printContents);
         printWindow.document.write('</body></html>');
         printWindow.document.close();

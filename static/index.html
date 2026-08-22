@@ -2149,9 +2149,15 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
                     <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
                         <h2 style="margin: 0; font-size: 1.3rem; color: var(--text-main);"><i class="fas fa-industry" style="margin-right: 8px; color: var(--primary);"></i>BC Production Report</h2>
-                        <div style="display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.04); padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-                            <label for="bcProdDate" style="font-weight: 600; font-size: 0.88rem; margin: 0; color: var(--text-main);">Select Date:</label>
-                            <input type="date" id="bcProdDate" style="padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem; font-weight: 600; color: var(--text-main); background: var(--card-bg);">
+                        <div style="display: flex; align-items: center; gap: 12px; background: rgba(0,0,0,0.04); padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label for="bcProdFromDate" style="font-weight: 600; font-size: 0.88rem; margin: 0; color: var(--text-main);">From:</label>
+                                <input type="date" id="bcProdFromDate" style="padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem; font-weight: 600; color: var(--text-main); background: var(--card-bg);">
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <label for="bcProdToDate" style="font-weight: 600; font-size: 0.88rem; margin: 0; color: var(--text-main);">To:</label>
+                                <input type="date" id="bcProdToDate" style="padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem; font-weight: 600; color: var(--text-main); background: var(--card-bg);">
+                            </div>
                         </div>
                     </div>
                     <div style="display: flex; gap: 10px; align-items: center;">
@@ -3492,6 +3498,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=299"></script>
+    <script src="/static/app.js?v=300"></script>
 </body>
 </html>
