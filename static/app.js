@@ -3071,13 +3071,39 @@ document.addEventListener('DOMContentLoaded', () => {
         if (footEl) footEl.innerHTML = '';
 
         try {
-            const [schedRes, partsRes] = await Promise.all([
+            const [schedRes, partsRes, logsRes] = await Promise.all([
                 fetch('/api/schedule'),
-                fetch('/api/partmaster')
+                fetch('/api/partmaster'),
+                fetch('/api/prodlog')
             ]);
             
             const schedules = await schedRes.json();
             const allParts = await partsRes.json();
+            const allLogs = await logsRes.json();
+
+            const now = new Date();
+            const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+            // Helper to match logs for current month
+            const isLogCurrentMonth = (logDateStr) => {
+                if (!logDateStr) return true;
+                const s = String(logDateStr).trim();
+                if (s.length >= 7 && s.charAt(4) === '-') {
+                    return s.slice(0, 7) === currentYearMonth;
+                }
+                if (s.includes('/') || s.includes('-')) {
+                    const parts = s.split(/[\/\-]/);
+                    if (parts.length === 3) {
+                        let y, m;
+                        if (parts[0].length === 4) { y = parts[0]; m = parts[1].padStart(2, '0'); }
+                        else if (parts[2].length === 4) { y = parts[2]; m = parts[1].padStart(2, '0'); }
+                        if (y && m) return `${y}-${m}` === currentYearMonth;
+                    }
+                }
+                return s.includes(currentYearMonth);
+            };
+
+            const currentMonthLogs = (allLogs || []).filter(l => isLogCurrentMonth(l.date));
 
             // Filter active schedules for chosen department
             const deptSchedules = (schedules || []).filter(s => 
@@ -3119,25 +3145,44 @@ document.addEventListener('DOMContentLoaded', () => {
                     } catch(e) { operations = []; }
                 }
 
-                // Map machine hours for this part
+                // Map machine hours for this part based on Balance Qty
                 const machineHoursMap = {};
                 let partTotalHours = 0;
+                let maxOpProdQty = 0;
 
                 (operations || []).forEach(op => {
                     const mName = (op.machine || 'Unassigned').trim();
+                    const opClean = (op.opn_no || '').trim().toLowerCase();
                     const cycTime = parseFloat(op.cycle_time) || 0;
+                    
+                    // Quantity produced in current month for this operation
+                    const opLogs = currentMonthLogs.filter(l => 
+                        (l.partno || '').trim().toUpperCase() === upperNo &&
+                        (l.opn_no || '').trim().toLowerCase() === opClean
+                    );
+                    const opProdQty = opLogs.reduce((sum, l) => sum + (parseFloat(l.prod_qty) || 0), 0);
+                    if (opProdQty > maxOpProdQty) maxOpProdQty = opProdQty;
+
+                    // Balance quantity to be produced during the month for this operation
+                    const opBalQty = Math.max(0, schedQty - opProdQty);
+
                     if (cycTime > 0) {
-                        const hrs = (schedQty * cycTime) / 60.0;
+                        const hrs = (opBalQty * cycTime) / 60.0;
                         machineHoursMap[mName] = (machineHoursMap[mName] || 0) + hrs;
                         partTotalHours += hrs;
                         machineSet.add(mName);
                     }
                 });
 
+                const producedQty = maxOpProdQty;
+                const balanceQty = Math.max(0, schedQty - producedQty);
+
                 partDetailsList.push({
                     customer: cust,
                     partno: upperNo,
                     schedQty,
+                    producedQty,
+                    balanceQty,
                     machineHoursMap,
                     totalHours: partTotalHours
                 });
@@ -3170,6 +3215,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <th style="padding: 10px; text-align: left; position: sticky; top: 0; background: var(--card-bg); z-index: 2;">Customer</th>
                 <th style="padding: 10px; text-align: left; position: sticky; top: 0; background: var(--card-bg); z-index: 2;">Part No</th>
                 <th style="padding: 10px; text-align: right; position: sticky; top: 0; background: var(--card-bg); z-index: 2;">Schedule Qty</th>
+                <th style="padding: 10px; text-align: right; position: sticky; top: 0; background: var(--card-bg); z-index: 2; color: #16a34a;">Produced Qty</th>
+                <th style="padding: 10px; text-align: right; position: sticky; top: 0; background: var(--card-bg); z-index: 2; color: #d97706;">Balance Qty</th>
         `;
 
         machineList.forEach(m => {
@@ -3182,18 +3229,24 @@ document.addEventListener('DOMContentLoaded', () => {
         // Body
         let bodyHtml = '';
         let grandSchedQty = 0;
+        let grandProducedQty = 0;
+        let grandBalanceQty = 0;
         let grandTotalHours = 0;
         const machineGrandTotals = {};
         machineList.forEach(m => machineGrandTotals[m] = 0);
 
         partDetailsList.forEach(item => {
             grandSchedQty += item.schedQty;
+            grandProducedQty += item.producedQty;
+            grandBalanceQty += item.balanceQty;
             grandTotalHours += item.totalHours;
 
             bodyHtml += `<tr style="border-bottom: 1px solid var(--border-color);">
                 <td style="padding: 8px 10px;">${escapeHtml(item.customer)}</td>
                 <td style="padding: 8px 10px; font-weight: 600;">${escapeHtml(item.partno)}</td>
                 <td style="padding: 8px 10px; text-align: right;">${item.schedQty.toLocaleString()}</td>
+                <td style="padding: 8px 10px; text-align: right; color: #16a34a; font-weight: 600;">${item.producedQty.toLocaleString()}</td>
+                <td style="padding: 8px 10px; text-align: right; color: #d97706; font-weight: 600;">${item.balanceQty.toLocaleString()}</td>
             `;
 
             machineList.forEach(m => {
@@ -3214,6 +3267,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <tr>
                 <td style="padding: 10px;" colspan="2">TOTAL REQUIREMENT (${dept})</td>
                 <td style="padding: 10px; text-align: right;">${grandSchedQty.toLocaleString()}</td>
+                <td style="padding: 10px; text-align: right; color: #16a34a; font-weight: 700;">${grandProducedQty.toLocaleString()}</td>
+                <td style="padding: 10px; text-align: right; color: #d97706; font-weight: 700;">${grandBalanceQty.toLocaleString()}</td>
         `;
 
         machineList.forEach(m => {
@@ -3238,7 +3293,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = {
                 'Customer': item.customer,
                 'Part No': item.partno,
-                'Schedule Qty': item.schedQty
+                'Schedule Qty': item.schedQty,
+                'Produced Qty (Month)': item.producedQty,
+                'Balance Qty': item.balanceQty
             };
 
             machineList.forEach(m => {
@@ -3254,7 +3311,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const totalsRow = {
             'Customer': 'TOTAL',
             'Part No': dept,
-            'Schedule Qty': partDetailsList.reduce((sum, i) => sum + i.schedQty, 0)
+            'Schedule Qty': partDetailsList.reduce((sum, i) => sum + i.schedQty, 0),
+            'Produced Qty (Month)': partDetailsList.reduce((sum, i) => sum + i.producedQty, 0),
+            'Balance Qty': partDetailsList.reduce((sum, i) => sum + i.balanceQty, 0)
         };
 
         let grandHours = 0;
