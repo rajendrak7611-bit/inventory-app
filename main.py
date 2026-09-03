@@ -355,6 +355,121 @@ def import_rfq_excel():
     except Exception as e:
         return {"error": str(e)}
 
+def import_schedule_excel():
+    excel_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "schedule.xlsx")
+    if not os.path.exists(excel_path):
+        return {"message": "schedule.xlsx not found"}
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(excel_path, data_only=True)
+        sheet = wb["schedules"] if "schedules" in wb.sheetnames else wb.active
+        
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS schedules (
+                    id SERIAL PRIMARY KEY,
+                    department TEXT,
+                    partno TEXT,
+                    target_date TEXT,
+                    qty TEXT,
+                    completed_qty TEXT DEFAULT '0',
+                    status TEXT DEFAULT 'Pending'
+                );
+            """))
+            conn.commit()
+
+            existing_ids = set()
+            try:
+                rows = conn.execute(text("SELECT id FROM schedules")).fetchall()
+                existing_ids = {r[0] for r in rows if r[0] is not None}
+            except Exception:
+                pass
+
+            imported_count = 0
+            updated_count = 0
+            
+            headers = []
+            for col in range(1, sheet.max_column + 1):
+                h = sheet.cell(row=1, column=col).value
+                headers.append(str(h).strip().lower() if h else f"col_{col}")
+            
+            for r in range(2, sheet.max_row + 1):
+                row_data = {}
+                for c in range(1, len(headers) + 1):
+                    val = sheet.cell(row=r, column=c).value
+                    row_data[headers[c-1]] = val
+                
+                partno = str(row_data.get("partno") or "").strip()
+                if not partno:
+                    continue
+                
+                sid = int(row_data.get("id")) if row_data.get("id") else None
+                dept = str(row_data.get("department") or "").strip()
+                target_date = str(row_data.get("target_date") or "").strip()
+                if hasattr(target_date, "strftime"):
+                    target_date = target_date.strftime("%Y-%m-%d")
+                elif " " in target_date:
+                    target_date = target_date.split(" ")[0]
+                    
+                qty = str(row_data.get("qty") or "0").strip()
+                completed_qty = str(row_data.get("completed_qty") or "0").strip()
+                status = str(row_data.get("status") or "Pending").strip()
+
+                if sid and sid in existing_ids:
+                    conn.execute(text("""
+                        UPDATE schedules
+                        SET department = :dept, partno = :partno, target_date = :target_date,
+                            qty = :qty, completed_qty = :completed_qty, status = :status
+                        WHERE id = :id
+                    """), {
+                        "id": sid, "dept": dept, "partno": partno, "target_date": target_date,
+                        "qty": qty, "completed_qty": completed_qty, "status": status
+                    })
+                    updated_count += 1
+                else:
+                    if sid:
+                        try:
+                            conn.execute(text("""
+                                INSERT INTO schedules (id, department, partno, target_date, qty, completed_qty, status)
+                                VALUES (:id, :dept, :partno, :target_date, :qty, :completed_qty, :status)
+                            """), {
+                                "id": sid, "dept": dept, "partno": partno, "target_date": target_date,
+                                "qty": qty, "completed_qty": completed_qty, "status": status
+                            })
+                            existing_ids.add(sid)
+                            imported_count += 1
+                        except Exception:
+                            conn.execute(text("""
+                                INSERT INTO schedules (department, partno, target_date, qty, completed_qty, status)
+                                VALUES (:dept, :partno, :target_date, :qty, :completed_qty, :status)
+                            """), {
+                                "dept": dept, "partno": partno, "target_date": target_date,
+                                "qty": qty, "completed_qty": completed_qty, "status": status
+                            })
+                            imported_count += 1
+                    else:
+                        conn.execute(text("""
+                            INSERT INTO schedules (department, partno, target_date, qty, completed_qty, status)
+                            VALUES (:dept, :partno, :target_date, :qty, :completed_qty, :status)
+                        """), {
+                            "dept": dept, "partno": partno, "target_date": target_date,
+                            "qty": qty, "completed_qty": completed_qty, "status": status
+                        })
+                        imported_count += 1
+
+            conn.commit()
+            try:
+                conn.execute(text("SELECT setval(pg_get_serial_sequence('schedules', 'id'), coalesce(max(id),0) + 1, false) FROM schedules;"))
+                conn.commit()
+            except Exception:
+                pass
+
+        return {"message": f"Schedule excel imported successfully: {imported_count} inserted, {updated_count} updated"}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
 @app.on_event("startup")
 def run_startup_migrations():
     try:
@@ -375,6 +490,10 @@ def run_startup_migrations():
         import_rfq_excel()
     except Exception as e:
         print("Startup rfq import note:", e)
+    try:
+        import_schedule_excel()
+    except Exception as e:
+        print("Startup schedule import note:", e)
 
 @app.post("/api/import-breakdown-excel")
 @app.get("/api/import-breakdown-excel")
@@ -385,6 +504,11 @@ def trigger_import_breakdown_excel():
 @app.get("/api/import-rfq-excel")
 def trigger_import_rfq_excel():
     return import_rfq_excel()
+
+@app.post("/api/import-schedule-excel")
+@app.get("/api/import-schedule-excel")
+def trigger_import_schedule_excel():
+    return import_schedule_excel()
 
 @app.post("/api/restore-from-backup")
 @app.get("/api/restore-from-backup")
@@ -2123,125 +2247,6 @@ def delete_part(part_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Part not found")
     db.delete(db_part)
     db.commit()
-    return {"message": "Part deleted"}
-
-# --- Schedules ---
-@app.get("/api/schedules")
-def get_schedules(db: Session = Depends(get_db)):
-    try:
-        schedules = db.query(models.ProductionSchedule).all()
-        if schedules:
-            parts = db.query(models.Part).all()
-            part_map = {p.part_no.strip().upper(): p for p in parts if p.part_no}
-
-            logs = db.query(models.ProductionLog).all()
-            prod_map = {}
-            for log in logs:
-                if log.part_no and log.opn_no:
-                    key = (log.part_no.strip().upper(), str(log.opn_no).strip())
-                    prod_map[key] = prod_map.get(key, 0) + (log.qty_produced or 0)
-
-            results = []
-            for sch in schedules:
-                p_key = sch.part_no.strip().upper() if sch.part_no else ""
-                part = part_map.get(p_key)
-
-                if part and part.operations and len(part.operations) > 0:
-                    for opn in part.operations:
-                        opn_str = str(opn.opn_no).strip()
-                        qty_prod = prod_map.get((p_key, opn_str), 0)
-                        bal = max(0, (sch.total_sch_qty or 0) - qty_prod)
-                        results.append({
-                            "id": sch.id,
-                            "part_no": sch.part_no,
-                            "sch_qty": sch.total_sch_qty or 0,
-                            "opn_no": opn.opn_no,
-                            "desc": opn.description or "",
-                            "qty_prod": qty_prod,
-                            "balance": bal
-                        })
-                else:
-                    qty_prod = prod_map.get((p_key, "10"), 0)
-                    bal = max(0, (sch.total_sch_qty or 0) - qty_prod)
-                    results.append({
-                        "id": sch.id,
-                        "part_no": sch.part_no,
-                        "sch_qty": sch.total_sch_qty or 0,
-                        "opn_no": "10",
-                        "desc": "General",
-                        "qty_prod": qty_prod,
-                        "balance": bal
-                    })
-
-            return results
-    except Exception:
-        db.rollback()
-
-    try:
-        from sqlalchemy import text
-        rows = db.execute(text("SELECT * FROM schedules")).mappings().all()
-        return [dict(r) for r in rows]
-    except Exception:
-        db.rollback()
-        return []
-    imported_opns_count = 0
-
-    def safe_num(val):
-        try:
-            return float(val) if val else 0.0
-        except (ValueError, TypeError):
-            return 0.0
-
-    for row in rows[1:]:
-        if part_idx < len(row) and row[part_idx]:
-            part_no = row[part_idx].strip()
-            if not part_no or part_no.upper() == "PART NO":
-                continue
-            
-            opn_no = row[opn_idx].strip() if opn_idx != -1 and opn_idx < len(row) and row[opn_idx] else "10"
-            desc = row[desc_idx].strip() if desc_idx != -1 and desc_idx < len(row) and row[desc_idx] else ""
-            cyc = safe_num(row[cyc_idx]) if cyc_idx != -1 and cyc_idx < len(row) and row[cyc_idx] else 0.0
-            mach = row[mach_idx].strip() if mach_idx != -1 and mach_idx < len(row) and row[mach_idx] else ""
-            if cyc == 0.0 and mach:
-                cyc = safe_num(mach)
-            customer = row[cust_idx].strip() if cust_idx != -1 and cust_idx < len(row) and row[cust_idx] else ""
-            dept = row[dept_idx].strip() if dept_idx != -1 and dept_idx < len(row) and row[dept_idx] else ""
-            family = row[fam_idx].strip() if fam_idx != -1 and fam_idx < len(row) and row[fam_idx] else ""
-            forge_pn = row[forge_idx].strip() if forge_idx != -1 and forge_idx < len(row) and row[forge_idx] else ""
-
-            part_key = part_no.upper()
-            part = existing_parts.get(part_key)
-            if not part:
-                part = models.Part(
-                    part_no=part_no,
-                    customer=customer,
-                    dept=dept,
-                    family=family,
-                    forge_pn=forge_pn,
-                    description=desc,
-                    cycle_time=cyc
-                )
-                db.add(part)
-                db.flush()
-                existing_parts[part_key] = part
-                imported_parts_count += 1
-
-            existing_opn_keys = {(str(op.opn_no).strip(), op.description.strip().upper()) for op in part.operations} if part.operations else set()
-            if (opn_no, desc.upper()) not in existing_opn_keys:
-                opn = models.Operation(
-                    part_id=part.id,
-                    opn_no=opn_no,
-                    description=desc,
-                    machine_name=mach,
-                    cycle_time=cyc
-                )
-                db.add(opn)
-                existing_opn_keys.add((opn_no, desc.upper()))
-                imported_opns_count += 1
-
-    db.commit()
-    return {"imported_parts_count": imported_parts_count, "imported_opns_count": imported_opns_count, "message": f"Successfully imported {imported_parts_count} new parts and {imported_opns_count} operations!"}
-
 @app.post("/api/parts/{part_id}/operations", response_model=OperationResponse)
 def create_operation(part_id: int, opn: OperationCreate, db: Session = Depends(get_db)):
     db_part = db.query(models.Part).filter(models.Part.id == part_id).first()
@@ -2253,87 +2258,206 @@ def create_operation(part_id: int, opn: OperationCreate, db: Session = Depends(g
     db.refresh(db_opn)
     return db_opn
 
-@app.delete("/api/parts/clear-all")
-def clear_all_parts(db: Session = Depends(get_db)):
-    db.query(models.Part).delete()
-    db.commit()
-    return {"message": "All parts cleared successfully!"}
-
-@app.delete("/api/parts/{part_id}")
-def delete_part(part_id: int, db: Session = Depends(get_db)):
-    db_part = db.query(models.Part).filter(models.Part.id == part_id).first()
-    if not db_part:
-        raise HTTPException(status_code=404, detail="Part not found")
-    db.delete(db_part)
-    db.commit()
-    return {"message": "Part deleted"}
-
-# --- Schedules ---
+# --- Schedules CRUD ---
 @app.get("/api/schedules")
 @app.get("/api/schedule")
-def get_schedules(db: Session = Depends(get_db)):
+def get_schedules_endpoint(db: Session = Depends(get_db)):
     try:
-        schedules = db.query(models.ProductionSchedule).all()
-        parts = db.query(models.Part).all()
-        part_map = {p.part_no.strip().upper(): p for p in parts if p.part_no}
-
-        logs = db.query(models.ProductionLog).all()
-        prod_map = {}
-        for log in logs:
-            if log.part_no and log.opn_no:
-                key = (log.part_no.strip().upper(), str(log.opn_no).strip())
-                prod_map[key] = prod_map.get(key, 0) + (log.qty_produced or 0)
-
-        results = []
-        for sch in schedules:
-            p_key = sch.part_no.strip().upper() if sch.part_no else ""
-            part = part_map.get(p_key)
-
-            if part and part.operations and len(part.operations) > 0:
-                for opn in part.operations:
-                    opn_str = str(opn.opn_no).strip()
-                    qty_prod = prod_map.get((p_key, opn_str), 0)
-                    bal = max(0, (sch.total_sch_qty or 0) - qty_prod)
-                    results.append({
-                        "id": sch.id,
-                        "part_no": sch.part_no,
-                        "sch_qty": sch.total_sch_qty or 0,
-                        "opn_no": opn.opn_no,
-                        "desc": opn.description or "",
-                        "qty_prod": qty_prod,
-                        "balance": bal
-                    })
-            else:
-                qty_prod = prod_map.get((p_key, "10"), 0)
-                bal = max(0, (sch.total_sch_qty or 0) - qty_prod)
-                results.append({
-                    "id": sch.id,
-                    "part_no": sch.part_no,
-                    "sch_qty": sch.total_sch_qty or 0,
-                    "opn_no": "10",
-                    "desc": "General",
-                    "qty_prod": qty_prod,
-                    "balance": bal
-                })
-
-        return results
+        rows = db.execute(text("SELECT id, department, partno, target_date, qty, completed_qty, status FROM schedules ORDER BY id DESC")).mappings().all()
+        return [dict(r) for r in rows]
     except Exception as e:
         print("get_schedules error:", e)
         db.rollback()
-        try:
-            rows = db.execute(text("SELECT * FROM schedules")).mappings().all()
-            return [dict(r) for r in rows]
-        except Exception:
-            return []
+        return []
 
+@app.post("/api/schedule")
+@app.post("/api/schedules")
+def create_schedule_endpoint(data: dict, db: Session = Depends(get_db)):
+    try:
+        partno = str(data.get("partno") or data.get("part_no") or "").strip()
+        if not partno:
+            raise HTTPException(status_code=400, detail="Part No is required")
+        dept = str(data.get("department") or data.get("dept") or "").strip()
+        target_date = str(data.get("target_date") or "").strip()
+        qty = str(data.get("qty") or data.get("total_sch_qty") or 0).strip()
+        completed_qty = str(data.get("completed_qty") or 0).strip()
+        status = str(data.get("status") or "Pending").strip()
+
+        try:
+            db.execute(text("SELECT setval(pg_get_serial_sequence('schedules', 'id'), coalesce(max(id),0) + 1, false) FROM schedules;"))
+            db.commit()
+        except Exception:
+            db.rollback()
+
+        max_row = db.execute(text("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM schedules")).mappings().first()
+        next_id = int(max_row["next_id"]) if max_row and max_row.get("next_id") else 1
+
+        params = {
+            "id": next_id,
+            "department": dept,
+            "partno": partno,
+            "target_date": target_date,
+            "qty": qty,
+            "completed_qty": completed_qty,
+            "status": status
+        }
+        try:
+            db.execute(text("""
+                INSERT INTO schedules (id, department, partno, target_date, qty, completed_qty, status)
+                VALUES (:id, :department, :partno, :target_date, :qty, :completed_qty, :status)
+            """), params)
+            db.commit()
+            return {"id": next_id, **params}
+        except Exception:
+            db.rollback()
+            try:
+                res = db.execute(text("""
+                    INSERT INTO schedules (department, partno, target_date, qty, completed_qty, status)
+                    VALUES (:department, :partno, :target_date, :qty, :completed_qty, :status)
+                    RETURNING id
+                """), {
+                    "department": dept,
+                    "partno": partno,
+                    "target_date": target_date,
+                    "qty": qty,
+                    "completed_qty": completed_qty,
+                    "status": status
+                })
+                new_id = res.scalar()
+                db.commit()
+                return {"id": new_id, **params}
+            except Exception:
+                db.rollback()
+                db.execute(text("""
+                    INSERT INTO schedules (department, partno, target_date, qty, completed_qty, status)
+                    VALUES (:department, :partno, :target_date, :qty, :completed_qty, :status)
+                """), {
+                    "department": dept,
+                    "partno": partno,
+                    "target_date": target_date,
+                    "qty": qty,
+                    "completed_qty": completed_qty,
+                    "status": status
+                })
+                db.commit()
+                last_row = db.execute(text("SELECT id FROM schedules ORDER BY id DESC LIMIT 1")).mappings().first()
+                new_id = int(last_row["id"]) if last_row and last_row.get("id") else next_id
+                return {"id": new_id, **params}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/schedule/{sch_id}")
+@app.put("/api/schedules/{sch_id}")
+def update_schedule_endpoint(sch_id: int, data: dict, db: Session = Depends(get_db)):
+    try:
+        partno = str(data.get("partno") or data.get("part_no") or "").strip()
+        dept = str(data.get("department") or data.get("dept") or "").strip()
+        target_date = str(data.get("target_date") or "").strip()
+        qty = str(data.get("qty") or data.get("total_sch_qty") or 0).strip()
+        completed_qty = str(data.get("completed_qty") or 0).strip()
+        status = str(data.get("status") or "Pending").strip()
+
+        db.execute(text("""
+            UPDATE schedules
+            SET department = :dept, partno = :partno, target_date = :target_date,
+                qty = :qty, completed_qty = :completed_qty, status = :status
+            WHERE id = :id
+        """), {
+            "id": sch_id,
+            "dept": dept,
+            "partno": partno,
+            "target_date": target_date,
+            "qty": qty,
+            "completed_qty": completed_qty,
+            "status": status
+        })
+        db.commit()
+        return {"id": sch_id, "department": dept, "partno": partno, "target_date": target_date, "qty": qty, "completed_qty": completed_qty, "status": status}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/schedule/{sch_id}")
+@app.delete("/api/schedules/{sch_id}")
+def delete_schedule_endpoint(sch_id: int, db: Session = Depends(get_db)):
+    try:
+        db.execute(text("DELETE FROM schedules WHERE id = :id"), {"id": sch_id})
+        db.commit()
+        return {"message": "Schedule deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/schedule")
+@app.delete("/api/schedules")
 @app.delete("/api/schedules/clear-all")
-def clear_all_schedules(db: Session = Depends(get_db)):
-    db.query(models.ProductionSchedule).delete()
-    db.commit()
-    return {"message": "All work schedules cleared successfully!"}
+def clear_all_schedules_endpoint(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("DELETE FROM schedules"))
+        db.commit()
+        return {"message": "All work schedules cleared successfully!"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/schedule/run")
+def get_schedule_run(db: Session = Depends(get_db)):
+    try:
+        schedules = db.execute(text("SELECT * FROM schedules WHERE status != 'Completed' ORDER BY id DESC")).mappings().all()
+        pm_rows = db.execute(text("SELECT id, partno FROM part_masters")).mappings().all()
+        pm_id_map = {str(r.get("partno") or "").strip().upper(): r.get("id") for r in pm_rows if r.get("partno")}
+        
+        opn_rows = db.execute(text("SELECT part_id, opn_no, opn_name, machine, cycletime FROM part_operations")).mappings().all()
+        opns_by_part = {}
+        for op in opn_rows:
+            pid = op.get("part_id")
+            if pid not in opns_by_part:
+                opns_by_part[pid] = []
+            opns_by_part[pid].append(op)
+
+        run_items = []
+        for s in schedules:
+            partno = str(s.get("partno") or "").strip()
+            qty = float(s.get("qty") or 0)
+            pid = pm_id_map.get(partno.upper())
+            ops = opns_by_part.get(pid, []) if pid else []
+            if ops:
+                for o in ops:
+                    cyc = float(o.get("cycletime") or 0)
+                    runtime_hrs = round((qty * cyc) / 60.0, 2)
+                    run_items.append({
+                        "partno": partno,
+                        "opn_no": o.get("opn_no") or "10",
+                        "description": o.get("opn_name") or "",
+                        "machine": o.get("machine") or "",
+                        "qty": int(qty),
+                        "cycle_time": cyc,
+                        "runtime": runtime_hrs,
+                        "start_date": s.get("target_date") or "",
+                        "end_date": s.get("target_date") or ""
+                    })
+            else:
+                run_items.append({
+                    "partno": partno,
+                    "opn_no": "10",
+                    "description": "General Machining",
+                    "machine": "",
+                    "qty": int(qty),
+                    "cycle_time": 0,
+                    "runtime": 0,
+                    "start_date": s.get("target_date") or "",
+                    "end_date": s.get("target_date") or ""
+                })
+        return run_items
+    except Exception as e:
+        print("get_schedule_run error:", e)
+        return []
 
 @app.post("/api/schedules/import-excel")
-async def import_schedules_excel(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def import_schedules_excel_upload(file: UploadFile = File(...), db: Session = Depends(get_db)):
     contents = await file.read()
     rows = parse_excel_bytes(contents)
     if not rows:
@@ -2341,73 +2465,49 @@ async def import_schedules_excel(file: UploadFile = File(...), db: Session = Dep
     
     data_started = False
     imported_count = 0
+    headers = [h.strip().lower() for h in rows[0]] if rows else []
 
-    def safe_int(val, default=0):
-        try:
-            return int(float(val)) if val else default
-        except (ValueError, TypeError):
-            return default
+    # Check if header matches schedule.xlsx format
+    if "partno" in headers or "department" in headers:
+        p_idx = headers.index("partno") if "partno" in headers else -1
+        d_idx = headers.index("department") if "department" in headers else -1
+        t_idx = headers.index("target_date") if "target_date" in headers else -1
+        q_idx = headers.index("qty") if "qty" in headers else -1
+        s_idx = headers.index("status") if "status" in headers else -1
 
-    def safe_float(val, default=0.0):
-        try:
-            return float(val) if val else default
-        except (ValueError, TypeError):
-            return default
+        for row in rows[1:]:
+            if not row: continue
+            partno = row[p_idx].strip() if p_idx != -1 and p_idx < len(row) else ""
+            if not partno or partno.lower() == "partno": continue
+            dept = row[d_idx].strip() if d_idx != -1 and d_idx < len(row) else ""
+            t_date = row[t_idx].strip() if t_idx != -1 and t_idx < len(row) else ""
+            qty = row[q_idx].strip() if q_idx != -1 and q_idx < len(row) else "0"
+            stat = row[s_idx].strip() if s_idx != -1 and s_idx < len(row) else "Pending"
 
-    for row in rows:
-        if not row: continue
-        if "Sl No" in row or "PART NO" in [x.upper().strip() for x in row]:
-            data_started = True
-            continue
-        if data_started and len(row) >= 4:
-            sl_no = row[0]
-            item = row[1] if len(row) > 1 else ""
-            grs_no = row[2] if len(row) > 2 else ""
-            part_no = row[3] if len(row) > 3 else ""
-            total_sch_qty = safe_int(row[4]) if len(row) > 4 else 0
-            rate_per_pc = safe_float(row[5]) if len(row) > 5 else 0.0
-            amount = safe_float(row[6]) if len(row) > 6 else 0.0
-            qty_disp = safe_int(row[7]) if len(row) > 7 else 0
-            value_rs = safe_float(row[8]) if len(row) > 8 else 0.0
-            balance_to_produce = safe_int(row[9]) if len(row) > 9 else (total_sch_qty - qty_disp)
-            remarks = row[10] if len(row) > 10 else ""
-
-            if part_no and part_no.upper() != "PART NO":
-                sch = models.ProductionSchedule(
-                    sl_no=sl_no,
-                    item=item,
-                    grs_no=grs_no,
-                    part_no=part_no,
-                    total_sch_qty=total_sch_qty,
-                    rate_per_pc=rate_per_pc,
-                    amount=amount,
-                    qty_disp=qty_disp,
-                    value_rs=value_rs,
-                    balance_to_produce=balance_to_produce,
-                    remarks=remarks
-                )
-                db.add(sch)
-                imported_count += 1
+            db.execute(text("""
+                INSERT INTO schedules (department, partno, target_date, qty, completed_qty, status)
+                VALUES (:department, :partno, :target_date, :qty, '0', :status)
+            """), {"department": dept, "partno": partno, "target_date": t_date, "qty": qty, "status": stat})
+            imported_count += 1
+    else:
+        for row in rows:
+            if not row: continue
+            if "Sl No" in row or "PART NO" in [x.upper().strip() for x in row]:
+                data_started = True
+                continue
+            if data_started and len(row) >= 4:
+                dept = row[1] if len(row) > 1 else ""
+                part_no = row[3] if len(row) > 3 else ""
+                total_sch_qty = str(row[4]) if len(row) > 4 else "0"
+                if part_no and part_no.upper() != "PART NO":
+                    db.execute(text("""
+                        INSERT INTO schedules (department, partno, target_date, qty, completed_qty, status)
+                        VALUES (:department, :partno, '', :qty, '0', 'Pending')
+                    """), {"department": dept, "partno": part_no, "qty": total_sch_qty})
+                    imported_count += 1
 
     db.commit()
-    return {"imported_count": imported_count, "message": f"Successfully imported {imported_count} work schedule items!"}
-
-@app.post("/api/schedules", response_model=ProductionScheduleResponse)
-def create_schedule(sch: ProductionScheduleCreate, db: Session = Depends(get_db)):
-    db_sch = models.ProductionSchedule(**sch.model_dump())
-    db.add(db_sch)
-    db.commit()
-    db.refresh(db_sch)
-    return db_sch
-
-@app.delete("/api/schedules/{sch_id}")
-def delete_schedule(sch_id: int, db: Session = Depends(get_db)):
-    db_sch = db.query(models.ProductionSchedule).filter(models.ProductionSchedule.id == sch_id).first()
-    if not db_sch:
-        raise HTTPException(status_code=404, detail="Schedule not found")
-    db.delete(db_sch)
-    db.commit()
-    return {"message": "Schedule deleted"}
+    return {"imported_count": imported_count, "message": f"Successfully imported {imported_count} schedule items!"}
 
 # --- Production Logging ---
 @app.get("/api/production-logs", response_model=List[ProductionLogResponse])
