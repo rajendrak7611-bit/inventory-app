@@ -494,6 +494,10 @@ def run_startup_migrations():
         import_schedule_excel()
     except Exception as e:
         print("Startup schedule import note:", e)
+    try:
+        sync_all_pc_receipts_to_production()
+    except Exception as e:
+        print("Startup PC receipts sync note:", e)
 
 @app.post("/api/import-breakdown-excel")
 @app.get("/api/import-breakdown-excel")
@@ -3343,37 +3347,135 @@ def get_ht_vendor_pending_parts(db: Session = Depends(get_db)):
 @app.get("/api/pc/available_parts")
 def get_pc_available_parts(db: Session = Depends(get_db)):
     try:
-        parts_rows = db.execute(text("SELECT id, partno, department FROM part_masters ORDER BY partno;")).mappings().all()
+        parts_rows = db.execute(text("SELECT id, partno, department FROM part_masters WHERE UPPER(TRIM(department)) = 'BC' ORDER BY partno;")).mappings().all()
+
+        po_rows = db.execute(text("SELECT id, part_id, opn_no, description, machine, cycle_time FROM part_operations ORDER BY id ASC;")).mappings().all()
+        po_by_part = {}
+        for r in po_rows:
+            pid = str(r.get("part_id") or "").strip()
+            if pid not in po_by_part:
+                po_by_part[pid] = []
+            po_by_part[pid].append(dict(r))
+
+        fallback_po = {}
+        try:
+            op_rows = db.execute(text("SELECT o.id, o.part_id, o.opn_no, o.description, o.machine_name, o.cycle_time, p.part_no FROM operations o JOIN parts p ON o.part_id = p.id ORDER BY o.id ASC;")).mappings().all()
+            for r in op_rows:
+                pno = (r.get("part_no") or "").strip().upper()
+                if pno not in fallback_po:
+                    fallback_po[pno] = []
+                fallback_po[pno].append({
+                    "id": r.get("id"),
+                    "part_id": r.get("part_id"),
+                    "opn_no": r.get("opn_no"),
+                    "description": r.get("description"),
+                    "machine": r.get("machine_name"),
+                    "cycle_time": r.get("cycle_time")
+                })
+        except Exception:
+            pass
+
         prod_rows = db.execute(text("SELECT partno, opn_no, prod_qty FROM production_logs;")).mappings().all()
         pc_rows = db.execute(text("SELECT partno, qty FROM pc_logs;")).mappings().all()
+
+        def clean_opn(val):
+            if val is None: return ""
+            v = str(val).strip().lower()
+            v = re.sub(r'opn[\s.]*', '', v).strip()
+            try:
+                f = float(v)
+                return str(int(f)) if f.is_integer() else str(f)
+            except Exception:
+                return v
 
         prod_map = {}
         for r in prod_rows:
             pno = (r.get("partno") or "").strip().upper()
-            prod_map[pno] = prod_map.get(pno, 0) + int(float(r.get("prod_qty") or 0))
+            op = clean_opn(r.get("opn_no"))
+            qty = int(float(r.get("prod_qty") or 0))
+            key = (pno, op)
+            prod_map[key] = prod_map.get(key, 0) + qty
 
         pc_map = {}
         for r in pc_rows:
             pno = (r.get("partno") or "").strip().upper()
             pc_map[pno] = pc_map.get(pno, 0) + int(float(r.get("qty") or 0))
 
+        def is_pc_op(op):
+            desc = (op.get("description") or "").strip().upper()
+            opn = str(op.get("opn_no") or "").strip().upper()
+            mach = (op.get("machine") or "").strip().upper()
+            return desc == "PC" or "PC" in desc.split() or "POWDER" in desc or opn == "PC" or mach == "PC"
+
         result = []
         for p in parts_rows:
             pno = (p.get("partno") or "").strip()
             pno_upper = pno.upper()
-            dept = p.get("department") or ""
-            prod_qty = prod_map.get(pno_upper, 0)
+            pid = str(p.get("id") or "").strip()
+            dept = p.get("department") or "BC"
+
+            ops = po_by_part.get(pid, [])
+            if not ops and pno_upper in fallback_po:
+                ops = fallback_po[pno_upper]
+
+            if not ops:
+                continue
+
+            def op_sort_key(o):
+                c = clean_opn(o.get("opn_no"))
+                try:
+                    return (0, float(c))
+                except Exception:
+                    return (1, c)
+            sorted_ops = sorted(ops, key=op_sort_key)
+
+            pc_idx = -1
+            for idx, o in enumerate(sorted_ops):
+                if is_pc_op(o):
+                    pc_idx = idx
+                    break
+
+            if pc_idx == -1:
+                # Part does not have PC operation - do not list
+                continue
+
+            pc_op = sorted_ops[pc_idx]
+            pc_opn_no = str(pc_op.get("opn_no") or "").strip()
+            pc_opn_desc = pc_op.get("description") or "PC"
+            is_final_opn = (pc_idx == len(sorted_ops) - 1)
+
+            if pc_idx > 0:
+                prev_op = sorted_ops[pc_idx - 1]
+                raw_prev_opn = str(prev_op.get("opn_no") or "").strip()
+                prev_opn_no = f"Opn {raw_prev_opn}" if raw_prev_opn and not raw_prev_opn.lower().startswith("opn") else raw_prev_opn
+                prev_opn_desc = prev_op.get("description") or ""
+                prev_clean = clean_opn(raw_prev_opn)
+                prev_prod_qty = prod_map.get((pno_upper, prev_clean), 0)
+            else:
+                prev_opn_no = "RM"
+                prev_opn_desc = "Raw Material"
+                prev_prod_qty = 0
+
             pc_sent = pc_map.get(pno_upper, 0)
-            avail = max(0, prod_qty - pc_sent)
+            available_qty = max(0, prev_prod_qty - pc_sent)
+
             result.append({
                 "partno": pno,
                 "department": dept,
-                "produced_qty": prod_qty,
+                "pc_opn_no": pc_opn_no,
+                "pc_opn_desc": pc_opn_desc,
+                "prev_opn_no": prev_opn_no,
+                "prev_opn_desc": prev_opn_desc,
+                "produced_qty": prev_prod_qty,
                 "pc_sent_qty": pc_sent,
-                "available_qty": avail
+                "available_qty": available_qty,
+                "is_final_opn": is_final_opn
             })
+
+        result.sort(key=lambda x: (-x["available_qty"], x["partno"]))
         return result
     except Exception as ex:
+        print("get_pc_available_parts error:", ex)
         db.rollback()
         return []
 
@@ -3797,6 +3899,69 @@ def get_pc_receipt_logs(db: Session = Depends(get_db)):
         db.rollback()
         return []
 
+def log_pc_receipt_to_production(conn, partno_val, qty_val, date_val, vendor_val):
+    try:
+        pno_clean = (partno_val or "").strip()
+        if not pno_clean or int(qty_val) <= 0:
+            return
+        pc_opn = "50"
+        pc_desc = "PC"
+        pc_cycle = 0.0
+        pm_row = conn.execute(text("SELECT id FROM part_masters WHERE UPPER(TRIM(partno)) = :pno;"), {"pno": pno_clean.upper()}).mappings().first()
+        if pm_row:
+            pid = str(pm_row["id"])
+            ops = conn.execute(text("SELECT opn_no, description, cycle_time FROM part_operations WHERE CAST(part_id AS TEXT) = :pid;"), {"pid": pid}).mappings().all()
+            for o in ops:
+                d = (o.get("description") or "").strip().upper()
+                opn_str = str(o.get("opn_no") or "").strip().upper()
+                if d == "PC" or "PC" in d.split() or "POWDER" in d or opn_str == "PC":
+                    pc_opn = str(o.get("opn_no") or "50")
+                    pc_desc = o.get("description") or "PC"
+                    pc_cycle = float(o.get("cycle_time") or 0.0)
+                    break
+
+        max_pl = conn.execute(text("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM production_logs;")).mappings().first()
+        next_pl_id = int(max_pl["next_id"]) if max_pl else 1
+        conn.execute(text("""
+            INSERT INTO production_logs (
+                id, dept, date, shift, setter, machine, operator, partno, opn_no, description, prod_qty, target_qty, efficiency, runtime, cycle_time, multiple_mc
+            ) VALUES (
+                :id, 'BC', :date, 'First', 'None', 'PC', :operator, :partno, :opn_no, :description, :qty, :qty, 100.0, 0.0, :cycle_time, 1
+            )
+        """), {
+            "id": next_pl_id,
+            "date": date_val or get_now_ist().strftime("%Y-%m-%d"),
+            "operator": vendor_val or "PC Vendor",
+            "partno": pno_clean,
+            "opn_no": pc_opn,
+            "description": pc_desc,
+            "qty": str(qty_val),
+            "cycle_time": pc_cycle
+        })
+        conn.commit()
+    except Exception as e:
+        print("log_pc_receipt_to_production error:", e)
+
+def sync_all_pc_receipts_to_production():
+    try:
+        with engine.connect() as conn:
+            recs = conn.execute(text("SELECT * FROM pc_receipt_logs;")).mappings().all()
+            for r in recs:
+                pno = (r.get("partno") or "").strip()
+                qty = int(float(r.get("qty") or 0))
+                date_val = r.get("date") or ""
+                vendor = r.get("vendor") or "PC Vendor"
+                if not pno or qty <= 0:
+                    continue
+                existing = conn.execute(text("""
+                    SELECT id FROM production_logs 
+                    WHERE UPPER(TRIM(partno)) = :pno AND machine = 'PC' AND prod_qty = :qty;
+                """), {"pno": pno.upper(), "qty": str(qty)}).mappings().first()
+                if not existing:
+                    log_pc_receipt_to_production(conn, pno, qty, date_val, vendor)
+    except Exception as e:
+        print("sync_all_pc_receipts_to_production note:", e)
+
 @app.post("/api/pc_receipt_logs")
 def create_pc_receipt_log(data: dict, db: Session = Depends(get_db)):
     try:
@@ -3834,6 +3999,9 @@ def create_pc_receipt_log(data: dict, db: Session = Depends(get_db)):
                 VALUES (:date, :vendor, :partno, :qty)
             """), {"date": date_val, "vendor": vendor_val, "partno": partno_val, "qty": qty_val})
             db.commit()
+
+        # Update Opn 50 (PC operation) in production_logs
+        log_pc_receipt_to_production(db, partno_val, qty_val, date_val, vendor_val)
 
         return {"message": "PC Receipt Log saved successfully"}
     except Exception as ex:
@@ -3875,16 +4043,33 @@ def update_pc_receipt_log(log_id: int, data: dict, db: Session = Depends(get_db)
     except Exception as ex:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(ex))
-    return {"message": "PC Receipt Log updated successfully"}
 
 @app.delete("/api/pc_receipt_logs/{log_id}")
 def delete_pc_receipt_log(log_id: int, db: Session = Depends(get_db)):
     try:
+        row = db.execute(text("SELECT * FROM pc_receipt_logs WHERE id = :id"), {"id": log_id}).mappings().first()
+        if row:
+            pno = row.get("partno")
+            qty = str(row.get("qty"))
+            try:
+                db.execute(text("""
+                    DELETE FROM production_logs 
+                    WHERE id IN (
+                        SELECT id FROM production_logs 
+                        WHERE machine = 'PC' AND UPPER(TRIM(partno)) = :pno AND prod_qty = :qty 
+                        LIMIT 1
+                    );
+                """), {"pno": pno.upper(), "qty": qty})
+                db.commit()
+            except Exception:
+                db.rollback()
+
         db.execute(text("DELETE FROM pc_receipt_logs WHERE id = :id"), {"id": log_id})
         db.commit()
-    except Exception:
+        return {"message": "PC Receipt Log deleted"}
+    except Exception as ex:
         db.rollback()
-    return {"message": "PC Receipt Log deleted"}
+        raise HTTPException(status_code=500, detail=str(ex))
 
 # --- BREAKDOWN SLIPS & SERVICE DETAILS CRUD ---
 @app.get("/api/breakdown_slips")

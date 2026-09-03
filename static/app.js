@@ -4575,9 +4575,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                const pcRecTotal = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
-                if (pcRecTotal > lastOpProd) {
-                    lastOpProd = pcRecTotal;
+                if (operations.length === 0) {
+                    const pcRecTotal = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                    if (pcRecTotal > lastOpProd) {
+                        lastOpProd = pcRecTotal;
+                    }
                 }
 
                 const deburredProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
@@ -7791,11 +7793,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         availableParts.forEach(p => {
+            const prevLabel = p.prev_opn_no ? (p.prev_opn_desc ? `${p.prev_opn_no}: ${p.prev_opn_desc}` : p.prev_opn_no) : 'RM';
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><strong>${p.partno}</strong></td>
-                <td>${p.department || '-'}</td>
-                <td>${p.produced_qty} (${p.prev_opn_no}: ${p.prev_opn_desc})</td>
+                <td>${p.department || 'BC'}</td>
+                <td>${p.produced_qty} (${prevLabel})</td>
                 <td>${p.pc_sent_qty}</td>
                 <td><span style="font-weight: bold; color: #16a34a;">${p.available_qty}</span></td>
                 <td>
