@@ -353,6 +353,7 @@ class SetterLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     date = Column(String, index=True, nullable=False)
+    dept = Column(String, index=True, nullable=True)
     setter_name = Column(String, index=True, nullable=False)
     time_from = Column(String, nullable=True)
     time_to = Column(String, nullable=True)

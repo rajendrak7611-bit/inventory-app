@@ -485,6 +485,7 @@ def run_startup_migrations():
                     CREATE TABLE IF NOT EXISTS setter_logs (
                         id SERIAL PRIMARY KEY,
                         date TEXT,
+                        dept TEXT DEFAULT '',
                         setter_name TEXT,
                         time_from TEXT,
                         time_to TEXT,
@@ -498,6 +499,11 @@ def run_startup_migrations():
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     );
                 """))
+                conn.commit()
+            except Exception:
+                pass
+            try:
+                conn.execute(text("ALTER TABLE setter_logs ADD COLUMN IF NOT EXISTS dept VARCHAR(50) DEFAULT '';"))
                 conn.commit()
             except Exception:
                 pass
@@ -4094,29 +4100,24 @@ def delete_pc_receipt_log(log_id: int, db: Session = Depends(get_db)):
 
 # --- SERVICE: SETTERS LOG CRUD ---
 @app.get("/api/service/setters")
-def get_service_setters_list(db: Session = Depends(get_db)):
+def get_service_setters_list(dept: Optional[str] = None, db: Session = Depends(get_db)):
     try:
         op_rows = db.execute(text("SELECT * FROM operators WHERE UPPER(TRIM(COALESCE(designation, ''))) = 'SETTER' ORDER BY name ASC;")).mappings().all()
-        st_rows = db.execute(text("SELECT * FROM setters ORDER BY name ASC;")).mappings().all()
         
+        d_filter = (dept or "").strip().upper()
         seen = set()
         result = []
         for r in op_rows:
             nm = (r.get("name") or "").strip()
+            d_val = (r.get("department") or r.get("dept") or "").strip()
+            if d_filter and d_val.upper() != d_filter:
+                continue
             if nm and nm.upper() not in seen:
                 seen.add(nm.upper())
                 result.append({
                     "name": nm,
-                    "department": r.get("department") or r.get("dept") or "",
-                    "designation": "SETTER"
-                })
-        for r in st_rows:
-            nm = (r.get("name") or "").strip()
-            if nm and nm.upper() not in seen:
-                seen.add(nm.upper())
-                result.append({
-                    "name": nm,
-                    "department": r.get("department") or r.get("dept") or "",
+                    "department": d_val,
+                    "dept": d_val,
                     "designation": "SETTER"
                 })
         result.sort(key=lambda x: x["name"])
@@ -4133,6 +4134,7 @@ def get_service_setter_logs(db: Session = Depends(get_db)):
             CREATE TABLE IF NOT EXISTS setter_logs (
                 id SERIAL PRIMARY KEY,
                 date TEXT,
+                dept TEXT DEFAULT '',
                 setter_name TEXT,
                 time_from TEXT,
                 time_to TEXT,
@@ -4147,10 +4149,17 @@ def get_service_setter_logs(db: Session = Depends(get_db)):
             );
         """))
         db.commit()
+        try:
+            db.execute(text("ALTER TABLE setter_logs ADD COLUMN dept VARCHAR(50) DEFAULT '';"))
+            db.commit()
+        except Exception:
+            db.rollback()
+
         rows = db.execute(text("SELECT * FROM setter_logs ORDER BY date DESC, id DESC;")).mappings().all()
         return [{
             "id": r.get("id"),
             "date": r.get("date") or "",
+            "dept": r.get("dept") or "",
             "setter_name": r.get("setter_name") or "",
             "time_from": r.get("time_from") or "",
             "time_to": r.get("time_to") or "",
@@ -4172,6 +4181,7 @@ def get_service_setter_logs(db: Session = Depends(get_db)):
 def create_service_setter_log(data: dict, db: Session = Depends(get_db)):
     try:
         date_val = normalize_date_str((data.get("date") or "").strip())
+        dept_val = (data.get("dept") or data.get("department") or "").strip()
         setter_name = (data.get("setter_name") or data.get("name") or "").strip()
         time_from = (data.get("time_from") or "").strip()
         time_to = (data.get("time_to") or "").strip()
@@ -4198,6 +4208,7 @@ def create_service_setter_log(data: dict, db: Session = Depends(get_db)):
         params = {
             "id": next_id,
             "date": date_val,
+            "dept": dept_val,
             "setter_name": setter_name,
             "time_from": time_from,
             "time_to": time_to,
@@ -4211,15 +4222,15 @@ def create_service_setter_log(data: dict, db: Session = Depends(get_db)):
         }
         try:
             db.execute(text("""
-                INSERT INTO setter_logs (id, date, setter_name, time_from, time_to, activity, machine, partno, opn_no, description, qty, remarks)
-                VALUES (:id, :date, :setter_name, :time_from, :time_to, :activity, :machine, :partno, :opn_no, :description, :qty, :remarks);
+                INSERT INTO setter_logs (id, date, dept, setter_name, time_from, time_to, activity, machine, partno, opn_no, description, qty, remarks)
+                VALUES (:id, :date, :dept, :setter_name, :time_from, :time_to, :activity, :machine, :partno, :opn_no, :description, :qty, :remarks);
             """), params)
             db.commit()
         except Exception:
             db.rollback()
             db.execute(text("""
-                INSERT INTO setter_logs (date, setter_name, time_from, time_to, activity, machine, partno, opn_no, description, qty, remarks)
-                VALUES (:date, :setter_name, :time_from, :time_to, :activity, :machine, :partno, :opn_no, :description, :qty, :remarks);
+                INSERT INTO setter_logs (date, dept, setter_name, time_from, time_to, activity, machine, partno, opn_no, description, qty, remarks)
+                VALUES (:date, :dept, :setter_name, :time_from, :time_to, :activity, :machine, :partno, :opn_no, :description, :qty, :remarks);
             """), params)
             db.commit()
 
@@ -4234,6 +4245,7 @@ def create_service_setter_log(data: dict, db: Session = Depends(get_db)):
 def update_service_setter_log(log_id: int, data: dict, db: Session = Depends(get_db)):
     try:
         date_val = normalize_date_str((data.get("date") or "").strip())
+        dept_val = (data.get("dept") or data.get("department") or "").strip()
         setter_name = (data.get("setter_name") or data.get("name") or "").strip()
         time_from = (data.get("time_from") or "").strip()
         time_to = (data.get("time_to") or "").strip()
@@ -4247,13 +4259,14 @@ def update_service_setter_log(log_id: int, data: dict, db: Session = Depends(get
 
         db.execute(text("""
             UPDATE setter_logs
-            SET date = :date, setter_name = :setter_name, time_from = :time_from, time_to = :time_to,
+            SET date = :date, dept = :dept, setter_name = :setter_name, time_from = :time_from, time_to = :time_to,
                 activity = :activity, machine = :machine, partno = :partno, opn_no = :opn_no,
                 description = :description, qty = :qty, remarks = :remarks
             WHERE id = :id;
         """), {
             "id": log_id,
             "date": date_val,
+            "dept": dept_val,
             "setter_name": setter_name,
             "time_from": time_from,
             "time_to": time_to,

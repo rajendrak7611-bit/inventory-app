@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GRS ENGINEERING PVT LTD</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=10046">
+    <link rel="stylesheet" href="/static/style.css?v=10047">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
@@ -797,16 +797,26 @@
                 <form id="setterLogForm">
                     <input type="hidden" id="editingSetterLogId" value="">
                     
-                    <!-- Row 1: Date, Name, From, To, Activity -->
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px;">
+                    <!-- Row 1: Date, Dept, Name, From, To, Activity -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px;">
                         <div class="form-group" style="margin: 0;">
                             <label for="setterLogDate" style="font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; display: block;">Date *</label>
                             <input type="date" id="setterLogDate" required style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;">
                         </div>
                         <div class="form-group" style="margin: 0;">
+                            <label for="setterLogDept" style="font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; display: block;">Dept *</label>
+                            <select id="setterLogDept" required style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #fff;">
+                                <option value="">-- Select Dept --</option>
+                                <option value="BC">BC</option>
+                                <option value="GEAR">GEAR</option>
+                                <option value="SPIDER">SPIDER</option>
+                                <option value="WIPRO">WIPRO</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0;">
                             <label for="setterLogName" style="font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; display: block;">Setter Name *</label>
                             <select id="setterLogName" required style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #fff;">
-                                <option value="">-- Select Setter --</option>
+                                <option value="">-- Select Dept First --</option>
                             </select>
                         </div>
                         <div class="form-group" style="margin: 0;">
@@ -840,13 +850,13 @@
                         <div class="form-group" style="margin: 0;">
                             <label for="setterLogMachine" style="font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; display: block;">Machine *</label>
                             <select id="setterLogMachine" required style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #fff;">
-                                <option value="">-- Select Machine --</option>
+                                <option value="">-- Select Dept First --</option>
                             </select>
                         </div>
                         <div class="form-group" style="margin: 0;">
                             <label for="setterLogPartNo" style="font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; display: block;">Part No</label>
                             <select id="setterLogPartNo" style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #fff;">
-                                <option value="">-- Select Part No --</option>
+                                <option value="">-- Select Dept First --</option>
                             </select>
                         </div>
                         <div class="form-group" style="margin: 0;">
@@ -908,6 +918,7 @@
                         <tr style="background: #f1f5f9;">
                             <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">ID</th>
                             <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">Date</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">Dept</th>
                             <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">Setter Name</th>
                             <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">From</th>
                             <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">To</th>
@@ -925,12 +936,13 @@
                             <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"><input type="text" class="table-col-filter" data-col="0" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
                             <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"><input type="text" class="table-col-filter" data-col="1" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
                             <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"><input type="text" class="table-col-filter" data-col="2" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"><input type="text" class="table-col-filter" data-col="3" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
                             <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"></th>
                             <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"></th>
                             <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"></th>
-                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"><input type="text" class="table-col-filter" data-col="6" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
                             <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"><input type="text" class="table-col-filter" data-col="7" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
                             <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"><input type="text" class="table-col-filter" data-col="8" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"><input type="text" class="table-col-filter" data-col="9" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
                             <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"></th>
                             <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"></th>
                             <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"></th>
@@ -939,7 +951,7 @@
                         </tr>
                     </thead>
                     <tbody id="setterLogsBody">
-                        <tr><td colspan="14" style="text-align: center; color: var(--text-muted); padding: 1rem;">Loading setter entries...</td></tr>
+                        <tr><td colspan="15" style="text-align: center; color: var(--text-muted); padding: 1rem;">Loading setter entries...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -4124,6 +4136,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10046"></script>
+    <script src="/static/app.js?v=10047"></script>
 </body>
 </html>

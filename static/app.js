@@ -14620,11 +14620,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         await Promise.all([
-            loadServiceSettersDropdown(),
+            loadServiceSettersData(),
             loadServiceSetterMachines(),
             loadServiceSetterParts(),
             fetchServiceSetterLogs()
         ]);
+
+        const deptSelect = document.getElementById('setterLogDept');
+        filterSetterDropdownsByDept(deptSelect ? deptSelect.value : '');
 
         if (!serviceSettersInitialized) {
             serviceSettersInitialized = true;
@@ -14632,21 +14635,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function loadServiceSettersDropdown() {
+    async function loadServiceSettersData() {
         try {
             const res = await fetch('/api/service/setters');
             cachedSettersList = await res.json();
-            const select = document.getElementById('setterLogName');
-            if (select) {
-                const currentVal = select.value;
-                let html = '<option value="">-- Select Setter --</option>';
-                cachedSettersList.forEach(s => {
-                    const deptText = s.department ? ` (${s.department})` : '';
-                    html += `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}${deptText}</option>`;
-                });
-                select.innerHTML = html;
-                if (currentVal) select.value = currentVal;
-            }
         } catch (err) {
             console.error('Error loading setters:', err);
         }
@@ -14656,19 +14648,6 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch('/api/machines');
             cachedSetterMachines = await res.json();
-            const select = document.getElementById('setterLogMachine');
-            if (select) {
-                const currentVal = select.value;
-                let html = '<option value="">-- Select Machine --</option>';
-                cachedSetterMachines.forEach(m => {
-                    const mName = m.name || m.machine_name || m.machine || '';
-                    if (mName) {
-                        html += `<option value="${escapeHtml(mName)}">${escapeHtml(mName)}</option>`;
-                    }
-                });
-                select.innerHTML = html;
-                if (currentVal) select.value = currentVal;
-            }
         } catch (err) {
             console.error('Error loading machines:', err);
         }
@@ -14678,21 +14657,77 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch('/api/partmaster');
             cachedSetterParts = await res.json();
-            const select = document.getElementById('setterLogPartNo');
-            if (select) {
-                const currentVal = select.value;
-                let html = '<option value="">-- Select Part No --</option>';
-                cachedSetterParts.forEach(p => {
-                    const pNo = p.partno || p.part_no || '';
-                    if (pNo) {
-                        html += `<option value="${escapeHtml(pNo)}" data-id="${p.id || ''}">${escapeHtml(pNo)}</option>`;
-                    }
-                });
-                select.innerHTML = html;
-                if (currentVal) select.value = currentVal;
-            }
         } catch (err) {
             console.error('Error loading parts:', err);
+        }
+    }
+
+    function filterSetterDropdownsByDept(dept) {
+        const dUpper = (dept || '').trim().toUpperCase();
+
+        // 1. Filter Setters
+        const setterSelect = document.getElementById('setterLogName');
+        if (setterSelect) {
+            const curSetter = setterSelect.value;
+            let filteredSetters = cachedSettersList;
+            if (dUpper) {
+                filteredSetters = cachedSettersList.filter(s => (s.department || s.dept || '').trim().toUpperCase() === dUpper);
+            }
+            let html = '<option value="">-- Select Setter --</option>';
+            filteredSetters.forEach(s => {
+                html += `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`;
+            });
+            setterSelect.innerHTML = html;
+            if (curSetter && filteredSetters.some(s => s.name === curSetter)) {
+                setterSelect.value = curSetter;
+            }
+        }
+
+        // 2. Filter Machines
+        const machineSelect = document.getElementById('setterLogMachine');
+        if (machineSelect) {
+            const curMachine = machineSelect.value;
+            let filteredMachines = cachedSetterMachines;
+            if (dUpper) {
+                filteredMachines = cachedSetterMachines.filter(m => {
+                    const mDept = (m.department || m.dept || '').trim().toUpperCase();
+                    return !mDept || mDept === dUpper;
+                });
+            }
+            let html = '<option value="">-- Select Machine --</option>';
+            filteredMachines.forEach(m => {
+                const mName = m.name || m.machine_name || m.machine || '';
+                if (mName) {
+                    html += `<option value="${escapeHtml(mName)}">${escapeHtml(mName)}</option>`;
+                }
+            });
+            machineSelect.innerHTML = html;
+            if (curMachine && filteredMachines.some(m => (m.name || m.machine_name || m.machine) === curMachine)) {
+                machineSelect.value = curMachine;
+            }
+        }
+
+        // 3. Filter Parts
+        const partSelect = document.getElementById('setterLogPartNo');
+        if (partSelect) {
+            const curPart = partSelect.value;
+            let filteredParts = cachedSetterParts;
+            if (dUpper) {
+                filteredParts = cachedSetterParts.filter(p => (p.dept || p.department || '').trim().toUpperCase() === dUpper);
+            }
+            let html = '<option value="">-- Select Part No --</option>';
+            filteredParts.forEach(p => {
+                const pNo = p.partno || p.part_no || '';
+                if (pNo) {
+                    html += `<option value="${escapeHtml(pNo)}" data-id="${p.id || ''}">${escapeHtml(pNo)}</option>`;
+                }
+            });
+            partSelect.innerHTML = html;
+            if (curPart && filteredParts.some(p => (p.partno || p.part_no) === curPart)) {
+                partSelect.value = curPart;
+            } else {
+                onSetterPartNoChanged('');
+            }
         }
     }
 
@@ -14768,7 +14803,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tbody.innerHTML = '';
 
         if (!logs || logs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="14" style="text-align: center; color: var(--text-muted); padding: 1.25rem;">No setter entries logged yet.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="15" style="text-align: center; color: var(--text-muted); padding: 1.25rem;">No setter entries logged yet.</td></tr>';
             updateSetterKpis([]);
             return;
         }
@@ -14781,6 +14816,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tr.innerHTML = `
                 <td>${l.id}</td>
                 <td><strong>${l.date}</strong></td>
+                <td><span style="background: #f1f5f9; color: #334155; font-weight: 600; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">${escapeHtml(l.dept || '-')}</span></td>
                 <td><span style="font-weight: 600; color: #0284c7;">${escapeHtml(l.setter_name)}</span></td>
                 <td>${l.time_from || '-'}</td>
                 <td>${l.time_to || '-'}</td>
@@ -14858,6 +14894,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('editingSetterLogId').value = item.id;
         document.getElementById('setterLogDate').value = item.date;
+
+        const deptSelect = document.getElementById('setterLogDept');
+        if (deptSelect) deptSelect.value = item.dept || '';
+        filterSetterDropdownsByDept(item.dept || '');
+
         document.getElementById('setterLogName').value = item.setter_name;
         document.getElementById('setterLogTimeFrom').value = item.time_from;
         document.getElementById('setterLogTimeTo').value = item.time_to;
@@ -14887,6 +14928,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('editingSetterLogId').value = '';
         document.getElementById('setterLogForm').reset();
         document.getElementById('setterLogDate').valueAsDate = new Date();
+        filterSetterDropdownsByDept('');
         const opnSelect = document.getElementById('setterLogOpnNo');
         if (opnSelect) opnSelect.innerHTML = '<option value="">-- Select Opn --</option>';
 
@@ -14899,6 +14941,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function setupServiceSettersEvents() {
+        const deptSelect = document.getElementById('setterLogDept');
+        if (deptSelect) {
+            deptSelect.addEventListener('change', (e) => {
+                filterSetterDropdownsByDept(e.target.value);
+            });
+        }
+
         const partSelect = document.getElementById('setterLogPartNo');
         if (partSelect) {
             partSelect.addEventListener('change', (e) => {
@@ -14930,6 +14979,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const editingId = document.getElementById('editingSetterLogId').value;
                 const payload = {
                     date: document.getElementById('setterLogDate').value,
+                    dept: document.getElementById('setterLogDept').value,
                     setter_name: document.getElementById('setterLogName').value,
                     time_from: document.getElementById('setterLogTimeFrom').value,
                     time_to: document.getElementById('setterLogTimeTo').value,
@@ -14974,6 +15024,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const exportData = currentSetterLogs.map(l => ({
                     'ID': l.id,
                     'Date': l.date,
+                    'Dept': l.dept || '',
                     'Setter Name': l.setter_name,
                     'From': l.time_from,
                     'To': l.time_to,
