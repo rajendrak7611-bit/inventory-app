@@ -11845,49 +11845,122 @@ document.addEventListener('DOMContentLoaded', () => {
     const addBdSlipBtn = document.getElementById('addBdSlipBtn');
     const cancelBdSlipBtn = document.getElementById('cancelBdSlipBtn');
     const closeBdSlipModalBtn = document.getElementById('closeBdSlipModalBtn');
+    let currentBdSlips = [];
+    let bdSlipExportInitialized = false;
 
     async function fetchBdSlips() {
         try {
             const res = await fetch('/api/breakdown_slips');
-            const data = await res.json();
-            renderBdSlips(data);
+            currentBdSlips = await res.json();
+            renderBdSlips(currentBdSlips);
         } catch (err) { console.error('Error fetching breakdown slips:', err); }
+    }
+
+    function updateBdSlipKpis(slips) {
+        const totalEl = document.getElementById('kpiBdTotal');
+        const openEl = document.getElementById('kpiBdOpen');
+        const signedOffEl = document.getElementById('kpiBdSignedOff');
+        const machEl = document.getElementById('kpiBdMachines');
+
+        if (!totalEl) return;
+        totalEl.innerText = slips.length;
+
+        let openCount = 0;
+        let signedOffCount = 0;
+        const machines = new Set();
+
+        slips.forEach(s => {
+            const isSignedOff = s.status === 'Signed Off' || (s.signoff_date_time && s.signoff_date_time.trim() !== '');
+            if (isSignedOff) signedOffCount++;
+            else openCount++;
+            if (s.machine) machines.add(s.machine.trim().toUpperCase());
+        });
+
+        if (openEl) openEl.innerText = openCount;
+        if (signedOffEl) signedOffEl.innerText = signedOffCount;
+        if (machEl) machEl.innerText = machines.size;
     }
 
     function renderBdSlips(slips) {
         const tbody = document.getElementById('bdSlipBody');
         if (!tbody) return;
         tbody.innerHTML = '';
+
+        updateBdSlipKpis(slips || []);
+
         if (!slips || slips.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No breakdown slips found. Click "+ Add Breakdown Slip" to create a record.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 1.5rem;">No breakdown slips found. Click "+ Add Breakdown Slip" to create a record.</td></tr>';
             return;
         }
 
-        slips.forEach(item => {
+        slips.forEach((item, idx) => {
             const tr = document.createElement('tr');
+            tr.style.backgroundColor = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+
             const isSignedOff = item.status === 'Signed Off' || (item.signoff_date_time && item.signoff_date_time.trim() !== '');
             const statusBadge = isSignedOff 
-                ? '<span style="color: #16a34a; font-weight: 600; background: #dcfce7; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">Signed Off</span>' 
-                : '<span style="color: #d97706; font-weight: 600; background: #fef3c7; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">Open</span>';
+                ? '<span style="display: inline-flex; align-items: center; gap: 5px; background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; font-weight: 700; padding: 3px 10px; border-radius: 20px; font-size: 0.78rem; white-space: nowrap;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #16a34a; display: inline-block;"></span>Signed Off</span>' 
+                : '<span style="display: inline-flex; align-items: center; gap: 5px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; font-weight: 700; padding: 3px 10px; border-radius: 20px; font-size: 0.78rem; white-space: nowrap;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #d97706; display: inline-block;"></span>Open</span>';
 
             const formattedDateTime = item.date_time ? item.date_time.replace('T', ' ') : '';
-            const formattedSignoff = item.signoff_date_time ? item.signoff_date_time.replace('T', ' ') : '-';
+            let [dPart, tPart] = formattedDateTime.split(' ');
+            let dateHtml = dPart ? `<div style="font-weight: 600; color: #1e293b; white-space: nowrap;"><i class="far fa-calendar-alt" style="color: #64748b; margin-right: 4px;"></i>${escapeHtml(dPart)}</div>` : '-';
+            if (tPart) dateHtml += `<div style="font-size: 0.75rem; color: #64748b; margin-top: 2px; white-space: nowrap;"><i class="far fa-clock" style="margin-right: 3px;"></i>${escapeHtml(tPart)}</div>`;
+
+            const formattedSignoff = item.signoff_date_time ? item.signoff_date_time.replace('T', ' ') : '';
+            let signoffHtml = '<span style="color: #94a3b8; font-style: italic; font-size: 0.8rem;">Pending</span>';
+            if (formattedSignoff) {
+                let [soD, soT] = formattedSignoff.split(' ');
+                signoffHtml = `<div style="font-weight: 600; color: #15803d; font-size: 0.82rem; white-space: nowrap;"><i class="fas fa-check" style="margin-right: 4px;"></i>${escapeHtml(soD)}</div>`;
+                if (soT) signoffHtml += `<div style="font-size: 0.75rem; color: #64748b; margin-top: 2px; white-space: nowrap;"><i class="far fa-clock" style="margin-right: 3px;"></i>${escapeHtml(soT)}</div>`;
+            }
+
+            let mType = item.maint_type || 'Breakdown';
+            let mTypeBadge = '';
+            if (mType.toLowerCase().includes('breakdown')) {
+                mTypeBadge = `<span style="background: #fee2e2; color: #991b1b; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; display: inline-block; white-space: nowrap;"><i class="fas fa-exclamation-triangle" style="margin-right: 3px;"></i>${escapeHtml(mType)}</span>`;
+            } else if (mType.toLowerCase().includes('corrective')) {
+                mTypeBadge = `<span style="background: #e0f2fe; color: #075985; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; display: inline-block; white-space: nowrap;"><i class="fas fa-wrench" style="margin-right: 3px;"></i>${escapeHtml(mType)}</span>`;
+            } else if (mType.toLowerCase().includes('preventive')) {
+                mTypeBadge = `<span style="background: #ede9fe; color: #5b21b6; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; display: inline-block; white-space: nowrap;"><i class="fas fa-shield-alt" style="margin-right: 3px;"></i>${escapeHtml(mType)}</span>`;
+            } else {
+                mTypeBadge = `<span style="background: #f1f5f9; color: #334155; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; display: inline-block; white-space: nowrap;">${escapeHtml(mType)}</span>`;
+            }
+
+            const deptPill = item.department ? `<span style="background: #e0e7ff; color: #3730a3; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; display: inline-block; white-space: nowrap;">${escapeHtml(item.department)}</span>` : '-';
+            const shiftPill = item.shift ? `<span style="background: #f1f5f9; color: #334155; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 500; display: inline-block; white-space: nowrap;">${escapeHtml(item.shift)}</span>` : '-';
+            const reqByHtml = item.request_by ? `<div style="font-weight: 600; color: #334155; font-size: 0.82rem;"><i class="far fa-user" style="color: #94a3b8; margin-right: 4px;"></i>${escapeHtml(item.request_by)}</div>` : '-';
+            const machBadge = item.machine ? `<span style="background: #ffffff; border: 1px solid #cbd5e1; color: #0f172a; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; display: inline-block; white-space: nowrap;">${escapeHtml(item.machine)}</span>` : '-';
+
+            let problemText = item.problem || '';
+            let problemHtml = '<span style="color: #94a3b8;">-</span>';
+            if (problemText) {
+                problemHtml = `
+                    <div style="max-width: 300px; min-width: 200px; font-size: 0.82rem; line-height: 1.45; color: #1e293b; background: #fffbeb; border-left: 3px solid #f59e0b; padding: 6px 10px; border-radius: 0 6px 6px 0; word-break: break-word; white-space: pre-wrap; max-height: 110px; overflow-y: auto;">
+                        ${escapeHtml(problemText)}
+                    </div>
+                `;
+            }
 
             tr.innerHTML = `
-                <td>${item.id}</td>
-                <td><span style="font-weight: 500;">${formattedDateTime}</span></td>
-                <td>${item.department || ''}</td>
-                <td>${item.shift || ''}</td>
-                <td><strong>${item.maint_type || 'Breakdown'}</strong></td>
-                <td>${item.request_by || ''}</td>
-                <td><strong>${item.machine || ''}</strong></td>
-                <td style="max-width: 200px; white-space: pre-wrap; font-size: 0.85rem;">${item.problem || ''}</td>
-                <td>${formattedSignoff}</td>
-                <td>${statusBadge}</td>
-                <td class="actions-cell">
-                    ${!isSignedOff ? `<button class="btn btn-outline signoff-bd-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; color: #16a34a; border-color: #16a34a; margin-right: 4px;">Sign-off</button>` : ''}
-                    <button class="btn btn-outline edit-bd-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; margin-right: 4px;">Edit</button>
-                    <button class="btn btn-outline delete-bd-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                <td style="text-align: center; padding: 8px 10px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">
+                    <span style="background: #f1f5f9; color: #475569; font-weight: 700; padding: 3px 8px; border-radius: 6px; font-size: 0.8rem;">#${item.id}</span>
+                </td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${dateHtml}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${deptPill}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${shiftPill}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${mTypeBadge}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${reqByHtml}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${machBadge}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${problemHtml}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${signoffHtml}</td>
+                <td style="text-align: center; padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${statusBadge}</td>
+                <td style="text-align: center; padding: 8px 12px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">
+                    <div style="display: flex; gap: 5px; align-items: center; justify-content: center;">
+                        ${!isSignedOff ? `<button class="btn btn-outline signoff-bd-btn" data-id="${item.id}" title="Sign off breakdown" style="padding: 4px 8px; font-size: 0.78rem; font-weight: 600; color: #16a34a; border-color: #86efac; background: #f0fdf4;"><i class="fas fa-check" style="margin-right: 3px;"></i>Sign-off</button>` : ''}
+                        <button class="btn btn-outline edit-bd-btn" data-id="${item.id}" title="Edit breakdown slip" style="padding: 4px 8px; font-size: 0.78rem; font-weight: 600; color: #0284c7; border-color: #bae6fd; background: #f0f9ff;"><i class="fas fa-edit" style="margin-right: 3px;"></i>Edit</button>
+                        <button class="btn btn-outline delete-bd-btn" data-id="${item.id}" title="Delete record" style="padding: 4px 8px; font-size: 0.78rem; font-weight: 600; color: #ef4444; border-color: #fca5a5; background: #fef2f2;"><i class="fas fa-trash-alt"></i></button>
+                    </div>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -11895,7 +11968,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.querySelectorAll('.signoff-bd-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const id = e.target.getAttribute('data-id');
+                const id = e.currentTarget.getAttribute('data-id');
                 const now = new Date();
                 const nowStr = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
                 const res = await fetch('/api/breakdown_slips');
@@ -11918,7 +11991,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.querySelectorAll('.edit-bd-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const id = e.target.getAttribute('data-id');
+                const id = e.currentTarget.getAttribute('data-id');
                 const res = await fetch('/api/breakdown_slips');
                 const data = await res.json();
                 const item = data.find(x => x.id == id);
@@ -11928,8 +12001,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.querySelectorAll('.delete-bd-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
+                const id = e.currentTarget.getAttribute('data-id');
                 if (confirm('Delete this Breakdown Slip record?')) {
-                    const id = e.target.getAttribute('data-id');
                     try {
                         const res = await fetch(`/api/breakdown_slips/${id}`, { method: 'DELETE' });
                         if (res.ok) fetchBdSlips();
@@ -11938,6 +12011,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
+
+        if (!bdSlipExportInitialized) {
+            bdSlipExportInitialized = true;
+            const exportBtn = document.getElementById('exportBdSlipBtn');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', () => {
+                    if (!currentBdSlips || currentBdSlips.length === 0) {
+                        alert('No breakdown slips to export.');
+                        return;
+                    }
+                    const exportData = currentBdSlips.map(s => ({
+                        'ID': s.id,
+                        'Date & Time': s.date_time ? s.date_time.replace('T', ' ') : '',
+                        'Dept': s.department || '',
+                        'Shift': s.shift || '',
+                        'Maint Type': s.maint_type || 'Breakdown',
+                        'Request By': s.request_by || '',
+                        'Machine': s.machine || '',
+                        'Problem': s.problem || '',
+                        'Sign-off Date & Time': s.signoff_date_time ? s.signoff_date_time.replace('T', ' ') : '',
+                        'Status': (s.status === 'Signed Off' || (s.signoff_date_time && s.signoff_date_time.trim() !== '')) ? 'Signed Off' : 'Open'
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(exportData);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, 'Breakdown_Slips');
+                    const today = new Date().toISOString().split('T')[0];
+                    XLSX.writeFile(wb, `Breakdown_Slips_${today}.xlsx`);
+                });
+            }
+        }
+
+        applyTableColFilters('bdSlipTable');
     }
 
     async function openBdSlipModal(item = null) {

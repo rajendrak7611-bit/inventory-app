@@ -323,7 +323,7 @@ header .logo h1 {
     z-index: 10;
 }
 
-.data-table tbody tr:hover {
+.data-table tbody tr:hover, #bdSlipTable tbody tr:hover {
     background-color: #f1f5f9;
 }
 

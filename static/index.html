@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GRS ENGINEERING PVT LTD</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=10047">
+    <link rel="stylesheet" href="/static/style.css?v=10048">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
@@ -614,29 +614,84 @@
         </div>
 
         <!-- Breakdown Slip Section -->
-        <div class="table-container" id="bdSlipSection" style="display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h2>Breakdown Slip</h2>
-                <button id="addBdSlipBtn" class="btn btn-primary">+ Add Breakdown Slip</button>
+        <div class="table-container" id="bdSlipSection" style="display: none; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 2rem;">
+            <!-- Top Header & Action Bar -->
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 1.25rem;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 38px; height: 38px; border-radius: 8px; background: #eff6ff; display: flex; align-items: center; justify-content: center; color: #2563eb; font-size: 1.2rem;">
+                        <i class="fas fa-tools"></i>
+                    </div>
+                    <div>
+                        <h2 style="margin: 0; font-size: 1.35rem; font-weight: 700; color: #0f172a;">Breakdown Slip</h2>
+                        <span style="font-size: 0.8rem; color: #64748b;">Log and track machine breakdown, preventive, and corrective maintenance records</span>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <button id="exportBdSlipBtn" class="btn btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem; font-weight: 600; color: #16a34a; border-color: #86efac; background: #f0fdf4;">
+                        <i class="fas fa-file-excel" style="margin-right: 5px;"></i> Export Excel
+                    </button>
+                    <button id="addBdSlipBtn" class="btn btn-primary" style="padding: 0.45rem 1rem; font-size: 0.85rem; font-weight: 600; background: #2563eb; border-color: #2563eb;">
+                        <i class="fas fa-plus" style="margin-right: 5px;"></i> Add Breakdown Slip
+                    </button>
+                </div>
             </div>
-            <table id="bdSlipTable">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Date with Time</th>
-                        <th>Dept</th>
-                        <th>Shift</th>
-                        <th>Maint Type</th>
-                        <th>Request By</th>
-                        <th>Machine</th>
-                        <th>Problem</th>
-                        <th>Sign-off Date with Time</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="bdSlipBody"></tbody>
-            </table>
+
+            <!-- KPI Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 1.5rem;">
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Total Slips</div>
+                    <div id="kpiBdTotal" style="font-size: 1.7rem; font-weight: 700; color: #0f172a; margin-top: 4px;">0</div>
+                </div>
+                <div style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: #d97706; text-transform: uppercase;">Open Issues</div>
+                    <div id="kpiBdOpen" style="font-size: 1.7rem; font-weight: 700; color: #b45309; margin-top: 4px;">0</div>
+                </div>
+                <div style="background: #f0fdf4; border: 1px solid #dcfce7; border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: #16a34a; text-transform: uppercase;">Signed Off</div>
+                    <div id="kpiBdSignedOff" style="font-size: 1.7rem; font-weight: 700; color: #15803d; margin-top: 4px;">0</div>
+                </div>
+                <div style="background: #fbfbfe; border: 1px solid #ede9fe; border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: #7c3aed; text-transform: uppercase;">Machines Affected</div>
+                    <div id="kpiBdMachines" style="font-size: 1.7rem; font-weight: 700; color: #6d28d9; margin-top: 4px;">0</div>
+                </div>
+            </div>
+
+            <!-- Table Container with Sticky Headers & Column Filters -->
+            <div style="overflow-x: auto; max-height: calc(100vh - 380px); overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff;">
+                <table id="bdSlipTable" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.85rem;">
+                    <thead>
+                        <tr style="background: #f1f5f9;">
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 10px 12px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #e2e8f0; font-weight: 600; color: #334155; text-align: center; width: 60px;">ID</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 10px 12px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #e2e8f0; font-weight: 600; color: #334155;">Date with Time</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 10px 12px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #e2e8f0; font-weight: 600; color: #334155;">Dept</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 10px 12px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #e2e8f0; font-weight: 600; color: #334155;">Shift</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 10px 12px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #e2e8f0; font-weight: 600; color: #334155;">Maint Type</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 10px 12px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #e2e8f0; font-weight: 600; color: #334155;">Request By</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 10px 12px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #e2e8f0; font-weight: 600; color: #334155;">Machine</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 10px 12px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #e2e8f0; font-weight: 600; color: #334155; min-width: 250px;">Problem</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 10px 12px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #e2e8f0; font-weight: 600; color: #334155;">Sign-off Date with Time</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 10px 12px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #e2e8f0; font-weight: 600; color: #334155; text-align: center;">Status</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 10px 12px; border-bottom: 1px solid #cbd5e1; font-weight: 600; color: #334155; text-align: center; min-width: 170px;">Actions</th>
+                        </tr>
+                        <tr style="background: #e2e8f0;">
+                            <th style="position: sticky; top: 39px; z-index: 19; padding: 4px; border-right: 1px solid #cbd5e1;"><input type="text" class="table-col-filter" data-col="0" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 39px; z-index: 19; padding: 4px; border-right: 1px solid #cbd5e1;"><input type="text" class="table-col-filter" data-col="1" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 39px; z-index: 19; padding: 4px; border-right: 1px solid #cbd5e1;"><input type="text" class="table-col-filter" data-col="2" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 39px; z-index: 19; padding: 4px; border-right: 1px solid #cbd5e1;"><input type="text" class="table-col-filter" data-col="3" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 39px; z-index: 19; padding: 4px; border-right: 1px solid #cbd5e1;"><input type="text" class="table-col-filter" data-col="4" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 39px; z-index: 19; padding: 4px; border-right: 1px solid #cbd5e1;"><input type="text" class="table-col-filter" data-col="5" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 39px; z-index: 19; padding: 4px; border-right: 1px solid #cbd5e1;"><input type="text" class="table-col-filter" data-col="6" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 39px; z-index: 19; padding: 4px; border-right: 1px solid #cbd5e1;"><input type="text" class="table-col-filter" data-col="7" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 39px; z-index: 19; padding: 4px; border-right: 1px solid #cbd5e1;"><input type="text" class="table-col-filter" data-col="8" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 39px; z-index: 19; padding: 4px; border-right: 1px solid #cbd5e1;"><input type="text" class="table-col-filter" data-col="9" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 39px; z-index: 19; padding: 4px; text-align: center;"><button type="button" class="clear-table-filters-btn btn btn-text" style="font-size: 0.75rem; color: #ef4444; padding: 2px 6px; font-weight: 600; cursor: pointer; display: none;">Clear</button></th>
+                        </tr>
+                    </thead>
+                    <tbody id="bdSlipBody">
+                        <tr><td colspan="11" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 1.5rem;">Loading breakdown slips...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Service Details Section -->
@@ -4136,6 +4191,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10047"></script>
+    <script src="/static/app.js?v=10048"></script>
 </body>
 </html>
