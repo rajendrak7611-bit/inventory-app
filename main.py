@@ -194,6 +194,167 @@ def import_breakdown_excel():
     except Exception as e:
         return {"error": str(e)}
 
+def import_rfq_excel():
+    excel_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rfq.xlsx")
+    if not os.path.exists(excel_path):
+        return {"message": "rfq.xlsx not found"}
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(excel_path, data_only=True)
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS rfq_headers (
+                    id SERIAL PRIMARY KEY,
+                    date TEXT,
+                    rfqno TEXT,
+                    unit TEXT,
+                    customer TEXT,
+                    created_at TEXT
+                );
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS rfq_items (
+                    id SERIAL PRIMARY KEY,
+                    rfq_id INTEGER,
+                    partno TEXT,
+                    description TEXT
+                );
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS quote_records (
+                    id SERIAL PRIMARY KEY,
+                    quote_no TEXT,
+                    date TEXT,
+                    rfq_id INTEGER,
+                    rfq_no TEXT,
+                    customer TEXT,
+                    part_no TEXT,
+                    part_description TEXT,
+                    unit TEXT,
+                    overhead_profit_pct NUMERIC DEFAULT 0,
+                    total_machining_cost NUMERIC DEFAULT 0,
+                    total_other_process_cost NUMERIC DEFAULT 0,
+                    total_packing_cost NUMERIC DEFAULT 0,
+                    base_part_cost NUMERIC DEFAULT 0,
+                    final_unit_price NUMERIC DEFAULT 0,
+                    total_dev_cost NUMERIC DEFAULT 0,
+                    machining_details TEXT,
+                    other_process_details TEXT,
+                    packing_details TEXT,
+                    dev_cost_details TEXT,
+                    created_at TEXT
+                );
+            """))
+            conn.commit()
+
+            if "rfq_headers" in wb.sheetnames:
+                sheet = wb["rfq_headers"]
+                headers = [sheet.cell(1, c).value for c in range(1, sheet.max_column + 1)]
+                conn.execute(text("DELETE FROM rfq_headers;"))
+                conn.commit()
+                for r in range(2, sheet.max_row + 1):
+                    row_data = {headers[c-1]: sheet.cell(r, c).value for c in range(1, len(headers)+1) if headers[c-1]}
+                    if not any(v is not None for v in row_data.values()):
+                        continue
+                    try:
+                        conn.execute(text("""
+                            INSERT INTO rfq_headers (id, date, rfqno, unit, customer, created_at)
+                            VALUES (:id, :date, :rfqno, :unit, :customer, :created_at)
+                        """), {
+                            "id": int(row_data.get("id")) if row_data.get("id") else None,
+                            "date": str(row_data.get("date") or ""),
+                            "rfqno": str(row_data.get("rfqno") or ""),
+                            "unit": str(row_data.get("unit") or ""),
+                            "customer": str(row_data.get("customer") or ""),
+                            "created_at": str(row_data.get("created_at") or "")
+                        })
+                    except Exception:
+                        pass
+                conn.commit()
+                try:
+                    conn.execute(text("SELECT setval(pg_get_serial_sequence('rfq_headers', 'id'), coalesce(max(id),0) + 1, false) FROM rfq_headers;"))
+                    conn.commit()
+                except Exception:
+                    pass
+
+            if "rfq_items" in wb.sheetnames:
+                sheet = wb["rfq_items"]
+                headers = [sheet.cell(1, c).value for c in range(1, sheet.max_column + 1)]
+                conn.execute(text("DELETE FROM rfq_items;"))
+                conn.commit()
+                for r in range(2, sheet.max_row + 1):
+                    row_data = {headers[c-1]: sheet.cell(r, c).value for c in range(1, len(headers)+1) if headers[c-1]}
+                    if not any(v is not None for v in row_data.values()):
+                        continue
+                    try:
+                        conn.execute(text("""
+                            INSERT INTO rfq_items (id, rfq_id, partno, description)
+                            VALUES (:id, :rfq_id, :partno, :description)
+                        """), {
+                            "id": int(row_data.get("id")) if row_data.get("id") else None,
+                            "rfq_id": int(row_data.get("rfq_id")) if row_data.get("rfq_id") else None,
+                            "partno": str(row_data.get("partno") or ""),
+                            "description": str(row_data.get("description") or "")
+                        })
+                    except Exception:
+                        pass
+                conn.commit()
+                try:
+                    conn.execute(text("SELECT setval(pg_get_serial_sequence('rfq_items', 'id'), coalesce(max(id),0) + 1, false) FROM rfq_items;"))
+                    conn.commit()
+                except Exception:
+                    pass
+
+            if "quote_records" in wb.sheetnames:
+                sheet = wb["quote_records"]
+                headers = [sheet.cell(1, c).value for c in range(1, sheet.max_column + 1)]
+                conn.execute(text("DELETE FROM quote_records;"))
+                conn.commit()
+                for r in range(2, sheet.max_row + 1):
+                    row_data = {headers[c-1]: sheet.cell(r, c).value for c in range(1, len(headers)+1) if headers[c-1]}
+                    if not any(v is not None for v in row_data.values()):
+                        continue
+                    try:
+                        rfq_id_val = int(row_data.get("rfq_id")) if row_data.get("rfq_id") is not None and str(row_data.get("rfq_id")).strip() != "" else None
+                        conn.execute(text("""
+                            INSERT INTO quote_records (id, quote_no, date, rfq_id, rfq_no, customer, part_no, part_description, unit, overhead_profit_pct, total_machining_cost, total_other_process_cost, total_packing_cost, base_part_cost, final_unit_price, total_dev_cost, machining_details, other_process_details, packing_details, dev_cost_details, created_at)
+                            VALUES (:id, :quote_no, :date, :rfq_id, :rfq_no, :customer, :part_no, :part_description, :unit, :overhead_profit_pct, :total_machining_cost, :total_other_process_cost, :total_packing_cost, :base_part_cost, :final_unit_price, :total_dev_cost, :machining_details, :other_process_details, :packing_details, :dev_cost_details, :created_at)
+                        """), {
+                            "id": int(row_data.get("id")) if row_data.get("id") else None,
+                            "quote_no": str(row_data.get("quote_no") or ""),
+                            "date": str(row_data.get("date") or ""),
+                            "rfq_id": rfq_id_val,
+                            "rfq_no": str(row_data.get("rfq_no") or ""),
+                            "customer": str(row_data.get("customer") or ""),
+                            "part_no": str(row_data.get("part_no") or ""),
+                            "part_description": str(row_data.get("part_description") or ""),
+                            "unit": str(row_data.get("unit") or "Unit 1"),
+                            "overhead_profit_pct": float(row_data.get("overhead_profit_pct") or 0),
+                            "total_machining_cost": float(row_data.get("total_machining_cost") or 0),
+                            "total_other_process_cost": float(row_data.get("total_other_process_cost") or 0),
+                            "total_packing_cost": float(row_data.get("total_packing_cost") or 0),
+                            "base_part_cost": float(row_data.get("base_part_cost") or 0),
+                            "final_unit_price": float(row_data.get("final_unit_price") or 0),
+                            "total_dev_cost": float(row_data.get("total_dev_cost") or 0),
+                            "machining_details": str(row_data.get("machining_details") or "[]"),
+                            "other_process_details": str(row_data.get("other_process_details") or "[]"),
+                            "packing_details": str(row_data.get("packing_details") or "[]"),
+                            "dev_cost_details": str(row_data.get("dev_cost_details") or "[]"),
+                            "created_at": str(row_data.get("created_at") or "")
+                        })
+                    except Exception as e:
+                        pass
+                conn.commit()
+                try:
+                    conn.execute(text("SELECT setval(pg_get_serial_sequence('quote_records', 'id'), coalesce(max(id),0) + 1, false) FROM quote_records;"))
+                    conn.commit()
+                except Exception:
+                    pass
+
+        return {"message": "RFQ excel imported successfully"}
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.on_event("startup")
 def run_startup_migrations():
     try:
@@ -210,11 +371,20 @@ def run_startup_migrations():
         import_breakdown_excel()
     except Exception as e:
         print("Startup breakdown import note:", e)
+    try:
+        import_rfq_excel()
+    except Exception as e:
+        print("Startup rfq import note:", e)
 
 @app.post("/api/import-breakdown-excel")
 @app.get("/api/import-breakdown-excel")
 def trigger_import_breakdown_excel():
     return import_breakdown_excel()
+
+@app.post("/api/import-rfq-excel")
+@app.get("/api/import-rfq-excel")
+def trigger_import_rfq_excel():
+    return import_rfq_excel()
 
 @app.post("/api/restore-from-backup")
 @app.get("/api/restore-from-backup")
@@ -3814,6 +3984,325 @@ def delete_service_detail(detail_id: int, db: Session = Depends(get_db)):
     except Exception:
         db.rollback()
     return {"message": "Service Detail deleted"}
+
+# --- RFQ & QUOTATION CRUD ---
+@app.get("/api/rfq")
+def get_rfqs(date_from: Optional[str] = None, date_to: Optional[str] = None, customer: Optional[str] = None, search: Optional[str] = None, db: Session = Depends(get_db)):
+    try:
+        query = "SELECT * FROM rfq_headers WHERE 1=1"
+        params = {}
+        if date_from:
+            query += " AND date >= :date_from"
+            params["date_from"] = date_from
+        if date_to:
+            query += " AND date <= :date_to"
+            params["date_to"] = date_to
+        if customer:
+            query += " AND LOWER(customer) = LOWER(:customer)"
+            params["customer"] = customer
+
+        query += " ORDER BY date DESC, id DESC"
+        rfqs = db.execute(text(query), params).mappings().all()
+
+        items = db.execute(text("SELECT * FROM rfq_items ORDER BY id ASC")).mappings().all()
+        items_by_rfq = {}
+        for it in items:
+            try:
+                rfq_id = int(it.get("rfq_id"))
+            except Exception:
+                rfq_id = it.get("rfq_id")
+            if rfq_id not in items_by_rfq:
+                items_by_rfq[rfq_id] = []
+            items_by_rfq[rfq_id].append({
+                "id": int(it.get("id")) if it.get("id") is not None else None,
+                "rfq_id": rfq_id,
+                "partno": it.get("partno") or "",
+                "description": it.get("description") or ""
+            })
+
+        result = []
+        for r in rfqs:
+            try:
+                rfq_id = int(r.get("id"))
+            except Exception:
+                rfq_id = r.get("id")
+            rfq_items_list = items_by_rfq.get(rfq_id, [])
+            
+            if search:
+                s_lower = search.strip().lower()
+                rfq_no_match = s_lower in str(r.get("rfqno") or "").lower()
+                cust_match = s_lower in str(r.get("customer") or "").lower()
+                item_match = any(s_lower in (it["partno"].lower() + " " + it["description"].lower()) for it in rfq_items_list)
+                if not (rfq_no_match or cust_match or item_match):
+                    continue
+
+            result.append({
+                "id": rfq_id,
+                "date": r.get("date") or "",
+                "rfqno": r.get("rfqno") or "",
+                "unit": r.get("unit") or "",
+                "customer": r.get("customer") or "",
+                "created_at": str(r.get("created_at") or ""),
+                "items": rfq_items_list
+            })
+        return result
+    except Exception:
+        db.rollback()
+        return []
+
+@app.post("/api/rfq")
+def create_rfq(data: dict, db: Session = Depends(get_db)):
+    try:
+        try:
+            db.execute(text("SELECT setval(pg_get_serial_sequence('rfq_headers', 'id'), coalesce(max(id),0) + 1, false) FROM rfq_headers;"))
+            db.execute(text("SELECT setval(pg_get_serial_sequence('rfq_items', 'id'), coalesce(max(id),0) + 1, false) FROM rfq_items;"))
+            db.commit()
+        except Exception:
+            db.rollback()
+
+        max_id_row = db.execute(text("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM rfq_headers;")).mappings().first()
+        next_id = int(max_id_row["next_id"]) if max_id_row else 1
+
+        db.execute(text("""
+            INSERT INTO rfq_headers (id, date, rfqno, unit, customer, created_at)
+            VALUES (:id, :date, :rfqno, :unit, :customer, :created_at)
+        """), {
+            "id": next_id,
+            "date": (data.get("date") or "").strip(),
+            "rfqno": (data.get("rfqno") or "").strip(),
+            "unit": (data.get("unit") or "").strip(),
+            "customer": (data.get("customer") or "").strip(),
+            "created_at": datetime.datetime.now(IST).isoformat()
+        })
+
+        items = data.get("items") or []
+        for it in items:
+            partno = (it.get("partno") or "").strip()
+            desc = (it.get("description") or "").strip()
+            if partno:
+                db.execute(text("""
+                    INSERT INTO rfq_items (rfq_id, partno, description)
+                    VALUES (:rfq_id, :partno, :description)
+                """), {"rfq_id": next_id, "partno": partno, "description": desc})
+
+        db.commit()
+        return {"message": "RFQ created successfully", "id": next_id}
+    except Exception as ex:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(ex))
+
+@app.put("/api/rfq/{rfq_id}")
+def update_rfq(rfq_id: int, data: dict, db: Session = Depends(get_db)):
+    try:
+        db.execute(text("""
+            UPDATE rfq_headers
+            SET date = :date, rfqno = :rfqno, unit = :unit, customer = :customer
+            WHERE id = :id
+        """), {
+            "id": rfq_id,
+            "date": (data.get("date") or "").strip(),
+            "rfqno": (data.get("rfqno") or "").strip(),
+            "unit": (data.get("unit") or "").strip(),
+            "customer": (data.get("customer") or "").strip()
+        })
+
+        db.execute(text("DELETE FROM rfq_items WHERE rfq_id = :rfq_id"), {"rfq_id": rfq_id})
+        items = data.get("items") or []
+        for it in items:
+            partno = (it.get("partno") or "").strip()
+            desc = (it.get("description") or "").strip()
+            if partno:
+                db.execute(text("""
+                    INSERT INTO rfq_items (rfq_id, partno, description)
+                    VALUES (:rfq_id, :partno, :description)
+                """), {"rfq_id": rfq_id, "partno": partno, "description": desc})
+
+        db.commit()
+        return {"message": "RFQ updated successfully"}
+    except Exception as ex:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(ex))
+
+@app.delete("/api/rfq/{rfq_id}")
+def delete_rfq(rfq_id: int, db: Session = Depends(get_db)):
+    try:
+        db.execute(text("DELETE FROM rfq_items WHERE rfq_id = :id"), {"id": rfq_id})
+        db.execute(text("DELETE FROM rfq_headers WHERE id = :id"), {"id": rfq_id})
+        db.commit()
+    except Exception:
+        db.rollback()
+    return {"message": "RFQ deleted"}
+
+@app.get("/api/quotes")
+def get_quotes(date_from: Optional[str] = None, date_to: Optional[str] = None, customer: Optional[str] = None, search: Optional[str] = None, db: Session = Depends(get_db)):
+    try:
+        query = "SELECT * FROM quote_records WHERE 1=1"
+        params = {}
+        if date_from:
+            query += " AND date >= :date_from"
+            params["date_from"] = date_from
+        if date_to:
+            query += " AND date <= :date_to"
+            params["date_to"] = date_to
+        if customer:
+            query += " AND LOWER(customer) = LOWER(:customer)"
+            params["customer"] = customer
+
+        query += " ORDER BY date DESC, id DESC"
+        rows = db.execute(text(query), params).mappings().all()
+
+        result = []
+        for r in rows:
+            if search:
+                s_lower = search.strip().lower()
+                q_match = s_lower in str(r.get("quote_no") or "").lower()
+                rfq_match = s_lower in str(r.get("rfq_no") or "").lower()
+                c_match = s_lower in str(r.get("customer") or "").lower()
+                p_match = s_lower in str(r.get("part_no") or "").lower()
+                d_match = s_lower in str(r.get("part_description") or "").lower()
+                if not (q_match or rfq_match or c_match or p_match or d_match):
+                    continue
+
+            result.append({
+                "id": r.get("id"),
+                "quote_no": r.get("quote_no") or "",
+                "date": r.get("date") or "",
+                "rfq_id": r.get("rfq_id"),
+                "rfq_no": r.get("rfq_no") or "",
+                "customer": r.get("customer") or "",
+                "part_no": r.get("part_no") or "",
+                "part_description": r.get("part_description") or "",
+                "unit": r.get("unit") or "Unit 1",
+                "overhead_profit_pct": float(r.get("overhead_profit_pct") or 0),
+                "total_machining_cost": float(r.get("total_machining_cost") or 0),
+                "total_other_process_cost": float(r.get("total_other_process_cost") or 0),
+                "total_packing_cost": float(r.get("total_packing_cost") or 0),
+                "base_part_cost": float(r.get("base_part_cost") or 0),
+                "final_unit_price": float(r.get("final_unit_price") or 0),
+                "total_dev_cost": float(r.get("total_dev_cost") or 0),
+                "machining_details": r.get("machining_details") or "[]",
+                "other_process_details": r.get("other_process_details") or "[]",
+                "packing_details": r.get("packing_details") or "[]",
+                "dev_cost_details": r.get("dev_cost_details") or "[]",
+                "created_at": str(r.get("created_at") or "")
+            })
+        return result
+    except Exception:
+        db.rollback()
+        return []
+
+@app.post("/api/quotes")
+def create_quote(data: dict, db: Session = Depends(get_db)):
+    try:
+        try:
+            db.execute(text("SELECT setval(pg_get_serial_sequence('quote_records', 'id'), coalesce(max(id),0) + 1, false) FROM quote_records;"))
+            db.commit()
+        except Exception:
+            db.rollback()
+
+        max_id_row = db.execute(text("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM quote_records;")).mappings().first()
+        next_id = int(max_id_row["next_id"]) if max_id_row else 1
+
+        rfq_id_val = data.get("rfq_id")
+        if rfq_id_val is not None and str(rfq_id_val).strip() != "":
+            try:
+                rfq_id_val = int(rfq_id_val)
+            except Exception:
+                rfq_id_val = None
+        else:
+            rfq_id_val = None
+
+        db.execute(text("""
+            INSERT INTO quote_records (id, quote_no, date, rfq_id, rfq_no, customer, part_no, part_description, unit, overhead_profit_pct, total_machining_cost, total_other_process_cost, total_packing_cost, base_part_cost, final_unit_price, total_dev_cost, machining_details, other_process_details, packing_details, dev_cost_details, created_at)
+            VALUES (:id, :quote_no, :date, :rfq_id, :rfq_no, :customer, :part_no, :part_description, :unit, :overhead_profit_pct, :total_machining_cost, :total_other_process_cost, :total_packing_cost, :base_part_cost, :final_unit_price, :total_dev_cost, :machining_details, :other_process_details, :packing_details, :dev_cost_details, :created_at)
+        """), {
+            "id": next_id,
+            "quote_no": (data.get("quote_no") or "").strip(),
+            "date": (data.get("date") or "").strip(),
+            "rfq_id": rfq_id_val,
+            "rfq_no": (data.get("rfq_no") or "").strip(),
+            "customer": (data.get("customer") or "").strip(),
+            "part_no": (data.get("part_no") or "").strip(),
+            "part_description": (data.get("part_description") or "").strip(),
+            "unit": (data.get("unit") or "Unit 1").strip(),
+            "overhead_profit_pct": float(data.get("overhead_profit_pct") or 0),
+            "total_machining_cost": float(data.get("total_machining_cost") or 0),
+            "total_other_process_cost": float(data.get("total_other_process_cost") or 0),
+            "total_packing_cost": float(data.get("total_packing_cost") or 0),
+            "base_part_cost": float(data.get("base_part_cost") or 0),
+            "final_unit_price": float(data.get("final_unit_price") or 0),
+            "total_dev_cost": float(data.get("total_dev_cost") or 0),
+            "machining_details": json.dumps(data.get("machining_details")) if isinstance(data.get("machining_details"), list) else str(data.get("machining_details") or "[]"),
+            "other_process_details": json.dumps(data.get("other_process_details")) if isinstance(data.get("other_process_details"), list) else str(data.get("other_process_details") or "[]"),
+            "packing_details": json.dumps(data.get("packing_details")) if isinstance(data.get("packing_details"), list) else str(data.get("packing_details") or "[]"),
+            "dev_cost_details": json.dumps(data.get("dev_cost_details")) if isinstance(data.get("dev_cost_details"), list) else str(data.get("dev_cost_details") or "[]"),
+            "created_at": datetime.datetime.now(IST).isoformat()
+        })
+        db.commit()
+        return {"message": "Quotation created successfully", "id": next_id}
+    except Exception as ex:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(ex))
+
+@app.put("/api/quotes/{quote_id}")
+def update_quote(quote_id: int, data: dict, db: Session = Depends(get_db)):
+    try:
+        rfq_id_val = data.get("rfq_id")
+        if rfq_id_val is not None and str(rfq_id_val).strip() != "":
+            try:
+                rfq_id_val = int(rfq_id_val)
+            except Exception:
+                rfq_id_val = None
+        else:
+            rfq_id_val = None
+
+        db.execute(text("""
+            UPDATE quote_records
+            SET quote_no = :quote_no, date = :date, rfq_id = :rfq_id, rfq_no = :rfq_no,
+                customer = :customer, part_no = :part_no, part_description = :part_description,
+                unit = :unit, overhead_profit_pct = :overhead_profit_pct,
+                total_machining_cost = :total_machining_cost, total_other_process_cost = :total_other_process_cost,
+                total_packing_cost = :total_packing_cost, base_part_cost = :base_part_cost,
+                final_unit_price = :final_unit_price, total_dev_cost = :total_dev_cost,
+                machining_details = :machining_details, other_process_details = :other_process_details,
+                packing_details = :packing_details, dev_cost_details = :dev_cost_details
+            WHERE id = :id
+        """), {
+            "id": quote_id,
+            "quote_no": (data.get("quote_no") or "").strip(),
+            "date": (data.get("date") or "").strip(),
+            "rfq_id": rfq_id_val,
+            "rfq_no": (data.get("rfq_no") or "").strip(),
+            "customer": (data.get("customer") or "").strip(),
+            "part_no": (data.get("part_no") or "").strip(),
+            "part_description": (data.get("part_description") or "").strip(),
+            "unit": (data.get("unit") or "Unit 1").strip(),
+            "overhead_profit_pct": float(data.get("overhead_profit_pct") or 0),
+            "total_machining_cost": float(data.get("total_machining_cost") or 0),
+            "total_other_process_cost": float(data.get("total_other_process_cost") or 0),
+            "total_packing_cost": float(data.get("total_packing_cost") or 0),
+            "base_part_cost": float(data.get("base_part_cost") or 0),
+            "final_unit_price": float(data.get("final_unit_price") or 0),
+            "total_dev_cost": float(data.get("total_dev_cost") or 0),
+            "machining_details": json.dumps(data.get("machining_details")) if isinstance(data.get("machining_details"), list) else str(data.get("machining_details") or "[]"),
+            "other_process_details": json.dumps(data.get("other_process_details")) if isinstance(data.get("other_process_details"), list) else str(data.get("other_process_details") or "[]"),
+            "packing_details": json.dumps(data.get("packing_details")) if isinstance(data.get("packing_details"), list) else str(data.get("packing_details") or "[]"),
+            "dev_cost_details": json.dumps(data.get("dev_cost_details")) if isinstance(data.get("dev_cost_details"), list) else str(data.get("dev_cost_details") or "[]")
+        })
+        db.commit()
+        return {"message": "Quotation updated successfully"}
+    except Exception as ex:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(ex))
+
+@app.delete("/api/quotes/{quote_id}")
+def delete_quote(quote_id: int, db: Session = Depends(get_db)):
+    try:
+        db.execute(text("DELETE FROM quote_records WHERE id = :id"), {"id": quote_id})
+        db.commit()
+    except Exception:
+        db.rollback()
+    return {"message": "Quotation deleted"}
 
 # --- SCHEDULE STATUS WIP ADJUSTMENTS ---
 @app.post("/api/schedule_status/adjust_part_wip")
