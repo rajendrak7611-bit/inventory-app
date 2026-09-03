@@ -507,6 +507,11 @@ def run_startup_migrations():
                 conn.commit()
             except Exception:
                 pass
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password VARCHAR(255) DEFAULT '';"))
+                conn.commit()
+            except Exception:
+                pass
     except Exception as e:
         print("Startup migration note:", e)
     try:
@@ -657,9 +662,17 @@ def create_user(data: dict, db: Session = Depends(get_db)):
             VALUES (:username, :password, :password_hash, :role, :accessible_screens)
         """), {"username": uname, "password": pw, "password_hash": pwhash, "role": role, "accessible_screens": screens})
         db.commit()
-    except Exception as ex:
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create user: {ex}")
+        try:
+            db.execute(text("""
+                INSERT INTO users (username, password_hash, role, accessible_screens)
+                VALUES (:username, :password_hash, :role, :accessible_screens)
+            """), {"username": uname, "password_hash": pwhash, "role": role, "accessible_screens": screens})
+            db.commit()
+        except Exception as ex:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Failed to create user: {ex}")
 
     return {"message": "User created successfully"}
 
@@ -687,9 +700,21 @@ def update_user(user_id: int, data: dict, db: Session = Depends(get_db)):
             UPDATE users SET {', '.join(sql_updates)} WHERE id = :id
         """), params)
         db.commit()
-    except Exception as ex:
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update user: {ex}")
+        if pw and "password = :password" in sql_updates:
+            sql_updates_no_pw = [u for u in sql_updates if u != "password = :password"]
+            params_no_pw = {k: v for k, v in params.items() if k != "password"}
+            try:
+                db.execute(text(f"""
+                    UPDATE users SET {', '.join(sql_updates_no_pw)} WHERE id = :id
+                """), params_no_pw)
+                db.commit()
+            except Exception as ex:
+                db.rollback()
+                raise HTTPException(status_code=500, detail=f"Failed to update user: {ex}")
+        else:
+            raise HTTPException(status_code=500, detail="Failed to update user")
 
     return {"message": "User updated successfully"}
 
@@ -705,9 +730,16 @@ def update_user_password(user_id: int, data: dict, db: Session = Depends(get_db)
             UPDATE users SET password = :password, password_hash = :password_hash WHERE id = :id
         """), {"id": user_id, "password": new_pw, "password_hash": pwhash})
         db.commit()
-    except Exception as ex:
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update password: {ex}")
+        try:
+            db.execute(text("""
+                UPDATE users SET password_hash = :password_hash WHERE id = :id
+            """), {"id": user_id, "password_hash": pwhash})
+            db.commit()
+        except Exception as ex:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Failed to update password: {ex}")
 
     return {"message": "Password updated successfully"}
 
