@@ -348,3 +348,21 @@ class TapIssue(Base):
     opn_no = Column(String, nullable=True)
     created_at = Column(DateTime, default=get_now_ist)
 
+class SetterLog(Base):
+    __tablename__ = "setter_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(String, index=True, nullable=False)
+    setter_name = Column(String, index=True, nullable=False)
+    time_from = Column(String, nullable=True)
+    time_to = Column(String, nullable=True)
+    activity = Column(String, nullable=True)
+    machine = Column(String, nullable=True)
+    partno = Column(String, nullable=True)
+    opn_no = Column(String, nullable=True)
+    description = Column(String, nullable=True)
+    qty = Column(Integer, default=0)
+    remarks = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=get_now_ist)
+
+

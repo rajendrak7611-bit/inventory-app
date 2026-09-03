@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GRS ENGINEERING PVT LTD</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=10045">
+    <link rel="stylesheet" href="/static/style.css?v=10046">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
@@ -59,8 +59,12 @@
             <div class="main-tab" id="sidebarMaintenance" data-group="maintenance">Maintenance</div>
             <div class="main-tab" id="sidebarHR" data-group="hr">HR</div>
             <div class="main-tab" id="sidebarMfe" data-group="mfe" style="display: inline-block;">MFE</div>
+            <div class="main-tab" id="sidebarService" data-group="service" style="display: inline-block;">Service</div>
         </nav>
         <nav class="sub-menu-horizontal">
+            <div class="sub-group" id="submenuService" style="display: none;">
+                <button class="sub-tab" id="sidebarServiceSetters" data-screen="service_setters">Setters</button>
+            </div>
             <div class="sub-group" id="submenuMaster" style="display: none;">
                 <button class="sub-tab" id="sidebarPartMaster" data-screen="partmaster">Part Master</button>
                 <button class="sub-tab" id="sidebarMachines" data-screen="machines">Machines</button>
@@ -758,6 +762,185 @@
                         </tr>
                     </thead>
                     <tbody id="sdHistoryBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Service: Setters Section -->
+        <div class="table-container" id="serviceSettersSection" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <h2 style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-tools" style="color: #0284c7;"></i> Service - Setters Log
+                    </h2>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">Log and track setter activities across machines, parts, and operations</span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button id="exportSetterLogsBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                        <i class="fas fa-file-excel" style="color: #16a34a; margin-right: 4px;"></i> Export Excel
+                    </button>
+                    <button id="clearAllSetterLogsBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444; display: none;">
+                        <i class="fas fa-trash-alt" style="margin-right: 4px;"></i> Clear All Logs
+                    </button>
+                </div>
+            </div>
+
+            <!-- Setter Entry Form Card -->
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.5rem;">
+                    <h3 id="setterFormTitle" style="margin: 0; font-size: 1.05rem; font-weight: 600; color: #1e293b;">
+                        <i class="fas fa-edit" style="color: #0284c7; margin-right: 6px;"></i>New Setter Entry
+                    </h3>
+                    <span id="setterEditBadge" style="display: none; background: #fef08a; color: #854d0e; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">EDIT MODE</span>
+                </div>
+
+                <form id="setterLogForm">
+                    <input type="hidden" id="editingSetterLogId" value="">
+                    
+                    <!-- Row 1: Date, Name, From, To, Activity -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px;">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="setterLogDate" style="font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; display: block;">Date *</label>
+                            <input type="date" id="setterLogDate" required style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;">
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="setterLogName" style="font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; display: block;">Setter Name *</label>
+                            <select id="setterLogName" required style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #fff;">
+                                <option value="">-- Select Setter --</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="setterLogTimeFrom" style="font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; display: block;">Time From *</label>
+                            <input type="time" id="setterLogTimeFrom" required style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;">
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="setterLogTimeTo" style="font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; display: block;">Time To *</label>
+                            <input type="time" id="setterLogTimeTo" required style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;">
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="setterLogActivity" style="font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; display: block;">Activity *</label>
+                            <select id="setterLogActivity" required style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #fff;">
+                                <option value="">-- Select Activity --</option>
+                                <option value="Machine Setting">Machine Setting</option>
+                                <option value="Tool Setting / Change">Tool Setting / Change</option>
+                                <option value="Program Editing">Program Editing</option>
+                                <option value="First Piece Approval">First Piece Approval</option>
+                                <option value="Troubleshooting">Troubleshooting</option>
+                                <option value="Fixture Setup">Fixture Setup</option>
+                                <option value="Job Proving">Job Proving</option>
+                                <option value="Quality Inspection Support">Quality Inspection Support</option>
+                                <option value="Maintenance Support">Maintenance Support</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Machine, Part No, Opn No, Desc, Qty -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px;">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="setterLogMachine" style="font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; display: block;">Machine *</label>
+                            <select id="setterLogMachine" required style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #fff;">
+                                <option value="">-- Select Machine --</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="setterLogPartNo" style="font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; display: block;">Part No</label>
+                            <select id="setterLogPartNo" style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #fff;">
+                                <option value="">-- Select Part No --</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="setterLogOpnNo" style="font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; display: block;">Opn No</label>
+                            <select id="setterLogOpnNo" style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #fff;">
+                                <option value="">-- Select Opn --</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="setterLogDesc" style="font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; display: block;">Description</label>
+                            <input type="text" id="setterLogDesc" placeholder="Opn Description" style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;">
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="setterLogQty" style="font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; display: block;">Qty Produced / Checked</label>
+                            <input type="number" id="setterLogQty" min="0" value="0" placeholder="0" style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;">
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Remarks and Buttons -->
+                    <div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+                        <div class="form-group" style="margin: 0; flex: 1; min-width: 250px;">
+                            <label for="setterLogRemarks" style="font-size: 0.82rem; font-weight: 600; margin-bottom: 4px; display: block;">Remarks / Notes</label>
+                            <input type="text" id="setterLogRemarks" placeholder="Enter remarks or details..." style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;">
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" id="resetSetterFormBtn" class="btn btn-secondary" style="padding: 0.45rem 1rem;">Reset</button>
+                            <button type="submit" id="saveSetterLogBtn" class="btn btn-primary" style="padding: 0.45rem 1.2rem; background: #0284c7; border-color: #0284c7;">
+                                <i class="fas fa-save" style="margin-right: 4px;"></i> Save Entry
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Summary KPI Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 1.5rem;">
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Total Entries</div>
+                    <div id="kpiSetterTotalEntries" style="font-size: 1.7rem; font-weight: 700; color: #0f172a; margin-top: 4px;">0</div>
+                </div>
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Total Setting Time</div>
+                    <div id="kpiSetterTotalHours" style="font-size: 1.7rem; font-weight: 700; color: #0284c7; margin-top: 4px;">0 hrs</div>
+                </div>
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Active Setters</div>
+                    <div id="kpiSetterActiveCount" style="font-size: 1.7rem; font-weight: 700; color: #16a34a; margin-top: 4px;">0</div>
+                </div>
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Machines Serviced</div>
+                    <div id="kpiSetterMachineCount" style="font-size: 1.7rem; font-weight: 700; color: #8b5cf6; margin-top: 4px;">0</div>
+                </div>
+            </div>
+
+            <!-- Log Entries Table -->
+            <div style="overflow-x: auto; max-height: calc(100vh - 400px); overflow-y: auto;">
+                <table id="setterLogsTable" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.85rem;">
+                    <thead>
+                        <tr style="background: #f1f5f9;">
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">ID</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">Date</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">Setter Name</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">From</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">To</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">Duration</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">Activity</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">Machine</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">Part No</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">Opn No</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">Description</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">Qty</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px;">Remarks</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 8px; text-align: center;">Actions</th>
+                        </tr>
+                        <tr style="background: #e2e8f0;">
+                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"><input type="text" class="table-col-filter" data-col="0" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"><input type="text" class="table-col-filter" data-col="1" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"><input type="text" class="table-col-filter" data-col="2" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"></th>
+                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"></th>
+                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"></th>
+                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"><input type="text" class="table-col-filter" data-col="6" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"><input type="text" class="table-col-filter" data-col="7" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"><input type="text" class="table-col-filter" data-col="8" placeholder="Filter..." style="width: 100%; padding: 2px 4px; font-size: 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"></th>
+                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"></th>
+                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"></th>
+                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px;"></th>
+                            <th style="position: sticky; top: 35px; z-index: 19; padding: 4px; text-align: center;"><button type="button" class="clear-table-filters-btn btn btn-text" style="font-size: 0.75rem; color: #ef4444; padding: 2px 6px; font-weight: 600; cursor: pointer; display: none;">Clear</button></th>
+                        </tr>
+                    </thead>
+                    <tbody id="setterLogsBody">
+                        <tr><td colspan="14" style="text-align: center; color: var(--text-muted); padding: 1rem;">Loading setter entries...</td></tr>
+                    </tbody>
                 </table>
             </div>
         </div>
@@ -2032,6 +2215,8 @@
                                     <label><input type="checkbox" value="bdslip"> Breakdown Slip</label>
                                     <label><input type="checkbox" value="servicedetails"> Service Details</label>
                                     <label><input type="checkbox" value="hr"> HR</label>
+                                    <label><input type="checkbox" value="service"> Service</label>
+                                    <label><input type="checkbox" value="service_setters"> Setters (Service)</label>
                                 </div>
                             </div>
                             <div style="margin-top: 20px;">
@@ -3939,6 +4124,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10045"></script>
+    <script src="/static/app.js?v=10046"></script>
 </body>
 </html>

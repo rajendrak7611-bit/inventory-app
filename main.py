@@ -480,6 +480,27 @@ def run_startup_migrations():
                     conn.commit()
                 except Exception:
                     pass
+            try:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS setter_logs (
+                        id SERIAL PRIMARY KEY,
+                        date TEXT,
+                        setter_name TEXT,
+                        time_from TEXT,
+                        time_to TEXT,
+                        activity TEXT,
+                        machine TEXT,
+                        partno TEXT,
+                        opn_no TEXT,
+                        description TEXT,
+                        qty INTEGER DEFAULT 0,
+                        remarks TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """))
+                conn.commit()
+            except Exception:
+                pass
     except Exception as e:
         print("Startup migration note:", e)
     try:
@@ -4067,6 +4088,205 @@ def delete_pc_receipt_log(log_id: int, db: Session = Depends(get_db)):
         db.execute(text("DELETE FROM pc_receipt_logs WHERE id = :id"), {"id": log_id})
         db.commit()
         return {"message": "PC Receipt Log deleted"}
+    except Exception as ex:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(ex))
+
+# --- SERVICE: SETTERS LOG CRUD ---
+@app.get("/api/service/setters")
+def get_service_setters_list(db: Session = Depends(get_db)):
+    try:
+        op_rows = db.execute(text("SELECT * FROM operators WHERE UPPER(TRIM(COALESCE(designation, ''))) = 'SETTER' ORDER BY name ASC;")).mappings().all()
+        st_rows = db.execute(text("SELECT * FROM setters ORDER BY name ASC;")).mappings().all()
+        
+        seen = set()
+        result = []
+        for r in op_rows:
+            nm = (r.get("name") or "").strip()
+            if nm and nm.upper() not in seen:
+                seen.add(nm.upper())
+                result.append({
+                    "name": nm,
+                    "department": r.get("department") or r.get("dept") or "",
+                    "designation": "SETTER"
+                })
+        for r in st_rows:
+            nm = (r.get("name") or "").strip()
+            if nm and nm.upper() not in seen:
+                seen.add(nm.upper())
+                result.append({
+                    "name": nm,
+                    "department": r.get("department") or r.get("dept") or "",
+                    "designation": "SETTER"
+                })
+        result.sort(key=lambda x: x["name"])
+        return result
+    except Exception as e:
+        print("get_service_setters_list error:", e)
+        db.rollback()
+        return []
+
+@app.get("/api/service/setter-logs")
+def get_service_setter_logs(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS setter_logs (
+                id SERIAL PRIMARY KEY,
+                date TEXT,
+                setter_name TEXT,
+                time_from TEXT,
+                time_to TEXT,
+                activity TEXT,
+                machine TEXT,
+                partno TEXT,
+                opn_no TEXT,
+                description TEXT,
+                qty INTEGER DEFAULT 0,
+                remarks TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """))
+        db.commit()
+        rows = db.execute(text("SELECT * FROM setter_logs ORDER BY date DESC, id DESC;")).mappings().all()
+        return [{
+            "id": r.get("id"),
+            "date": r.get("date") or "",
+            "setter_name": r.get("setter_name") or "",
+            "time_from": r.get("time_from") or "",
+            "time_to": r.get("time_to") or "",
+            "activity": r.get("activity") or "",
+            "machine": r.get("machine") or "",
+            "partno": r.get("partno") or "",
+            "opn_no": r.get("opn_no") or "",
+            "description": r.get("description") or "",
+            "qty": int(r.get("qty") or 0),
+            "remarks": r.get("remarks") or "",
+            "created_at": str(r.get("created_at") or "")
+        } for r in rows]
+    except Exception as e:
+        print("get_service_setter_logs error:", e)
+        db.rollback()
+        return []
+
+@app.post("/api/service/setter-logs")
+def create_service_setter_log(data: dict, db: Session = Depends(get_db)):
+    try:
+        date_val = normalize_date_str((data.get("date") or "").strip())
+        setter_name = (data.get("setter_name") or data.get("name") or "").strip()
+        time_from = (data.get("time_from") or "").strip()
+        time_to = (data.get("time_to") or "").strip()
+        activity = (data.get("activity") or "").strip()
+        machine = (data.get("machine") or "").strip()
+        partno = (data.get("partno") or data.get("part_no") or "").strip()
+        opn_no = (data.get("opn_no") or "").strip()
+        description = (data.get("description") or data.get("desc") or "").strip()
+        qty = int(data.get("qty") or 0)
+        remarks = (data.get("remarks") or "").strip()
+
+        if not setter_name:
+            raise HTTPException(status_code=400, detail="Setter Name is required")
+
+        try:
+            db.execute(text("SELECT setval(pg_get_serial_sequence('setter_logs', 'id'), coalesce(max(id),0) + 1, false) FROM setter_logs;"))
+            db.commit()
+        except Exception:
+            db.rollback()
+
+        max_row = db.execute(text("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM setter_logs;")).mappings().first()
+        next_id = int(max_row["next_id"]) if max_row else 1
+
+        params = {
+            "id": next_id,
+            "date": date_val,
+            "setter_name": setter_name,
+            "time_from": time_from,
+            "time_to": time_to,
+            "activity": activity,
+            "machine": machine,
+            "partno": partno,
+            "opn_no": opn_no,
+            "description": description,
+            "qty": qty,
+            "remarks": remarks
+        }
+        try:
+            db.execute(text("""
+                INSERT INTO setter_logs (id, date, setter_name, time_from, time_to, activity, machine, partno, opn_no, description, qty, remarks)
+                VALUES (:id, :date, :setter_name, :time_from, :time_to, :activity, :machine, :partno, :opn_no, :description, :qty, :remarks);
+            """), params)
+            db.commit()
+        except Exception:
+            db.rollback()
+            db.execute(text("""
+                INSERT INTO setter_logs (date, setter_name, time_from, time_to, activity, machine, partno, opn_no, description, qty, remarks)
+                VALUES (:date, :setter_name, :time_from, :time_to, :activity, :machine, :partno, :opn_no, :description, :qty, :remarks);
+            """), params)
+            db.commit()
+
+        return {"message": "Setter entry logged successfully", "id": next_id, **params}
+    except HTTPException:
+        raise
+    except Exception as ex:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(ex))
+
+@app.put("/api/service/setter-logs/{log_id}")
+def update_service_setter_log(log_id: int, data: dict, db: Session = Depends(get_db)):
+    try:
+        date_val = normalize_date_str((data.get("date") or "").strip())
+        setter_name = (data.get("setter_name") or data.get("name") or "").strip()
+        time_from = (data.get("time_from") or "").strip()
+        time_to = (data.get("time_to") or "").strip()
+        activity = (data.get("activity") or "").strip()
+        machine = (data.get("machine") or "").strip()
+        partno = (data.get("partno") or data.get("part_no") or "").strip()
+        opn_no = (data.get("opn_no") or "").strip()
+        description = (data.get("description") or data.get("desc") or "").strip()
+        qty = int(data.get("qty") or 0)
+        remarks = (data.get("remarks") or "").strip()
+
+        db.execute(text("""
+            UPDATE setter_logs
+            SET date = :date, setter_name = :setter_name, time_from = :time_from, time_to = :time_to,
+                activity = :activity, machine = :machine, partno = :partno, opn_no = :opn_no,
+                description = :description, qty = :qty, remarks = :remarks
+            WHERE id = :id;
+        """), {
+            "id": log_id,
+            "date": date_val,
+            "setter_name": setter_name,
+            "time_from": time_from,
+            "time_to": time_to,
+            "activity": activity,
+            "machine": machine,
+            "partno": partno,
+            "opn_no": opn_no,
+            "description": description,
+            "qty": qty,
+            "remarks": remarks
+        })
+        db.commit()
+        return {"message": "Setter entry updated successfully", "id": log_id}
+    except Exception as ex:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(ex))
+
+@app.delete("/api/service/setter-logs/{log_id}")
+def delete_service_setter_log(log_id: int, db: Session = Depends(get_db)):
+    try:
+        db.execute(text("DELETE FROM setter_logs WHERE id = :id;"), {"id": log_id})
+        db.commit()
+        return {"message": "Setter entry deleted successfully"}
+    except Exception as ex:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(ex))
+
+@app.delete("/api/service/setter-logs")
+def clear_all_service_setter_logs(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("DELETE FROM setter_logs;"))
+        db.commit()
+        return {"message": "All setter entries cleared successfully"}
     except Exception as ex:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(ex))

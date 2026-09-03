@@ -148,7 +148,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     'toolcrib': ['insertmaster', 'drillmaster', 'products', 'insertreceipt', 'insertissue', 'insertcpc', 'insertstock'],
                     'reports': ['reports', 'rm_requirement', 'mc_util', 'oper_eff', 'bc_prod', 'att_vs_login'],
                     'maintenance': ['maintenance', 'bdslip', 'servicedetails'],
-                    'hr': ['hr', 'attendance']
+                    'hr': ['hr', 'attendance'],
+                    'service': ['service', 'service_setters', 'setters']
                 };
                 const allowed = (!accessibleScreens || accessibleScreens.length === 0) || (groupScreens[group] ? groupScreens[group].some(s => accessibleScreens.includes(s) || accessibleScreens.includes(group)) : false);
                 tab.style.display = allowed ? 'inline-block' : 'none';
@@ -422,7 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'insertStockSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'dbBackupSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'resourceReqdSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection',
-            'inspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'hrSection', 'attendanceSection', 'rfqSection', 'quoteSection'
+            'inspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'serviceSettersSection', 'hrSection', 'attendanceSection', 'rfqSection', 'quoteSection'
         ];
         sections.forEach(id => {
             const el = document.getElementById(id);
@@ -507,6 +508,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Sub-tab Click Handlers
     const subTabs = {
+        'sidebarServiceSetters': { tab: 'service_setters', action: () => {
+            const sec = document.getElementById('serviceSettersSection');
+            if (sec) sec.style.display = 'block';
+            importBtn.style.display = 'none';
+            addBtn.style.display = 'none';
+            initServiceSettersSection();
+        }},
         'sidebarRfq': { tab: 'rfq', action: () => {
             const sec = document.getElementById('rfqSection');
             if (sec) sec.style.display = 'block';
@@ -14590,6 +14598,418 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert('Error saving Quotation: ' + err.message);
                 }
             };
+        }
+    }
+
+    // ====== SERVICE: SETTERS LOG LOGIC ======
+    let serviceSettersInitialized = false;
+    let cachedSettersList = [];
+    let cachedSetterMachines = [];
+    let cachedSetterParts = [];
+    let currentSetterLogs = [];
+
+    async function initServiceSettersSection() {
+        const dateInput = document.getElementById('setterLogDate');
+        if (dateInput && !dateInput.value) {
+            dateInput.valueAsDate = new Date();
+        }
+
+        const clearAllBtn = document.getElementById('clearAllSetterLogsBtn');
+        if (clearAllBtn) {
+            clearAllBtn.style.display = isUserAdmin() ? 'inline-block' : 'none';
+        }
+
+        await Promise.all([
+            loadServiceSettersDropdown(),
+            loadServiceSetterMachines(),
+            loadServiceSetterParts(),
+            fetchServiceSetterLogs()
+        ]);
+
+        if (!serviceSettersInitialized) {
+            serviceSettersInitialized = true;
+            setupServiceSettersEvents();
+        }
+    }
+
+    async function loadServiceSettersDropdown() {
+        try {
+            const res = await fetch('/api/service/setters');
+            cachedSettersList = await res.json();
+            const select = document.getElementById('setterLogName');
+            if (select) {
+                const currentVal = select.value;
+                let html = '<option value="">-- Select Setter --</option>';
+                cachedSettersList.forEach(s => {
+                    const deptText = s.department ? ` (${s.department})` : '';
+                    html += `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}${deptText}</option>`;
+                });
+                select.innerHTML = html;
+                if (currentVal) select.value = currentVal;
+            }
+        } catch (err) {
+            console.error('Error loading setters:', err);
+        }
+    }
+
+    async function loadServiceSetterMachines() {
+        try {
+            const res = await fetch('/api/machines');
+            cachedSetterMachines = await res.json();
+            const select = document.getElementById('setterLogMachine');
+            if (select) {
+                const currentVal = select.value;
+                let html = '<option value="">-- Select Machine --</option>';
+                cachedSetterMachines.forEach(m => {
+                    const mName = m.name || m.machine_name || m.machine || '';
+                    if (mName) {
+                        html += `<option value="${escapeHtml(mName)}">${escapeHtml(mName)}</option>`;
+                    }
+                });
+                select.innerHTML = html;
+                if (currentVal) select.value = currentVal;
+            }
+        } catch (err) {
+            console.error('Error loading machines:', err);
+        }
+    }
+
+    async function loadServiceSetterParts() {
+        try {
+            const res = await fetch('/api/partmaster');
+            cachedSetterParts = await res.json();
+            const select = document.getElementById('setterLogPartNo');
+            if (select) {
+                const currentVal = select.value;
+                let html = '<option value="">-- Select Part No --</option>';
+                cachedSetterParts.forEach(p => {
+                    const pNo = p.partno || p.part_no || '';
+                    if (pNo) {
+                        html += `<option value="${escapeHtml(pNo)}" data-id="${p.id || ''}">${escapeHtml(pNo)}</option>`;
+                    }
+                });
+                select.innerHTML = html;
+                if (currentVal) select.value = currentVal;
+            }
+        } catch (err) {
+            console.error('Error loading parts:', err);
+        }
+    }
+
+    async function onSetterPartNoChanged(partNo) {
+        const opnSelect = document.getElementById('setterLogOpnNo');
+        const descInput = document.getElementById('setterLogDesc');
+        if (!opnSelect) return;
+        opnSelect.innerHTML = '<option value="">-- Select Opn --</option>';
+        if (descInput) descInput.value = '';
+
+        if (!partNo) return;
+        const partObj = cachedSetterParts.find(p => (p.partno || p.part_no || '').trim().toUpperCase() === partNo.trim().toUpperCase());
+        if (!partObj || !partObj.id) return;
+
+        try {
+            const res = await fetch(`/api/partmaster/${partObj.id}/operations`);
+            const ops = await res.json();
+            let html = '<option value="">-- Select Opn --</option>';
+            ops.forEach(o => {
+                const opn = o.opn_no || '';
+                const desc = o.description || '';
+                html += `<option value="${escapeHtml(opn)}" data-desc="${escapeHtml(desc)}">${escapeHtml(opn)}${desc ? ' - ' + escapeHtml(desc) : ''}</option>`;
+            });
+            opnSelect.innerHTML = html;
+        } catch (e) {
+            console.error('Error loading part operations:', e);
+        }
+    }
+
+    function calculateDuration(timeFrom, timeTo) {
+        if (!timeFrom || !timeTo) return '-';
+        try {
+            const [h1, m1] = timeFrom.split(':').map(Number);
+            const [h2, m2] = timeTo.split(':').map(Number);
+            let diffMins = (h2 * 60 + m2) - (h1 * 60 + m1);
+            if (diffMins < 0) diffMins += 24 * 60; // overnight shift
+            const hrs = Math.floor(diffMins / 60);
+            const mins = diffMins % 60;
+            if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
+            if (hrs > 0) return `${hrs}h`;
+            return `${mins}m`;
+        } catch (e) {
+            return '-';
+        }
+    }
+
+    function calculateDurationInHours(timeFrom, timeTo) {
+        if (!timeFrom || !timeTo) return 0;
+        try {
+            const [h1, m1] = timeFrom.split(':').map(Number);
+            const [h2, m2] = timeTo.split(':').map(Number);
+            let diffMins = (h2 * 60 + m2) - (h1 * 60 + m1);
+            if (diffMins < 0) diffMins += 24 * 60;
+            return diffMins / 60.0;
+        } catch (e) {
+            return 0;
+        }
+    }
+
+    async function fetchServiceSetterLogs() {
+        try {
+            const res = await fetch('/api/service/setter-logs');
+            currentSetterLogs = await res.json();
+            renderServiceSetterLogs(currentSetterLogs);
+        } catch (err) {
+            console.error('Error fetching setter logs:', err);
+        }
+    }
+
+    function renderServiceSetterLogs(logs) {
+        const tbody = document.getElementById('setterLogsBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        if (!logs || logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="14" style="text-align: center; color: var(--text-muted); padding: 1.25rem;">No setter entries logged yet.</td></tr>';
+            updateSetterKpis([]);
+            return;
+        }
+
+        updateSetterKpis(logs);
+
+        logs.forEach(l => {
+            const dur = calculateDuration(l.time_from, l.time_to);
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${l.id}</td>
+                <td><strong>${l.date}</strong></td>
+                <td><span style="font-weight: 600; color: #0284c7;">${escapeHtml(l.setter_name)}</span></td>
+                <td>${l.time_from || '-'}</td>
+                <td>${l.time_to || '-'}</td>
+                <td><span style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">${dur}</span></td>
+                <td><span style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 500;">${escapeHtml(l.activity || '-')}</span></td>
+                <td><strong>${escapeHtml(l.machine || '-')}</strong></td>
+                <td>${escapeHtml(l.partno || '-')}</td>
+                <td>${escapeHtml(l.opn_no || '-')}</td>
+                <td>${escapeHtml(l.description || '-')}</td>
+                <td style="text-align: right; font-weight: 600;">${l.qty || 0}</td>
+                <td>${escapeHtml(l.remarks || '-')}</td>
+                <td style="text-align: center; white-space: nowrap;">
+                    <button class="btn btn-outline edit-setter-log-btn" data-id="${l.id}" style="padding: 2px 6px; font-size: 0.78rem; margin-right: 4px;">Edit</button>
+                    <button class="btn btn-outline delete-setter-log-btn" data-id="${l.id}" style="padding: 2px 6px; font-size: 0.78rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.edit-setter-log-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = parseInt(e.currentTarget.getAttribute('data-id'));
+                editServiceSetterLog(id);
+            });
+        });
+
+        tbody.querySelectorAll('.delete-setter-log-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = parseInt(e.currentTarget.getAttribute('data-id'));
+                if (confirm(`Delete setter log #${id}?`)) {
+                    try {
+                        const res = await fetch(`/api/service/setter-logs/${id}`, { method: 'DELETE' });
+                        if (res.ok) {
+                            fetchServiceSetterLogs();
+                        } else {
+                            alert('Failed to delete setter log');
+                        }
+                    } catch (err) {
+                        console.error(err);
+                    }
+                }
+            });
+        });
+
+        applyTableColFilters('setterLogsTable');
+    }
+
+    function updateSetterKpis(logs) {
+        const totalEntriesEl = document.getElementById('kpiSetterTotalEntries');
+        const totalHoursEl = document.getElementById('kpiSetterTotalHours');
+        const activeCountEl = document.getElementById('kpiSetterActiveCount');
+        const machineCountEl = document.getElementById('kpiSetterMachineCount');
+
+        if (!totalEntriesEl) return;
+        totalEntriesEl.innerText = logs.length;
+
+        let totalHours = 0;
+        const uniqueSetters = new Set();
+        const uniqueMachines = new Set();
+
+        logs.forEach(l => {
+            totalHours += calculateDurationInHours(l.time_from, l.time_to);
+            if (l.setter_name) uniqueSetters.add(l.setter_name.trim().toUpperCase());
+            if (l.machine) uniqueMachines.add(l.machine.trim().toUpperCase());
+        });
+
+        if (totalHoursEl) totalHoursEl.innerText = totalHours.toFixed(1) + ' hrs';
+        if (activeCountEl) activeCountEl.innerText = uniqueSetters.size;
+        if (machineCountEl) machineCountEl.innerText = uniqueMachines.size;
+    }
+
+    async function editServiceSetterLog(id) {
+        const item = currentSetterLogs.find(l => l.id === id);
+        if (!item) return;
+
+        document.getElementById('editingSetterLogId').value = item.id;
+        document.getElementById('setterLogDate').value = item.date;
+        document.getElementById('setterLogName').value = item.setter_name;
+        document.getElementById('setterLogTimeFrom').value = item.time_from;
+        document.getElementById('setterLogTimeTo').value = item.time_to;
+        document.getElementById('setterLogActivity').value = item.activity;
+        document.getElementById('setterLogMachine').value = item.machine;
+        document.getElementById('setterLogPartNo').value = item.partno;
+
+        await onSetterPartNoChanged(item.partno);
+        const opnSelect = document.getElementById('setterLogOpnNo');
+        if (opnSelect) opnSelect.value = item.opn_no;
+
+        document.getElementById('setterLogDesc').value = item.description;
+        document.getElementById('setterLogQty').value = item.qty || 0;
+        document.getElementById('setterLogRemarks').value = item.remarks;
+
+        const formTitle = document.getElementById('setterFormTitle');
+        if (formTitle) formTitle.innerHTML = `<i class="fas fa-edit" style="color: #eab308; margin-right: 6px;"></i>Edit Setter Entry #${item.id}`;
+        const editBadge = document.getElementById('setterEditBadge');
+        if (editBadge) editBadge.style.display = 'inline-block';
+        const saveBtn = document.getElementById('saveSetterLogBtn');
+        if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-save" style="margin-right: 4px;"></i> Update Entry';
+
+        document.getElementById('serviceSettersSection').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function resetServiceSetterForm() {
+        document.getElementById('editingSetterLogId').value = '';
+        document.getElementById('setterLogForm').reset();
+        document.getElementById('setterLogDate').valueAsDate = new Date();
+        const opnSelect = document.getElementById('setterLogOpnNo');
+        if (opnSelect) opnSelect.innerHTML = '<option value="">-- Select Opn --</option>';
+
+        const formTitle = document.getElementById('setterFormTitle');
+        if (formTitle) formTitle.innerHTML = `<i class="fas fa-edit" style="color: #0284c7; margin-right: 6px;"></i>New Setter Entry`;
+        const editBadge = document.getElementById('setterEditBadge');
+        if (editBadge) editBadge.style.display = 'none';
+        const saveBtn = document.getElementById('saveSetterLogBtn');
+        if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-save" style="margin-right: 4px;"></i> Save Entry';
+    }
+
+    function setupServiceSettersEvents() {
+        const partSelect = document.getElementById('setterLogPartNo');
+        if (partSelect) {
+            partSelect.addEventListener('change', (e) => {
+                onSetterPartNoChanged(e.target.value);
+            });
+        }
+
+        const opnSelect = document.getElementById('setterLogOpnNo');
+        if (opnSelect) {
+            opnSelect.addEventListener('change', (e) => {
+                const opt = e.target.selectedOptions[0];
+                const desc = opt ? (opt.getAttribute('data-desc') || '') : '';
+                const descInput = document.getElementById('setterLogDesc');
+                if (descInput && desc) {
+                    descInput.value = desc;
+                }
+            });
+        }
+
+        const resetBtn = document.getElementById('resetSetterFormBtn');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', resetServiceSetterForm);
+        }
+
+        const form = document.getElementById('setterLogForm');
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const editingId = document.getElementById('editingSetterLogId').value;
+                const payload = {
+                    date: document.getElementById('setterLogDate').value,
+                    setter_name: document.getElementById('setterLogName').value,
+                    time_from: document.getElementById('setterLogTimeFrom').value,
+                    time_to: document.getElementById('setterLogTimeTo').value,
+                    activity: document.getElementById('setterLogActivity').value,
+                    machine: document.getElementById('setterLogMachine').value,
+                    partno: document.getElementById('setterLogPartNo').value,
+                    opn_no: document.getElementById('setterLogOpnNo').value,
+                    description: document.getElementById('setterLogDesc').value,
+                    qty: parseInt(document.getElementById('setterLogQty').value) || 0,
+                    remarks: document.getElementById('setterLogRemarks').value
+                };
+
+                const url = editingId ? `/api/service/setter-logs/${editingId}` : '/api/service/setter-logs';
+                const method = editingId ? 'PUT' : 'POST';
+
+                try {
+                    const res = await fetch(url, {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (res.ok) {
+                        resetServiceSetterForm();
+                        fetchServiceSetterLogs();
+                    } else {
+                        const err = await res.json();
+                        alert('Error: ' + (err.detail || 'Failed to save setter log'));
+                    }
+                } catch (err) {
+                    alert('Error saving setter log: ' + err.message);
+                }
+            });
+        }
+
+        const exportBtn = document.getElementById('exportSetterLogsBtn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                if (!currentSetterLogs || currentSetterLogs.length === 0) {
+                    alert('No setter logs to export.');
+                    return;
+                }
+                const exportData = currentSetterLogs.map(l => ({
+                    'ID': l.id,
+                    'Date': l.date,
+                    'Setter Name': l.setter_name,
+                    'From': l.time_from,
+                    'To': l.time_to,
+                    'Duration': calculateDuration(l.time_from, l.time_to),
+                    'Activity': l.activity,
+                    'Machine': l.machine,
+                    'Part No': l.partno,
+                    'Opn No': l.opn_no,
+                    'Description': l.description,
+                    'Qty': l.qty,
+                    'Remarks': l.remarks
+                }));
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Setters_Log');
+                const today = new Date().toISOString().split('T')[0];
+                XLSX.writeFile(wb, `Setters_Log_${today}.xlsx`);
+            });
+        }
+
+        const clearAllBtn = document.getElementById('clearAllSetterLogsBtn');
+        if (clearAllBtn) {
+            clearAllBtn.addEventListener('click', async () => {
+                if (confirm('Are you sure you want to clear ALL setter entries? This cannot be undone.')) {
+                    try {
+                        const res = await fetch('/api/service/setter-logs', { method: 'DELETE' });
+                        if (res.ok) {
+                            fetchServiceSetterLogs();
+                        } else {
+                            alert('Failed to clear setter logs.');
+                        }
+                    } catch (err) {
+                        console.error(err);
+                    }
+                }
+            });
         }
     }
 });
