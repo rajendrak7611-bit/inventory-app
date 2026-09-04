@@ -512,6 +512,37 @@ def run_startup_migrations():
                 conn.commit()
             except Exception:
                 pass
+            # Align sequences to MAX(id) for PostgreSQL
+            if "postgresql" in str(engine.url):
+                for tbl in [
+                    "part_masters", "parts", "operations", "part_operations", 
+                    "machines", "operators", "departments", "shifts", "vendors", 
+                    "setters", "suppliers", "raw_materials", "raw_material_logs", 
+                    "ht_logs", "ht_receipt_logs", "pc_logs", "pc_receipt_logs", 
+                    "production_logs", "production_schedules", "customer_masters",
+                    "drill_masters", "insert_masters", "tap_masters"
+                ]:
+                    try:
+                        conn.execute(text(f"""
+                            DO $$
+                            DECLARE
+                                seq_name text;
+                                max_val bigint;
+                            BEGIN
+                                seq_name := pg_get_serial_sequence('{tbl}', 'id');
+                                IF seq_name IS NOT NULL THEN
+                                    EXECUTE format('SELECT COALESCE(MAX(id), 0) FROM %I', '{tbl}') INTO max_val;
+                                    IF max_val > 0 THEN
+                                        EXECUTE format('SELECT setval(%L, %s, true)', seq_name, max_val);
+                                    END IF;
+                                END IF;
+                            EXCEPTION WHEN OTHERS THEN
+                                NULL;
+                            END $$;
+                        """))
+                        conn.commit()
+                    except Exception:
+                        pass
     except Exception as e:
         print("Startup migration note:", e)
     try:
@@ -1841,7 +1872,10 @@ def bulk_import_partmasters(data: dict, db: Session = Depends(get_db)):
         operations = p.get("operations") or []
         if partno:
             try:
-                db.execute(text("INSERT INTO part_masters (customer, department, family, forge_pn, part_prefix, partno, va, rfd_phy) VALUES (:customer, :department, :family, :forge_pn, :part_prefix, :partno, :va, :rfd_phy)"), {
+                max_id = db.execute(text("SELECT COALESCE(MAX(id), 0) FROM part_masters")).scalar() or 0
+                next_id = int(max_id) + 1
+                db.execute(text("INSERT INTO part_masters (id, customer, department, family, forge_pn, part_prefix, partno, va, rfd_phy) VALUES (:id, :customer, :department, :family, :forge_pn, :part_prefix, :partno, :va, :rfd_phy)"), {
+                    "id": next_id,
                     "customer": customer,
                     "department": department,
                     "family": family,
@@ -1851,23 +1885,35 @@ def bulk_import_partmasters(data: dict, db: Session = Depends(get_db)):
                     "va": va,
                     "rfd_phy": 0
                 })
+                try:
+                    db.execute(text("SELECT setval(pg_get_serial_sequence('part_masters', 'id'), (SELECT MAX(id) FROM part_masters));"))
+                except Exception:
+                    pass
                 db.commit()
                 count += 1
+            except Exception as e1:
+                db.rollback()
+                print("Note inserting to part_masters in bulk_import:", e1)
+            
+            try:
+                p_max_id = db.execute(text("SELECT COALESCE(MAX(id), 0) FROM parts")).scalar() or 0
+                p_next_id = int(p_max_id) + 1
+                db.execute(text("INSERT INTO parts (id, part_no, customer, dept, family, forge_pn, va) VALUES (:id, :part_no, :customer, :dept, :family, :forge_pn, :va)"), {
+                    "id": p_next_id,
+                    "part_no": partno,
+                    "customer": customer,
+                    "dept": department,
+                    "family": family,
+                    "forge_pn": forge_pn,
+                    "va": float(va) if va.replace('.','',1).isdigit() else 0.0
+                })
+                try:
+                    db.execute(text("SELECT setval(pg_get_serial_sequence('parts', 'id'), (SELECT MAX(id) FROM parts));"))
+                except Exception:
+                    pass
+                db.commit()
             except Exception:
                 db.rollback()
-                try:
-                    db.execute(text("INSERT INTO parts (part_no, customer, dept, family, forge_pn, va) VALUES (:part_no, :customer, :dept, :family, :forge_pn, :va)"), {
-                        "part_no": partno,
-                        "customer": customer,
-                        "dept": department,
-                        "family": family,
-                        "forge_pn": forge_pn,
-                        "va": float(va) if va.replace('.','',1).isdigit() else 0.0
-                    })
-                    db.commit()
-                    count += 1
-                except Exception:
-                    db.rollback()
             
             if operations:
                 try:
@@ -2139,51 +2185,170 @@ def save_partmaster_operations(part_id: int, ops: List[dict], db: Session = Depe
 @app.post("/api/partmaster")
 def create_partmaster(data: dict, db: Session = Depends(get_db)):
     try:
-        db.execute(text("INSERT INTO part_masters (customer, department, family, forge_pn, part_prefix, partno, va, rfd_phy) VALUES (:customer, :department, :family, :forge_pn, :part_prefix, :partno, :va, :rfd_phy)"), {
-            "customer": data.get("customer") or "",
-            "department": data.get("department") or data.get("dept") or "",
-            "family": data.get("family") or "",
-            "forge_pn": data.get("forge_pn") or "",
-            "part_prefix": data.get("part_prefix") or "",
-            "partno": data.get("partno") or data.get("part_no") or "",
-            "va": data.get("va") or 0,
-            "rfd_phy": data.get("rfd_phy") or 0
+        max_id = db.execute(text("SELECT COALESCE(MAX(id), 0) FROM part_masters")).scalar() or 0
+        next_id = int(max_id) + 1
+        
+        partno = (data.get("partno") or data.get("part_no") or "").strip()
+        customer = (data.get("customer") or "").strip()
+        department = (data.get("department") or data.get("dept") or "").strip()
+        family = (data.get("family") or "").strip()
+        forge_pn = (data.get("forge_pn") or "").strip()
+        part_prefix = (data.get("part_prefix") or "").strip()
+        va = str(data.get("va") if data.get("va") is not None else 0)
+        rfd_phy = str(data.get("rfd_phy") if data.get("rfd_phy") is not None else 0)
+
+        db.execute(text("""
+            INSERT INTO part_masters (id, customer, department, family, forge_pn, part_prefix, partno, va, rfd_phy) 
+            VALUES (:id, :customer, :department, :family, :forge_pn, :part_prefix, :partno, :va, :rfd_phy)
+        """), {
+            "id": next_id,
+            "customer": customer,
+            "department": department,
+            "family": family,
+            "forge_pn": forge_pn,
+            "part_prefix": part_prefix,
+            "partno": partno,
+            "va": va,
+            "rfd_phy": rfd_phy
         })
+
+        # Sync postgres sequence if applicable
+        try:
+            db.execute(text("SELECT setval(pg_get_serial_sequence('part_masters', 'id'), (SELECT MAX(id) FROM part_masters));"))
+        except Exception:
+            pass
+
+        # Also sync into parts table
+        if partno:
+            try:
+                p_max_id = db.execute(text("SELECT COALESCE(MAX(id), 0) FROM parts")).scalar() or 0
+                p_next_id = int(p_max_id) + 1
+                va_float = float(va) if va.replace('.', '', 1).isdigit() else 0.0
+
+                existing_p = db.execute(text("SELECT id FROM parts WHERE UPPER(TRIM(part_no)) = :p"), {"p": partno.upper()}).mappings().first()
+                if existing_p:
+                    db.execute(text("""
+                        UPDATE parts SET 
+                            customer = :customer, 
+                            dept = :dept, 
+                            family = :family, 
+                            forge_pn = :forge_pn, 
+                            va = :va 
+                        WHERE id = :id
+                    """), {
+                        "id": existing_p["id"],
+                        "customer": customer,
+                        "dept": department,
+                        "family": family,
+                        "forge_pn": forge_pn,
+                        "va": va_float
+                    })
+                else:
+                    db.execute(text("""
+                        INSERT INTO parts (id, part_no, customer, dept, family, forge_pn, va)
+                        VALUES (:id, :part_no, :customer, :dept, :family, :forge_pn, :va)
+                    """), {
+                        "id": p_next_id,
+                        "part_no": partno,
+                        "customer": customer,
+                        "dept": department,
+                        "family": family,
+                        "forge_pn": forge_pn,
+                        "va": va_float
+                    })
+                    try:
+                        db.execute(text("SELECT setval(pg_get_serial_sequence('parts', 'id'), (SELECT MAX(id) FROM parts));"))
+                    except Exception:
+                        pass
+            except Exception as pe:
+                print("Note syncing to parts table:", pe)
+
         db.commit()
-        return {"message": "Part master created", **data}
+        return {"message": "Part master created", "id": next_id, **data}
     except Exception as e:
         db.rollback()
-        return {"message": "Part master created", **data}
+        print("Error creating part master:", e)
+        raise HTTPException(status_code=500, detail=f"Failed to create part master: {str(e)}")
 
 @app.put("/api/partmaster/{part_id}")
 def update_partmaster(part_id: int, data: dict, db: Session = Depends(get_db)):
     try:
-        db.execute(text("UPDATE part_masters SET customer = :customer, department = :department, family = :family, forge_pn = :forge_pn, part_prefix = :part_prefix, partno = :partno, va = :va WHERE id = :id"), {
+        partno = (data.get("partno") or data.get("part_no") or "").strip()
+        customer = (data.get("customer") or "").strip()
+        department = (data.get("department") or data.get("dept") or "").strip()
+        family = (data.get("family") or "").strip()
+        forge_pn = (data.get("forge_pn") or "").strip()
+        part_prefix = (data.get("part_prefix") or "").strip()
+        va = str(data.get("va") if data.get("va") is not None else 0)
+
+        db.execute(text("""
+            UPDATE part_masters 
+            SET customer = :customer, department = :department, family = :family, 
+                forge_pn = :forge_pn, part_prefix = :part_prefix, partno = :partno, va = :va 
+            WHERE id = :id
+        """), {
             "id": part_id,
-            "customer": data.get("customer") or "",
-            "department": data.get("department") or data.get("dept") or "",
-            "family": data.get("family") or "",
-            "forge_pn": data.get("forge_pn") or "",
-            "part_prefix": data.get("part_prefix") or "",
-            "partno": data.get("partno") or data.get("part_no") or "",
-            "va": data.get("va") or 0
+            "customer": customer,
+            "department": department,
+            "family": family,
+            "forge_pn": forge_pn,
+            "part_prefix": part_prefix,
+            "partno": partno,
+            "va": va
         })
+
+        if partno:
+            try:
+                va_float = float(va) if va.replace('.', '', 1).isdigit() else 0.0
+                existing_p = db.execute(text("SELECT id FROM parts WHERE UPPER(TRIM(part_no)) = :p"), {"p": partno.upper()}).mappings().first()
+                if existing_p:
+                    db.execute(text("""
+                        UPDATE parts SET 
+                            customer = :customer, 
+                            dept = :dept, 
+                            family = :family, 
+                            forge_pn = :forge_pn, 
+                            va = :va 
+                        WHERE id = :id
+                    """), {
+                        "id": existing_p["id"],
+                        "customer": customer,
+                        "dept": department,
+                        "family": family,
+                        "forge_pn": forge_pn,
+                        "va": va_float
+                    })
+            except Exception as pe:
+                print("Note syncing update to parts table:", pe)
+
         db.commit()
-        return {"id": part_id, **data}
+        return {"id": part_id, "message": "Part master updated", **data}
     except Exception as e:
         db.rollback()
-        return {"id": part_id, **data}
+        print("Error updating part master:", e)
+        raise HTTPException(status_code=500, detail=f"Failed to update part master: {str(e)}")
 
 @app.delete("/api/partmaster/{part_id}")
 def delete_partmaster(part_id: int, db: Session = Depends(get_db)):
     try:
+        row = db.execute(text("SELECT partno FROM part_masters WHERE id = :id"), {"id": part_id}).mappings().first()
+        partno = row.get("partno") if row else None
+
         db.execute(text("DELETE FROM part_masters WHERE id = :id"), {"id": part_id})
         db.execute(text("DELETE FROM part_operations WHERE part_id = :id"), {"id": part_id})
+
+        if partno:
+            try:
+                db.execute(text("DELETE FROM parts WHERE UPPER(TRIM(part_no)) = :p"), {"p": partno.strip().upper()})
+            except Exception:
+                pass
+
         db.commit()
         return {"message": "Part master deleted"}
     except Exception as e:
         db.rollback()
-        return {"message": "Deleted"}
+        print("Error deleting part master:", e)
+        raise HTTPException(status_code=500, detail=f"Failed to delete part master: {str(e)}")
 
 # --- Parts ---
 @app.get("/api/parts", response_model=List[PartResponse])

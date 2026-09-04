@@ -1323,12 +1323,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    function openPartModal(isEdit) {
+    async function openPartModal(isEdit, deptToSelect) {
         if (partModal) {
             partModal.classList.add('active');
             partModal.classList.add('show');
         }
         if (partModalTitle) partModalTitle.textContent = isEdit ? 'Edit Part' : 'Add Part';
+        
+        const deptSelect = document.getElementById('partDept');
+        if (deptSelect && deptSelect.options.length <= 1) {
+            try {
+                const res = await fetch('/api/departments');
+                if (res.ok) {
+                    const depts = await res.json();
+                    if (Array.isArray(depts) && depts.length > 0) {
+                        let html = '<option value="">-- Select Dept --</option>';
+                        depts.forEach(d => {
+                            html += `<option value="${d.name}">${d.name}</option>`;
+                        });
+                        deptSelect.innerHTML = html;
+                    }
+                }
+            } catch(e) {
+                console.error('Error loading departments for part modal:', e);
+            }
+        }
+        if (deptToSelect && deptSelect) {
+            deptSelect.value = deptToSelect;
+        }
     }
     function closePartModal() {
         if (partModal) {
@@ -1345,19 +1367,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     partForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const submitBtn = partForm.querySelector('button[type="submit"]');
+        const origBtnText = submitBtn ? submitBtn.textContent : 'Save Details';
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+        }
+
         const id = document.getElementById('partId').value;
         const data = {
-            family: document.getElementById('partFamily').value,
-            forge_pn: document.getElementById('forgePn').value,
+            family: (document.getElementById('partFamily').value || '').trim(),
+            forge_pn: (document.getElementById('forgePn').value || '').trim(),
             part_prefix: document.getElementById('partPrefix') ? document.getElementById('partPrefix').value.trim() : '',
-            partno: document.getElementById('partno').value,
-            department: document.getElementById('partDept').value,
-            customer: document.getElementById('partCustomer').value,
-            va: document.getElementById('partVa').value
+            partno: (document.getElementById('partno').value || '').trim(),
+            department: document.getElementById('partDept').value || '',
+            customer: (document.getElementById('partCustomer').value || '').trim(),
+            va: document.getElementById('partVa').value || '0'
         };
         const url = id ? `/api/partmaster/${id}` : '/api/partmaster';
         try {
-            const res = await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+            const res = await fetch(url, { 
+                method: id ? 'PUT' : 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(data) 
+            });
             if (!res.ok) {
                 const errText = await res.text();
                 let errDetail = errText;
@@ -1366,13 +1399,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (parsed.detail) errDetail = typeof parsed.detail === 'string' ? parsed.detail : JSON.stringify(parsed.detail);
                 } catch(e){}
                 alert('Failed to save part details: ' + errDetail);
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = origBtnText;
+                }
                 return;
             }
             closePartModal();
-            fetchPartMasters();
+            // Clear any active column filter on partMasterTable so user sees the newly saved part
+            const table = document.getElementById('partMasterTable');
+            if (table) {
+                table.querySelectorAll('thead input, thead select').forEach(inp => inp.value = '');
+            }
+            await fetchPartMasters();
+            alert(`Part "${data.partno}" saved successfully!`);
         } catch(err) {
             console.error('Error saving part master:', err);
             alert('Failed to save part details: ' + err.message);
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = origBtnText;
+            }
         }
     });
 
@@ -1390,18 +1438,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     window.editPartMaster = async (id) => {
-        const res = await fetch('/api/partmaster'); const data = await res.json();
-        const p = data.find(x => x.id === id);
-        if (p) {
-            document.getElementById('partId').value = p.id;
-            document.getElementById('partFamily').value = p.family;
-            document.getElementById('forgePn').value = p.forge_pn;
-            if (document.getElementById('partPrefix')) document.getElementById('partPrefix').value = p.part_prefix || '';
-            document.getElementById('partno').value = p.partno;
-            document.getElementById('partCustomer').value = p.customer || '';
-            document.getElementById('partDept').value = p.department || '';
-            document.getElementById('partVa').value = p.va || '';
-            openPartModal(true);
+        try {
+            const res = await fetch('/api/partmaster'); 
+            const data = await res.json();
+            const p = data.find(x => x.id === id);
+            if (p) {
+                document.getElementById('partId').value = p.id;
+                document.getElementById('partFamily').value = p.family || '';
+                document.getElementById('forgePn').value = p.forge_pn || '';
+                if (document.getElementById('partPrefix')) document.getElementById('partPrefix').value = p.part_prefix || '';
+                document.getElementById('partno').value = p.partno || '';
+                document.getElementById('partCustomer').value = p.customer || '';
+                document.getElementById('partVa').value = p.va || '';
+                await openPartModal(true, p.department || '');
+            }
+        } catch(e) {
+            alert('Error loading part for editing: ' + e);
         }
     };
 
