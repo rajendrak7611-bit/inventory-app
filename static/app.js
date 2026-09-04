@@ -3089,7 +3089,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     (s.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()
                 );
                 const pendingSchedules = allPartSchedules.filter(s => s.status === 'Pending' || !s.status);
-                const schedQty = pendingSchedules.reduce((sum, s) => sum + (s.qty || 0), 0);
+                const schedQty = pendingSchedules.reduce((sum, s) => sum + (parseInt(s.qty, 10) || 0), 0);
                 const isCompleted = allPartSchedules.length > 0 && (pendingSchedules.length === 0 || allPartSchedules.every(s => (s.status || '').trim().toLowerCase() === 'completed'));
                 
                 let rowHtml = `<td>${cust || '-'}</td><td>${partno}</td><td>${schedQty}</td>`;

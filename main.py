@@ -2327,7 +2327,19 @@ def create_operation(part_id: int, opn: OperationCreate, db: Session = Depends(g
 def get_schedules_endpoint(db: Session = Depends(get_db)):
     try:
         rows = db.execute(text("SELECT id, department, partno, target_date, qty, completed_qty, status FROM schedules ORDER BY id DESC")).mappings().all()
-        return [dict(r) for r in rows]
+        result = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["qty"] = int(float(str(d.get("qty") or 0).strip()))
+            except Exception:
+                d["qty"] = 0
+            try:
+                d["completed_qty"] = int(float(str(d.get("completed_qty") or 0).strip()))
+            except Exception:
+                d["completed_qty"] = 0
+            result.append(d)
+        return result
     except Exception as e:
         print("get_schedules error:", e)
         db.rollback()
