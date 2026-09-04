@@ -2335,7 +2335,7 @@ def delete_partmaster(part_id: int, db: Session = Depends(get_db)):
         partno = row.get("partno") if row else None
 
         db.execute(text("DELETE FROM part_masters WHERE id = :id"), {"id": part_id})
-        db.execute(text("DELETE FROM part_operations WHERE part_id = :id"), {"id": part_id})
+        db.execute(text("DELETE FROM part_operations WHERE CAST(part_id AS TEXT) = :id"), {"id": str(part_id)})
 
         if partno:
             try:
