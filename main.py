@@ -121,34 +121,34 @@ def import_breakdown_excel():
             conn.commit()
 
             if "breakdown_slips" in wb.sheetnames:
-                sheet = wb["breakdown_slips"]
-                headers = [sheet.cell(1, c).value for c in range(1, sheet.max_column + 1)]
-                conn.execute(text("DELETE FROM breakdown_slips;"))
-                conn.commit()
-                for r in range(2, sheet.max_row + 1):
-                    row_data = {headers[c-1]: sheet.cell(r, c).value for c in range(1, len(headers)+1) if headers[c-1]}
-                    if not any(v is not None for v in row_data.values()):
-                        continue
-                    try:
-                        conn.execute(text("""
-                            INSERT INTO breakdown_slips (id, date_time, department, shift, maint_type, request_by, machine, problem, signoff_date_time, status, created_at)
-                            VALUES (:id, :date_time, :department, :shift, :maint_type, :request_by, :machine, :problem, :signoff_date_time, :status, :created_at)
-                        """), {
-                            "id": int(row_data.get("id")) if row_data.get("id") else None,
-                            "date_time": str(row_data.get("date_time") or ""),
-                            "department": str(row_data.get("department") or ""),
-                            "shift": str(row_data.get("shift") or ""),
-                            "maint_type": str(row_data.get("maint_type") or "Breakdown"),
-                            "request_by": str(row_data.get("request_by") or ""),
-                            "machine": str(row_data.get("machine") or ""),
-                            "problem": str(row_data.get("problem") or ""),
-                            "signoff_date_time": str(row_data.get("signoff_date_time") or ""),
-                            "status": str(row_data.get("status") or "Open"),
-                            "created_at": str(row_data.get("created_at") or "")
-                        })
-                    except Exception as e:
-                        pass
-                conn.commit()
+                existing_cnt = conn.execute(text("SELECT COUNT(*) FROM breakdown_slips;")).scalar() or 0
+                if existing_cnt == 0:
+                    sheet = wb["breakdown_slips"]
+                    headers = [sheet.cell(1, c).value for c in range(1, sheet.max_column + 1)]
+                    for r in range(2, sheet.max_row + 1):
+                        row_data = {headers[c-1]: sheet.cell(r, c).value for c in range(1, len(headers)+1) if headers[c-1]}
+                        if not any(v is not None for v in row_data.values()):
+                            continue
+                        try:
+                            conn.execute(text("""
+                                INSERT INTO breakdown_slips (id, date_time, department, shift, maint_type, request_by, machine, problem, signoff_date_time, status, created_at)
+                                VALUES (:id, :date_time, :department, :shift, :maint_type, :request_by, :machine, :problem, :signoff_date_time, :status, :created_at)
+                            """), {
+                                "id": int(row_data.get("id")) if row_data.get("id") else None,
+                                "date_time": str(row_data.get("date_time") or ""),
+                                "department": str(row_data.get("department") or ""),
+                                "shift": str(row_data.get("shift") or ""),
+                                "maint_type": str(row_data.get("maint_type") or "Breakdown"),
+                                "request_by": str(row_data.get("request_by") or ""),
+                                "machine": str(row_data.get("machine") or ""),
+                                "problem": str(row_data.get("problem") or ""),
+                                "signoff_date_time": str(row_data.get("signoff_date_time") or ""),
+                                "status": str(row_data.get("status") or "Open"),
+                                "created_at": str(row_data.get("created_at") or "")
+                            })
+                        except Exception as e:
+                            pass
+                    conn.commit()
                 try:
                     conn.execute(text("SELECT setval(pg_get_serial_sequence('breakdown_slips', 'id'), coalesce(max(id),0) + 1, false) FROM breakdown_slips;"))
                     conn.commit()
@@ -156,34 +156,34 @@ def import_breakdown_excel():
                     pass
 
             if "service_details" in wb.sheetnames:
-                sheet = wb["service_details"]
-                headers = [sheet.cell(1, c).value for c in range(1, sheet.max_column + 1)]
-                conn.execute(text("DELETE FROM service_details;"))
-                conn.commit()
-                for r in range(2, sheet.max_row + 1):
-                    row_data = {headers[c-1]: sheet.cell(r, c).value for c in range(1, len(headers)+1) if headers[c-1]}
-                    if not any(v is not None for v in row_data.values()):
-                        continue
-                    try:
-                        bd_id = int(row_data.get("breakdown_slip_id")) if row_data.get("breakdown_slip_id") is not None and str(row_data.get("breakdown_slip_id")).strip() != "" else None
-                        conn.execute(text("""
-                            INSERT INTO service_details (id, breakdown_slip_id, machine, spares_data, service_data, spares_cost, service_cost, total_cost, remarks, created_at)
-                            VALUES (:id, :breakdown_slip_id, :machine, :spares_data, :service_data, :spares_cost, :service_cost, :total_cost, :remarks, :created_at)
-                        """), {
-                            "id": int(row_data.get("id")) if row_data.get("id") else None,
-                            "breakdown_slip_id": bd_id,
-                            "machine": str(row_data.get("machine") or ""),
-                            "spares_data": str(row_data.get("spares_data") or "[]"),
-                            "service_data": str(row_data.get("service_data") or "[]"),
-                            "spares_cost": float(row_data.get("spares_cost") or 0),
-                            "service_cost": float(row_data.get("service_cost") or 0),
-                            "total_cost": float(row_data.get("total_cost") or 0),
-                            "remarks": str(row_data.get("remarks") or ""),
-                            "created_at": str(row_data.get("created_at") or "")
-                        })
-                    except Exception as e:
-                        pass
-                conn.commit()
+                existing_sd_cnt = conn.execute(text("SELECT COUNT(*) FROM service_details;")).scalar() or 0
+                if existing_sd_cnt == 0:
+                    sheet = wb["service_details"]
+                    headers = [sheet.cell(1, c).value for c in range(1, sheet.max_column + 1)]
+                    for r in range(2, sheet.max_row + 1):
+                        row_data = {headers[c-1]: sheet.cell(r, c).value for c in range(1, len(headers)+1) if headers[c-1]}
+                        if not any(v is not None for v in row_data.values()):
+                            continue
+                        try:
+                            bd_id = int(row_data.get("breakdown_slip_id")) if row_data.get("breakdown_slip_id") is not None and str(row_data.get("breakdown_slip_id")).strip() != "" else None
+                            conn.execute(text("""
+                                INSERT INTO service_details (id, breakdown_slip_id, machine, spares_data, service_data, spares_cost, service_cost, total_cost, remarks, created_at)
+                                VALUES (:id, :breakdown_slip_id, :machine, :spares_data, :service_data, :spares_cost, :service_cost, :total_cost, :remarks, :created_at)
+                            """), {
+                                "id": int(row_data.get("id")) if row_data.get("id") else None,
+                                "breakdown_slip_id": bd_id,
+                                "machine": str(row_data.get("machine") or ""),
+                                "spares_data": str(row_data.get("spares_data") or "[]"),
+                                "service_data": str(row_data.get("service_data") or "[]"),
+                                "spares_cost": float(row_data.get("spares_cost") or 0),
+                                "service_cost": float(row_data.get("service_cost") or 0),
+                                "total_cost": float(row_data.get("total_cost") or 0),
+                                "remarks": str(row_data.get("remarks") or ""),
+                                "created_at": str(row_data.get("created_at") or "")
+                            })
+                        except Exception as e:
+                            pass
+                    conn.commit()
                 try:
                     conn.execute(text("SELECT setval(pg_get_serial_sequence('service_details', 'id'), coalesce(max(id),0) + 1, false) FROM service_details;"))
                     conn.commit()
@@ -248,29 +248,29 @@ def import_rfq_excel():
             conn.commit()
 
             if "rfq_headers" in wb.sheetnames:
-                sheet = wb["rfq_headers"]
-                headers = [sheet.cell(1, c).value for c in range(1, sheet.max_column + 1)]
-                conn.execute(text("DELETE FROM rfq_headers;"))
-                conn.commit()
-                for r in range(2, sheet.max_row + 1):
-                    row_data = {headers[c-1]: sheet.cell(r, c).value for c in range(1, len(headers)+1) if headers[c-1]}
-                    if not any(v is not None for v in row_data.values()):
-                        continue
-                    try:
-                        conn.execute(text("""
-                            INSERT INTO rfq_headers (id, date, rfqno, unit, customer, created_at)
-                            VALUES (:id, :date, :rfqno, :unit, :customer, :created_at)
-                        """), {
-                            "id": int(row_data.get("id")) if row_data.get("id") else None,
-                            "date": str(row_data.get("date") or ""),
-                            "rfqno": str(row_data.get("rfqno") or ""),
-                            "unit": str(row_data.get("unit") or ""),
-                            "customer": str(row_data.get("customer") or ""),
-                            "created_at": str(row_data.get("created_at") or "")
-                        })
-                    except Exception:
-                        pass
-                conn.commit()
+                existing_rfq_cnt = conn.execute(text("SELECT COUNT(*) FROM rfq_headers;")).scalar() or 0
+                if existing_rfq_cnt == 0:
+                    sheet = wb["rfq_headers"]
+                    headers = [sheet.cell(1, c).value for c in range(1, sheet.max_column + 1)]
+                    for r in range(2, sheet.max_row + 1):
+                        row_data = {headers[c-1]: sheet.cell(r, c).value for c in range(1, len(headers)+1) if headers[c-1]}
+                        if not any(v is not None for v in row_data.values()):
+                            continue
+                        try:
+                            conn.execute(text("""
+                                INSERT INTO rfq_headers (id, date, rfqno, unit, customer, created_at)
+                                VALUES (:id, :date, :rfqno, :unit, :customer, :created_at)
+                            """), {
+                                "id": int(row_data.get("id")) if row_data.get("id") else None,
+                                "date": str(row_data.get("date") or ""),
+                                "rfqno": str(row_data.get("rfqno") or ""),
+                                "unit": str(row_data.get("unit") or ""),
+                                "customer": str(row_data.get("customer") or ""),
+                                "created_at": str(row_data.get("created_at") or "")
+                            })
+                        except Exception:
+                            pass
+                    conn.commit()
                 try:
                     conn.execute(text("SELECT setval(pg_get_serial_sequence('rfq_headers', 'id'), coalesce(max(id),0) + 1, false) FROM rfq_headers;"))
                     conn.commit()
@@ -278,27 +278,27 @@ def import_rfq_excel():
                     pass
 
             if "rfq_items" in wb.sheetnames:
-                sheet = wb["rfq_items"]
-                headers = [sheet.cell(1, c).value for c in range(1, sheet.max_column + 1)]
-                conn.execute(text("DELETE FROM rfq_items;"))
-                conn.commit()
-                for r in range(2, sheet.max_row + 1):
-                    row_data = {headers[c-1]: sheet.cell(r, c).value for c in range(1, len(headers)+1) if headers[c-1]}
-                    if not any(v is not None for v in row_data.values()):
-                        continue
-                    try:
-                        conn.execute(text("""
-                            INSERT INTO rfq_items (id, rfq_id, partno, description)
-                            VALUES (:id, :rfq_id, :partno, :description)
-                        """), {
-                            "id": int(row_data.get("id")) if row_data.get("id") else None,
-                            "rfq_id": int(row_data.get("rfq_id")) if row_data.get("rfq_id") else None,
-                            "partno": str(row_data.get("partno") or ""),
-                            "description": str(row_data.get("description") or "")
-                        })
-                    except Exception:
-                        pass
-                conn.commit()
+                existing_items_cnt = conn.execute(text("SELECT COUNT(*) FROM rfq_items;")).scalar() or 0
+                if existing_items_cnt == 0:
+                    sheet = wb["rfq_items"]
+                    headers = [sheet.cell(1, c).value for c in range(1, sheet.max_column + 1)]
+                    for r in range(2, sheet.max_row + 1):
+                        row_data = {headers[c-1]: sheet.cell(r, c).value for c in range(1, len(headers)+1) if headers[c-1]}
+                        if not any(v is not None for v in row_data.values()):
+                            continue
+                        try:
+                            conn.execute(text("""
+                                INSERT INTO rfq_items (id, rfq_id, partno, description)
+                                VALUES (:id, :rfq_id, :partno, :description)
+                            """), {
+                                "id": int(row_data.get("id")) if row_data.get("id") else None,
+                                "rfq_id": int(row_data.get("rfq_id")) if row_data.get("rfq_id") else None,
+                                "partno": str(row_data.get("partno") or ""),
+                                "description": str(row_data.get("description") or "")
+                            })
+                        except Exception:
+                            pass
+                    conn.commit()
                 try:
                     conn.execute(text("SELECT setval(pg_get_serial_sequence('rfq_items', 'id'), coalesce(max(id),0) + 1, false) FROM rfq_items;"))
                     conn.commit()
@@ -306,45 +306,45 @@ def import_rfq_excel():
                     pass
 
             if "quote_records" in wb.sheetnames:
-                sheet = wb["quote_records"]
-                headers = [sheet.cell(1, c).value for c in range(1, sheet.max_column + 1)]
-                conn.execute(text("DELETE FROM quote_records;"))
-                conn.commit()
-                for r in range(2, sheet.max_row + 1):
-                    row_data = {headers[c-1]: sheet.cell(r, c).value for c in range(1, len(headers)+1) if headers[c-1]}
-                    if not any(v is not None for v in row_data.values()):
-                        continue
-                    try:
-                        rfq_id_val = int(row_data.get("rfq_id")) if row_data.get("rfq_id") is not None and str(row_data.get("rfq_id")).strip() != "" else None
-                        conn.execute(text("""
-                            INSERT INTO quote_records (id, quote_no, date, rfq_id, rfq_no, customer, part_no, part_description, unit, overhead_profit_pct, total_machining_cost, total_other_process_cost, total_packing_cost, base_part_cost, final_unit_price, total_dev_cost, machining_details, other_process_details, packing_details, dev_cost_details, created_at)
-                            VALUES (:id, :quote_no, :date, :rfq_id, :rfq_no, :customer, :part_no, :part_description, :unit, :overhead_profit_pct, :total_machining_cost, :total_other_process_cost, :total_packing_cost, :base_part_cost, :final_unit_price, :total_dev_cost, :machining_details, :other_process_details, :packing_details, :dev_cost_details, :created_at)
-                        """), {
-                            "id": int(row_data.get("id")) if row_data.get("id") else None,
-                            "quote_no": str(row_data.get("quote_no") or ""),
-                            "date": str(row_data.get("date") or ""),
-                            "rfq_id": rfq_id_val,
-                            "rfq_no": str(row_data.get("rfq_no") or ""),
-                            "customer": str(row_data.get("customer") or ""),
-                            "part_no": str(row_data.get("part_no") or ""),
-                            "part_description": str(row_data.get("part_description") or ""),
-                            "unit": str(row_data.get("unit") or "Unit 1"),
-                            "overhead_profit_pct": float(row_data.get("overhead_profit_pct") or 0),
-                            "total_machining_cost": float(row_data.get("total_machining_cost") or 0),
-                            "total_other_process_cost": float(row_data.get("total_other_process_cost") or 0),
-                            "total_packing_cost": float(row_data.get("total_packing_cost") or 0),
-                            "base_part_cost": float(row_data.get("base_part_cost") or 0),
-                            "final_unit_price": float(row_data.get("final_unit_price") or 0),
-                            "total_dev_cost": float(row_data.get("total_dev_cost") or 0),
-                            "machining_details": str(row_data.get("machining_details") or "[]"),
-                            "other_process_details": str(row_data.get("other_process_details") or "[]"),
-                            "packing_details": str(row_data.get("packing_details") or "[]"),
-                            "dev_cost_details": str(row_data.get("dev_cost_details") or "[]"),
-                            "created_at": str(row_data.get("created_at") or "")
-                        })
-                    except Exception as e:
-                        pass
-                conn.commit()
+                existing_quote_cnt = conn.execute(text("SELECT COUNT(*) FROM quote_records;")).scalar() or 0
+                if existing_quote_cnt == 0:
+                    sheet = wb["quote_records"]
+                    headers = [sheet.cell(1, c).value for c in range(1, sheet.max_column + 1)]
+                    for r in range(2, sheet.max_row + 1):
+                        row_data = {headers[c-1]: sheet.cell(r, c).value for c in range(1, len(headers)+1) if headers[c-1]}
+                        if not any(v is not None for v in row_data.values()):
+                            continue
+                        try:
+                            rfq_id_val = int(row_data.get("rfq_id")) if row_data.get("rfq_id") is not None and str(row_data.get("rfq_id")).strip() != "" else None
+                            conn.execute(text("""
+                                INSERT INTO quote_records (id, quote_no, date, rfq_id, rfq_no, customer, part_no, part_description, unit, overhead_profit_pct, total_machining_cost, total_other_process_cost, total_packing_cost, base_part_cost, final_unit_price, total_dev_cost, machining_details, other_process_details, packing_details, dev_cost_details, created_at)
+                                VALUES (:id, :quote_no, :date, :rfq_id, :rfq_no, :customer, :part_no, :part_description, :unit, :overhead_profit_pct, :total_machining_cost, :total_other_process_cost, :total_packing_cost, :base_part_cost, :final_unit_price, :total_dev_cost, :machining_details, :other_process_details, :packing_details, :dev_cost_details, :created_at)
+                            """), {
+                                "id": int(row_data.get("id")) if row_data.get("id") else None,
+                                "quote_no": str(row_data.get("quote_no") or ""),
+                                "date": str(row_data.get("date") or ""),
+                                "rfq_id": rfq_id_val,
+                                "rfq_no": str(row_data.get("rfq_no") or ""),
+                                "customer": str(row_data.get("customer") or ""),
+                                "part_no": str(row_data.get("part_no") or ""),
+                                "part_description": str(row_data.get("part_description") or ""),
+                                "unit": str(row_data.get("unit") or "Unit 1"),
+                                "overhead_profit_pct": float(row_data.get("overhead_profit_pct") or 0),
+                                "total_machining_cost": float(row_data.get("total_machining_cost") or 0),
+                                "total_other_process_cost": float(row_data.get("total_other_process_cost") or 0),
+                                "total_packing_cost": float(row_data.get("total_packing_cost") or 0),
+                                "base_part_cost": float(row_data.get("base_part_cost") or 0),
+                                "final_unit_price": float(row_data.get("final_unit_price") or 0),
+                                "total_dev_cost": float(row_data.get("total_dev_cost") or 0),
+                                "machining_details": str(row_data.get("machining_details") or "[]"),
+                                "other_process_details": str(row_data.get("other_process_details") or "[]"),
+                                "packing_details": str(row_data.get("packing_details") or "[]"),
+                                "dev_cost_details": str(row_data.get("dev_cost_details") or "[]"),
+                                "created_at": str(row_data.get("created_at") or "")
+                            })
+                        except Exception as e:
+                            pass
+                    conn.commit()
                 try:
                     conn.execute(text("SELECT setval(pg_get_serial_sequence('quote_records', 'id'), coalesce(max(id),0) + 1, false) FROM quote_records;"))
                     conn.commit()
@@ -5014,7 +5014,7 @@ def update_breakdown_slip(slip_id: int, data: dict, db: Session = Depends(get_db
             "status": (data.get("status") or "Open").strip()
         })
         db.commit()
-        return {"message": "Breakdown Slip updated successfully"}
+        return {"message": "Breakdown Slip updated successfully", "id": slip_id}
     except Exception as ex:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(ex))
@@ -5102,9 +5102,11 @@ def update_service_detail(detail_id: int, data: dict, db: Session = Depends(get_
         else:
             bd_id = None
 
+        mach_val = (data.get("machine") or "").strip()
         db.execute(text("""
             UPDATE service_details
-            SET breakdown_slip_id = :breakdown_slip_id, machine = :machine,
+            SET breakdown_slip_id = :breakdown_slip_id,
+                machine = CASE WHEN :machine <> '' THEN :machine ELSE machine END,
                 spares_data = :spares_data, service_data = :service_data,
                 spares_cost = :spares_cost, service_cost = :service_cost,
                 total_cost = :total_cost, remarks = :remarks
@@ -5112,7 +5114,7 @@ def update_service_detail(detail_id: int, data: dict, db: Session = Depends(get_
         """), {
             "id": detail_id,
             "breakdown_slip_id": bd_id,
-            "machine": (data.get("machine") or "").strip(),
+            "machine": mach_val,
             "spares_data": json.dumps(data.get("spares_data")) if isinstance(data.get("spares_data"), list) else str(data.get("spares_data") or "[]"),
             "service_data": json.dumps(data.get("service_data")) if isinstance(data.get("service_data"), list) else str(data.get("service_data") or "[]"),
             "spares_cost": float(data.get("spares_cost") or 0),
@@ -5121,7 +5123,7 @@ def update_service_detail(detail_id: int, data: dict, db: Session = Depends(get_
             "remarks": (data.get("remarks") or "").strip()
         })
         db.commit()
-        return {"message": "Service Detail updated successfully"}
+        return {"message": "Service Detail updated successfully", "id": detail_id}
     except Exception as ex:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(ex))

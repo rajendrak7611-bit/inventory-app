@@ -12379,29 +12379,39 @@ document.addEventListener('DOMContentLoaded', () => {
     async function openBdSlipModal(item = null) {
         if (!bdSlipModal) return;
 
-        const [deptRes, shiftRes, machRes] = await Promise.all([
-            fetch('/api/departments'),
-            fetch('/api/shifts'),
-            fetch('/api/machines')
-        ]);
-        const depts = await deptRes.json();
-        const shifts = await shiftRes.json();
-        const machines = await machRes.json();
+        let depts = [], shifts = [], machines = [];
+        try {
+            const [deptRes, shiftRes, machRes] = await Promise.all([
+                fetch('/api/departments'),
+                fetch('/api/shifts'),
+                fetch('/api/machines')
+            ]);
+            if (deptRes && deptRes.ok) depts = await deptRes.json();
+            if (shiftRes && shiftRes.ok) shifts = await shiftRes.json();
+            if (machRes && machRes.ok) machines = await machRes.json();
+        } catch (err) {
+            console.error('Error fetching masters for BD Slip modal:', err);
+        }
 
         const deptSel = document.getElementById('bdDeptSelect');
-        deptSel.innerHTML = '<option value="">-- Select Dept --</option>';
-        depts.forEach(d => {
-            deptSel.innerHTML += `<option value="${d.name}">${d.name}</option>`;
-        });
+        if (deptSel) {
+            deptSel.innerHTML = '<option value="">-- Select Dept --</option>';
+            depts.forEach(d => {
+                deptSel.innerHTML += `<option value="${d.name}">${d.name}</option>`;
+            });
+        }
 
         const shiftSel = document.getElementById('bdShiftSelect');
-        shiftSel.innerHTML = '<option value="">-- Select Shift --</option>';
-        shifts.forEach(s => {
-            shiftSel.innerHTML += `<option value="${s.name}">${s.name}</option>`;
-        });
+        if (shiftSel) {
+            shiftSel.innerHTML = '<option value="">-- Select Shift --</option>';
+            shifts.forEach(s => {
+                shiftSel.innerHTML += `<option value="${s.name}">${s.name}</option>`;
+            });
+        }
 
         const updateMachineDropdown = (selectedDept, currentMach = '') => {
             const machSel = document.getElementById('bdMachineSelect');
+            if (!machSel) return;
             machSel.innerHTML = '<option value="">-- Select Machine --</option>';
             const cleanDept = (selectedDept || '').trim().toUpperCase();
             let filtered = machines;
@@ -12418,16 +12428,18 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         };
 
-        deptSel.onchange = (e) => {
-            updateMachineDropdown(e.target.value);
-        };
+        if (deptSel) {
+            deptSel.onchange = (e) => {
+                updateMachineDropdown(e.target.value);
+            };
+        }
 
         if (item) {
             document.getElementById('bdSlipModalTitle').textContent = 'Edit Breakdown Slip';
             document.getElementById('bdSlipId').value = item.id;
             document.getElementById('bdDateTimeInput').value = item.date_time || '';
-            document.getElementById('bdDeptSelect').value = item.department || '';
-            document.getElementById('bdShiftSelect').value = item.shift || '';
+            if (deptSel) deptSel.value = item.department || '';
+            if (shiftSel) shiftSel.value = item.shift || '';
             document.getElementById('bdMaintTypeSelect').value = item.maint_type || 'Breakdown';
             document.getElementById('bdRequestByInput').value = item.request_by || '';
             updateMachineDropdown(item.department || '', item.machine || '');
@@ -12479,13 +12491,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 if (res.ok) {
                     bdSlipModal.classList.remove('show');
-                    fetchBdSlips();
+                    const filterInputs = document.querySelectorAll('#bdSlipTable thead input');
+                    filterInputs.forEach(inp => inp.value = '');
+                    await fetchBdSlips();
+                    alert(id ? 'Breakdown Slip updated successfully!' : 'Breakdown Slip saved successfully!');
+                    if (typeof loadOpenBreakdownMachinesDropdown === 'function') {
+                        loadOpenBreakdownMachinesDropdown();
+                    }
                 } else {
-                    alert('Error saving Breakdown Slip');
+                    const err = await res.text();
+                    alert('Error saving Breakdown Slip: ' + (err || res.statusText));
                 }
             } catch (err) {
                 console.error(err);
-                alert('Error saving Breakdown Slip');
+                alert('Error saving Breakdown Slip: ' + (err.message || err));
             }
         });
     }
@@ -12541,42 +12560,98 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadOpenBreakdownMachinesDropdown() {
         const select = document.getElementById('sdBreakdownSelect');
         if (!select) return;
-        select.innerHTML = '<option value="">-- Loading Open Breakdown Slips... --</option>';
+        select.innerHTML = '<option value="">-- Loading Machines & Breakdown Slips... --</option>';
 
         try {
-            const res = await fetch('/api/breakdown_slips');
-            const data = await res.json();
+            const [bdRes, machRes] = await Promise.all([
+                fetch('/api/breakdown_slips'),
+                fetch('/api/machines')
+            ]);
+            const slips = (bdRes && bdRes.ok) ? await bdRes.json() : [];
+            const machines = (machRes && machRes.ok) ? await machRes.json() : [];
             openBreakdownSlipsMap = {};
 
-            const openSlips = data.filter(s => s.status !== 'Signed Off' && (!s.signoff_date_time || s.signoff_date_time.trim() === ''));
+            const openSlips = slips.filter(s => s.status !== 'Signed Off' && (!s.signoff_date_time || s.signoff_date_time.trim() === ''));
+            const closedSlips = slips.filter(s => s.status === 'Signed Off' || (s.signoff_date_time && s.signoff_date_time.trim() !== ''));
 
-            select.innerHTML = '<option value="">-- Select Open Breakdown Machine --</option>';
+            select.innerHTML = '<option value="">-- Select Breakdown Slip or Machine --</option>';
+
+            // Group 1: Open Breakdowns
+            const openGroup = document.createElement('optgroup');
+            openGroup.label = `Open Breakdown Slips (${openSlips.length})`;
             if (openSlips.length === 0) {
-                select.innerHTML += '<option value="" disabled>(No open breakdown slips currently available)</option>';
+                const disabledOpt = document.createElement('option');
+                disabledOpt.value = "";
+                disabledOpt.disabled = true;
+                disabledOpt.textContent = "(No active open breakdown slips)";
+                openGroup.appendChild(disabledOpt);
+            } else {
+                openSlips.forEach(item => {
+                    const key = 'bd_' + item.id;
+                    openBreakdownSlipsMap[key] = item;
+                    openBreakdownSlipsMap[item.id] = item;
+                    const probText = item.problem ? item.problem.substring(0, 45) : 'No problem text';
+                    const opt = document.createElement('option');
+                    opt.value = key;
+                    opt.textContent = `[OPEN] ${item.machine} | ${probText} (ID: ${item.id}, Dept: ${item.department || '-'})`;
+                    openGroup.appendChild(opt);
+                });
+            }
+            select.appendChild(openGroup);
+
+            // Group 2: Closed/Signed-Off Breakdowns
+            if (closedSlips.length > 0) {
+                const closedGroup = document.createElement('optgroup');
+                closedGroup.label = `Signed Off / Completed Slips (${closedSlips.length})`;
+                closedSlips.forEach(item => {
+                    const key = 'bd_' + item.id;
+                    openBreakdownSlipsMap[key] = item;
+                    openBreakdownSlipsMap[item.id] = item;
+                    const probText = item.problem ? item.problem.substring(0, 45) : 'No problem text';
+                    const opt = document.createElement('option');
+                    opt.value = key;
+                    opt.textContent = `[SIGNED OFF] ${item.machine} | ${probText} (ID: ${item.id})`;
+                    closedGroup.appendChild(opt);
+                });
+                select.appendChild(closedGroup);
             }
 
-            openSlips.forEach(item => {
-                openBreakdownSlipsMap[item.id] = item;
-                const probText = item.problem ? item.problem.substring(0, 45) : 'No problem text';
-                const opt = document.createElement('option');
-                opt.value = item.id;
-                opt.textContent = `${item.machine} | ${probText} (Dept: ${item.department || '-'}, ID: ${item.id})`;
-                select.appendChild(opt);
-            });
+            // Group 3: Direct Machine Maintenance (No Slip)
+            if (machines.length > 0) {
+                const machGroup = document.createElement('optgroup');
+                machGroup.label = `Direct Machine Maintenance (${machines.length})`;
+                machines.forEach(m => {
+                    const key = 'mach_' + m.name;
+                    openBreakdownSlipsMap[key] = {
+                        isMachineOnly: true,
+                        machine: m.name,
+                        department: m.department || '',
+                        id: null,
+                        date_time: '',
+                        request_by: '',
+                        problem: 'Direct Machine Maintenance / Service'
+                    };
+                    const opt = document.createElement('option');
+                    opt.value = key;
+                    opt.textContent = `${m.name} (Dept: ${m.department || '-'})`;
+                    machGroup.appendChild(opt);
+                });
+                select.appendChild(machGroup);
+            }
         } catch (err) {
-            console.error('Error loading breakdown slips:', err);
-            select.innerHTML = '<option value="">-- Error loading open breakdowns --</option>';
+            console.error('Error loading breakdown slips & machines:', err);
+            select.innerHTML = '<option value="">-- Error loading options --</option>';
         }
     }
 
     const sdBreakdownSelect = document.getElementById('sdBreakdownSelect');
     if (sdBreakdownSelect) {
         sdBreakdownSelect.addEventListener('change', async (e) => {
-            const bdId = e.target.value;
+            const selVal = e.target.value;
             const infoCard = document.getElementById('sdBreakdownInfoCard');
-            if (bdId && openBreakdownSlipsMap[bdId]) {
-                const item = openBreakdownSlipsMap[bdId];
-                document.getElementById('sdInfoId').textContent = item.id;
+            if (selVal && openBreakdownSlipsMap[selVal]) {
+                const item = openBreakdownSlipsMap[selVal];
+                document.getElementById('sdInfoId').textContent = item.id ? item.id : 'Direct (No Slip)';
                 document.getElementById('sdInfoDate').textContent = item.date_time ? item.date_time.replace('T', ' ') : '-';
                 document.getElementById('sdInfoDept').textContent = item.department || '-';
                 document.getElementById('sdInfoMachine').textContent = item.machine || '-';
@@ -12584,12 +12659,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('sdInfoProblem').textContent = item.problem || '-';
                 if (infoCard) infoCard.style.display = 'block';
 
-                await loadExistingServiceDetailForBreakdown(item.id);
+                if (item.id) {
+                    await loadExistingServiceDetailForBreakdown(item.id);
+                } else if (item.machine) {
+                    await loadExistingServiceDetailForMachine(item.machine);
+                }
             } else {
                 if (infoCard) infoCard.style.display = 'none';
                 resetServiceDetailsForm(false);
             }
         });
+    }
+
+    function populateServiceDetailsForm(existing) {
+        currentServiceDetailId = existing.id;
+        
+        // Load Spares Data
+        let sparesList = [];
+        try { sparesList = JSON.parse(existing.spares_data || '[]'); } catch(e) {}
+        sdSparesBody.innerHTML = '';
+        if (sparesList.length > 0) {
+            sparesList.forEach(sp => addSpareRow(sp));
+        } else {
+            addSpareRow();
+        }
+
+        // Load Service Data
+        let serviceList = [];
+        try { serviceList = JSON.parse(existing.service_data || '[]'); } catch(e) {}
+        sdServiceBody.innerHTML = '';
+        if (serviceList.length > 0) {
+            serviceList.forEach(srv => addServiceRow(srv));
+        } else {
+            addServiceRow();
+        }
+
+        // Load Remarks
+        document.getElementById('sdRemarksInput').value = existing.remarks || '';
+        calcServiceTotals();
     }
 
     async function loadExistingServiceDetailForBreakdown(breakdownSlipId) {
@@ -12598,31 +12705,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const list = await res.json();
             const existing = list.find(s => s.breakdown_slip_id == breakdownSlipId);
             if (existing) {
-                currentServiceDetailId = existing.id;
-                
-                // Load Spares Data
-                let sparesList = [];
-                try { sparesList = JSON.parse(existing.spares_data || '[]'); } catch(e) {}
-                sdSparesBody.innerHTML = '';
-                if (sparesList.length > 0) {
-                    sparesList.forEach(sp => addSpareRow(sp));
-                } else {
-                    addSpareRow();
-                }
-
-                // Load Service Data
-                let serviceList = [];
-                try { serviceList = JSON.parse(existing.service_data || '[]'); } catch(e) {}
-                sdServiceBody.innerHTML = '';
-                if (serviceList.length > 0) {
-                    serviceList.forEach(srv => addServiceRow(srv));
-                } else {
-                    addServiceRow();
-                }
-
-                // Load Remarks
-                document.getElementById('sdRemarksInput').value = existing.remarks || '';
-                calcServiceTotals();
+                populateServiceDetailsForm(existing);
             } else {
                 currentServiceDetailId = null;
                 if (sdSparesBody) sdSparesBody.innerHTML = '';
@@ -12634,6 +12717,27 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (err) {
             console.error('Error loading existing service detail:', err);
+        }
+    }
+
+    async function loadExistingServiceDetailForMachine(machineName) {
+        try {
+            const res = await fetch('/api/service_details');
+            const list = await res.json();
+            const existing = list.find(s => (!s.breakdown_slip_id || s.breakdown_slip_id === '') && (s.machine || '').trim().toUpperCase() === machineName.trim().toUpperCase());
+            if (existing) {
+                populateServiceDetailsForm(existing);
+            } else {
+                currentServiceDetailId = null;
+                if (sdSparesBody) sdSparesBody.innerHTML = '';
+                if (sdServiceBody) sdServiceBody.innerHTML = '';
+                addSpareRow();
+                addServiceRow();
+                document.getElementById('sdRemarksInput').value = '';
+                calcServiceTotals();
+            }
+        } catch (err) {
+            console.error('Error loading existing service detail for machine:', err);
         }
     }
 
@@ -12773,11 +12877,26 @@ document.addEventListener('DOMContentLoaded', () => {
         saveServiceDetailBtn.addEventListener('click', async () => {
             const bdIdVal = document.getElementById('sdBreakdownSelect').value;
             if (!bdIdVal && !currentServiceDetailId) {
-                alert('Please select an Open Breakdown Machine');
+                alert('Please select a Breakdown Slip or Machine');
                 return;
             }
 
             const bdItem = openBreakdownSlipsMap[bdIdVal] || {};
+            let machineName = bdItem.machine || '';
+            if (!machineName && bdIdVal && bdIdVal.startsWith('mach_')) {
+                machineName = bdIdVal.replace('mach_', '');
+            }
+
+            let breakdownSlipId = null;
+            if (bdIdVal) {
+                if (bdIdVal.startsWith('bd_')) {
+                    breakdownSlipId = parseInt(bdIdVal.replace('bd_', '')) || null;
+                } else if (!isNaN(parseInt(bdIdVal)) && !bdIdVal.startsWith('mach_')) {
+                    breakdownSlipId = parseInt(bdIdVal) || null;
+                }
+            } else if (bdItem.id) {
+                breakdownSlipId = parseInt(bdItem.id) || null;
+            }
 
             const sparesList = [];
             document.querySelectorAll('.spare-row').forEach(tr => {
@@ -12812,8 +12931,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const remarks = document.getElementById('sdRemarksInput').value.trim();
 
             const payload = {
-                breakdown_slip_id: parseInt(bdIdVal) || (bdItem.id ? parseInt(bdItem.id) : null),
-                machine: bdItem.machine || '',
+                breakdown_slip_id: breakdownSlipId,
+                machine: machineName,
                 spares_data: JSON.stringify(sparesList),
                 service_data: JSON.stringify(serviceList),
                 spares_cost,
@@ -12834,15 +12953,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (res.ok) {
                     const savedItem = await res.json();
-                    currentServiceDetailId = savedItem.id;
-                    alert('Service Details saved successfully!');
-                    fetchServiceHistory();
+                    if (savedItem && savedItem.id) {
+                        currentServiceDetailId = savedItem.id;
+                    }
+                    alert(method === 'PUT' ? 'Service Details updated successfully!' : 'Service Details saved successfully!');
+                    await fetchServiceHistory();
                 } else {
-                    alert('Error saving Service Details');
+                    const errText = await res.text();
+                    alert('Error saving Service Details: ' + (errText || res.statusText));
                 }
             } catch (err) {
                 console.error(err);
-                alert('Error saving Service Details');
+                alert('Error saving Service Details: ' + (err.message || err));
             }
         });
     }
@@ -12894,10 +13016,35 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><strong style="color: #0369a1;">₹${(item.total_cost || 0).toFixed(2)}</strong></td>
                     <td style="max-width: 160px; white-space: pre-wrap; font-size: 0.85rem;">${item.remarks || '-'}</td>
                     <td class="actions-cell">
+                        <button class="btn btn-primary edit-sd-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; margin-right: 4px;">Edit</button>
                         <button class="btn btn-outline delete-sd-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; color: #ef4444; border-color: #ef4444;">Delete</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
+            });
+
+            tbody.querySelectorAll('.edit-sd-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.target.getAttribute('data-id');
+                    const item = data.find(d => String(d.id) === String(id));
+                    if (item) {
+                        currentServiceDetailId = item.id;
+                        populateServiceDetailsForm(item);
+                        const select = document.getElementById('sdBreakdownSelect');
+                        if (select) {
+                            if (item.breakdown_slip_id) {
+                                select.value = 'bd_' + item.breakdown_slip_id;
+                                if (!select.value) select.value = String(item.breakdown_slip_id);
+                            } else if (item.machine) {
+                                select.value = 'mach_' + item.machine;
+                            }
+                            select.dispatchEvent(new Event('change'));
+                        }
+                        showServiceFormView();
+                        const formElem = document.getElementById('sdFormContainer');
+                        if (formElem) formElem.scrollIntoView({ behavior: 'smooth' });
+                    }
+                });
             });
 
             tbody.querySelectorAll('.delete-sd-btn').forEach(btn => {
@@ -12911,6 +13058,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             });
+
+            if (typeof applyTableColFilters === 'function') {
+                applyTableColFilters('sdHistoryTable');
+            }
         } catch (err) { console.error(err); }
     }
 
