@@ -2535,6 +2535,206 @@ def get_schedule_run(db: Session = Depends(get_db)):
         print("get_schedule_run error:", e)
         return []
 
+@app.get("/api/production/bc_status")
+def get_bc_status_endpoint(month: Optional[str] = None, db: Session = Depends(get_db)):
+    try:
+        if not month or not str(month).strip():
+            now_ist = get_now_ist()
+            month = now_ist.strftime("%Y-%m")
+        else:
+            month = str(month).strip()
+
+        # Helper to match date against target month
+        def is_in_month(d_str, target_month):
+            if not d_str: return False
+            s = str(d_str).strip()
+            if s.startswith(target_month):
+                return True
+            if "/" in s:
+                pts = s.split("/")
+                if len(pts) == 3 and len(pts[2]) == 4:
+                    ym = f"{pts[2]}-{pts[1].zfill(2)}"
+                    return ym == target_month
+            elif "-" in s:
+                pts = s.split("-")
+                if len(pts) == 3 and len(pts[0]) == 4:
+                    ym = f"{pts[0]}-{pts[1].zfill(2)}"
+                    return ym == target_month
+                elif len(pts) == 3 and len(pts[2]) == 4:
+                    ym = f"{pts[2]}-{pts[1].zfill(2)}"
+                    return ym == target_month
+            return False
+
+        # 1. Fetch BC parts from part_masters
+        pm_rows = db.execute(text("SELECT id, partno, customer, department FROM part_masters WHERE UPPER(TRIM(department)) = 'BC' ORDER BY partno;")).mappings().all()
+        pm_map = {r['partno'].strip(): dict(r) for r in pm_rows if r['partno']}
+
+        # Also fetch schedules for BC
+        sch_rows = db.execute(text("SELECT id, department, partno, qty, status, target_date FROM schedules WHERE UPPER(TRIM(department)) = 'BC';")).mappings().all()
+        sch_map = {}
+        for s in sch_rows:
+            pno = (s.get('partno') or '').strip()
+            try:
+                q = int(float(str(s.get('qty') or 0).strip()))
+            except Exception:
+                q = 0
+            sch_map[pno] = sch_map.get(pno, 0) + q
+
+        all_bc_partnos = sorted(set(list(pm_map.keys()) + [p for p in sch_map.keys() if p]))
+
+        # 2. Operations per part
+        po_rows = db.execute(text("SELECT id, part_id, opn_no, description, machine, cycle_time FROM part_operations ORDER BY id ASC;")).mappings().all()
+        po_by_part = {}
+        for r in po_rows:
+            pid = str(r.get("part_id") or "").strip()
+            if pid not in po_by_part:
+                po_by_part[pid] = []
+            po_by_part[pid].append(dict(r))
+
+        fallback_po = {}
+        try:
+            op_rows = db.execute(text("SELECT o.id, o.part_id, o.opn_no, o.description, o.machine_name, o.cycle_time, p.part_no FROM operations o JOIN parts p ON o.part_id = p.id ORDER BY o.id ASC;")).mappings().all()
+            for r in op_rows:
+                pno = (r.get("part_no") or "").strip().upper()
+                if pno not in fallback_po:
+                    fallback_po[pno] = []
+                fallback_po[pno].append({
+                    "id": r.get("id"),
+                    "part_id": r.get("part_id"),
+                    "opn_no": r.get("opn_no"),
+                    "description": r.get("description"),
+                    "machine": r.get("machine_name"),
+                    "cycle_time": r.get("cycle_time")
+                })
+        except Exception:
+            pass
+
+        part_ops_map = {}
+        for pno in all_bc_partnos:
+            pm = pm_map.get(pno)
+            pid = str(pm['id']) if pm else ""
+            ops = po_by_part.get(pid, [])
+            if not ops and pno.upper() in fallback_po:
+                ops = fallback_po[pno.upper()]
+            part_ops_map[pno] = ops
+
+        # Standard operation categories
+        discovered_ops = ["Box Mill", "Pre Drill", "Mill Drill", "Spherical", "Tapping"]
+        for pno in all_bc_partnos:
+            for o in part_ops_map[pno]:
+                d = (o.get('description') or '').strip()
+                if not d or d.upper() == 'PC' or 'POWDER' in d.upper():
+                    continue
+                d_clean = d.title()
+                if "Box" in d_clean or "Pre Drill" in d_clean or "Mill Drill" in d_clean or d_clean == "Drill" or "Spherical" in d_clean or "Tapping" in d_clean:
+                    continue
+                if d_clean not in discovered_ops:
+                    discovered_ops.append(d_clean)
+
+        # 3. Fetch monthly logs
+        prod_rows = db.execute(text("SELECT partno, opn_no, description, machine, prod_qty, date FROM production_logs WHERE UPPER(TRIM(dept)) = 'BC';")).mappings().all()
+        month_prod = [r for r in prod_rows if is_in_month(r.get('date'), month)]
+
+        pc_rows = db.execute(text("SELECT partno, qty, date FROM pc_logs;")).mappings().all()
+        month_pc_sent = [r for r in pc_rows if is_in_month(r.get('date'), month)]
+
+        pc_rec_rows = db.execute(text("SELECT partno, qty, date FROM pc_receipt_logs;")).mappings().all()
+        month_pc_rec = [r for r in pc_rec_rows if is_in_month(r.get('date'), month)]
+
+        rm_desp_rows = db.execute(text("SELECT finish_part_no, qty, date FROM raw_material_logs WHERE type = 'despatch';")).mappings().all()
+        month_desp = [r for r in rm_desp_rows if is_in_month(r.get('date'), month)]
+
+        def match_op_category(op_cat, log_opn, log_desc, log_mach):
+            cat = op_cat.lower()
+            o = str(log_opn or '').strip().lower()
+            d = str(log_desc or '').strip().lower()
+            m = str(log_mach or '').strip().lower()
+            combined = f"{o} {d} {m}"
+            
+            if cat == "box mill":
+                return "box" in combined or (o == "20" and ("mill" in combined or not d))
+            if cat == "pre drill":
+                return "pre drill" in combined or "pre-drill" in combined
+            if cat == "mill drill":
+                if "pre drill" in combined: return False
+                return "mill drill" in combined or (o in ["30", "40"] and "drill" in combined)
+            if cat == "spherical":
+                return "spherical" in combined or (o == "40" and "spherical" in combined)
+            if cat == "tapping":
+                return "tap" in combined or o == "60"
+            if cat == "milling":
+                return "milling" in combined and "box" not in combined
+            return cat in combined
+
+        result_parts = []
+        for pno in all_bc_partnos:
+            pm = pm_map.get(pno, {})
+            cust = pm.get('customer') or '-'
+            sch_qty = sch_map.get(pno, 0)
+            part_ops = part_ops_map.get(pno, [])
+
+            op_prod = {}
+            for op_cat in discovered_ops:
+                has_op = any(match_op_category(op_cat, o.get('opn_no'), o.get('description'), o.get('machine')) for o in part_ops)
+                qty = sum(
+                    int(float(l.get('prod_qty') or 0))
+                    for l in month_prod
+                    if (l.get('partno') or '').strip().upper() == pno.upper() and match_op_category(op_cat, l.get('opn_no'), l.get('description'), l.get('machine'))
+                )
+                op_prod[op_cat] = {"has_op": has_op, "qty": qty}
+
+            # Check if part has PC in Part Master
+            has_pc_op = any((o.get('description') or '').strip().upper() == 'PC' or 'POWDER' in (o.get('description') or '').strip().upper() or str(o.get('opn_no') or '').strip().upper() == 'PC' for o in part_ops)
+
+            to_pc = sum(
+                int(float(l.get('qty') or 0))
+                for l in month_pc_sent
+                if (l.get('partno') or '').strip().upper() == pno.upper()
+            )
+
+            from_pc = sum(
+                int(float(l.get('qty') or 0))
+                for l in month_pc_rec
+                if (l.get('partno') or '').strip().upper() == pno.upper()
+            )
+
+            rfd = sum(
+                int(float(l.get('prod_qty') or 0))
+                for l in month_prod
+                if (l.get('partno') or '').strip().upper() == pno.upper() and str(l.get('opn_no') or '').strip().lower() == 'rfd'
+            )
+
+            desp = sum(
+                int(float(l.get('qty') or 0))
+                for l in month_desp
+                if (l.get('finish_part_no') or '').strip().upper() == pno.upper()
+            )
+
+            result_parts.append({
+                "partno": pno,
+                "customer": cust,
+                "schedule_qty": sch_qty,
+                "operations": op_prod,
+                "has_pc": has_pc_op,
+                "to_pc": to_pc,
+                "from_pc": from_pc,
+                "rfd": rfd,
+                "despatch": desp
+            })
+
+        # Sort: parts with active schedule or production first, then alphabetically
+        result_parts.sort(key=lambda x: (-(x["schedule_qty"] > 0 or any(v["qty"] > 0 for v in x["operations"].values()) or x["to_pc"] > 0 or x["from_pc"] > 0 or x["despatch"] > 0), x["partno"]))
+
+        return {
+            "month": month,
+            "operation_columns": discovered_ops,
+            "parts": result_parts
+        }
+    except Exception as ex:
+        print("get_bc_status_endpoint error:", ex)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(ex))
+
 @app.post("/api/schedules/import-excel")
 async def import_schedules_excel_upload(file: UploadFile = File(...), db: Session = Depends(get_db)):
     contents = await file.read()
