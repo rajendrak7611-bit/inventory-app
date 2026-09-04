@@ -2783,18 +2783,42 @@ def get_bc_status_endpoint(month: Optional[str] = None, db: Session = Depends(ge
                 ops = fallback_po[pno.upper()]
             part_ops_map[pno] = ops
 
-        # Standard operation categories
-        discovered_ops = ["Box Mill", "Pre Drill", "Mill Drill", "Spherical", "Tapping"]
+        # Dynamically discover non-PC operation categories present in Part Master for BC
+        raw_ops = set()
         for pno in all_bc_partnos:
             for o in part_ops_map[pno]:
                 d = (o.get('description') or '').strip()
-                if not d or d.upper() == 'PC' or 'POWDER' in d.upper():
+                if not d or d.upper() in ['PC', 'POWDER COATING'] or 'POWDER' in d.upper() or str(o.get('opn_no') or '').strip().upper() == 'PC' or d.lower() in ['pre drill', 'pre-drill']:
                     continue
-                d_clean = d.title()
-                if "Box" in d_clean or "Pre Drill" in d_clean or "Mill Drill" in d_clean or d_clean == "Drill" or "Spherical" in d_clean or "Tapping" in d_clean:
-                    continue
-                if d_clean not in discovered_ops:
-                    discovered_ops.append(d_clean)
+                raw_ops.add(d)
+
+        # Standard canonical order for BC operations (Pre Drill has been unified into Drill)
+        canonical_order = ["Box Mill", "Mill Drill", "Drill", "Spherical", "Tapping", "Top Mill"]
+        discovered_ops = []
+        for c in canonical_order:
+            has_any = False
+            for pno in all_bc_partnos:
+                for o in part_ops_map[pno]:
+                    d = (o.get('description') or '').strip().lower()
+                    if c.lower() == "box mill" and ("box" in d or d == "box milling"):
+                        has_any = True; break
+                    elif c.lower() == "mill drill" and "mill drill" in d:
+                        has_any = True; break
+                    elif c.lower() == "drill" and ("drill" in d or "drll" in d or "pre drill" in d or "pre-drill" in d) and "mill" not in d:
+                        has_any = True; break
+                    elif c.lower() == d:
+                        has_any = True; break
+                if has_any: break
+            if has_any:
+                discovered_ops.append(c)
+
+        # Any other custom operation present in Part Master not covered above
+        for r in sorted(raw_ops):
+            r_clean = r.title()
+            if r_clean.lower() in ["box mill", "box milling", "mill drill", "drill", "spherical", "tapping", "top mill", "pre drill", "pre-drill"]:
+                continue
+            if r_clean not in discovered_ops:
+                discovered_ops.append(r_clean)
 
         # 3. Fetch monthly logs
         prod_rows = db.execute(text("SELECT partno, opn_no, description, machine, prod_qty, date FROM production_logs WHERE UPPER(TRIM(dept)) = 'BC';")).mappings().all()
@@ -2809,6 +2833,23 @@ def get_bc_status_endpoint(month: Optional[str] = None, db: Session = Depends(ge
         rm_desp_rows = db.execute(text("SELECT finish_part_no, qty, date FROM raw_material_logs WHERE type = 'despatch';")).mappings().all()
         month_desp = [r for r in rm_desp_rows if is_in_month(r.get('date'), month)]
 
+        def match_part_master_op(op_cat, o_no, desc):
+            cat = op_cat.lower()
+            d = str(desc or '').strip().lower()
+            if cat == "box mill":
+                return "box" in d or d == "box milling"
+            if cat == "mill drill":
+                return "mill drill" in d
+            if cat == "drill":
+                return ("drill" in d or "drll" in d or "pre drill" in d or "pre-drill" in d) and "mill" not in d
+            if cat == "spherical":
+                return "spherical" in d
+            if cat == "tapping":
+                return "tap" in d
+            if cat == "top mill":
+                return "top mill" in d
+            return cat == d
+
         def match_op_category(op_cat, log_opn, log_desc, log_mach):
             cat = op_cat.lower()
             o = str(log_opn or '').strip().lower()
@@ -2817,18 +2858,33 @@ def get_bc_status_endpoint(month: Optional[str] = None, db: Session = Depends(ge
             combined = f"{o} {d} {m}"
             
             if cat == "box mill":
-                return "box" in combined or (o == "20" and ("mill" in combined or not d))
-            if cat == "pre drill":
-                return "pre drill" in combined or "pre-drill" in combined
+                if "mill drill" in d or (("drill" in d or "drll" in d) and "mill" not in d):
+                    return False
+                return "box" in combined or (o == "20" and ("mill" in combined or not d or m in ["millwake", "wmw", "cincinati", "leadwell", "fn2v", "ams 1", "ams 2"]))
+
             if cat == "mill drill":
-                if "pre drill" in combined: return False
-                return "mill drill" in combined or (o in ["30", "40"] and "drill" in combined)
+                if ("drill" in d or "drll" in d) and "mill" not in d:
+                    return False
+                return "mill drill" in combined or ("mill" in d and "drill" in d)
+
+            if cat == "drill":
+                if "mill drill" in combined:
+                    return False
+                if "drill" in d or "drll" in d or "drilling" in d or "pre drill" in d or "pre-drill" in d:
+                    return True
+                if m in ["new 2 way"]:
+                    return True
+                return False
+
             if cat == "spherical":
-                return "spherical" in combined or (o == "40" and "spherical" in combined)
+                return "spherical" in combined or (o == "40" and ("spherical" in combined or m in ["radial", "chamfer", "sph"]))
+
             if cat == "tapping":
-                return "tap" in combined or o == "60"
-            if cat == "milling":
-                return "milling" in combined and "box" not in combined
+                return "tap" in combined or o == "60" or "tapping" in m
+
+            if cat == "top mill":
+                return "top mill" in combined
+
             return cat in combined
 
         result_parts = []
@@ -2840,7 +2896,7 @@ def get_bc_status_endpoint(month: Optional[str] = None, db: Session = Depends(ge
 
             op_prod = {}
             for op_cat in discovered_ops:
-                has_op = any(match_op_category(op_cat, o.get('opn_no'), o.get('description'), o.get('machine')) for o in part_ops)
+                has_op = any(match_part_master_op(op_cat, o.get('opn_no'), o.get('description')) for o in part_ops)
                 qty = sum(
                     int(float(l.get('prod_qty') or 0))
                     for l in month_prod
