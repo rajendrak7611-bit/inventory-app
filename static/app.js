@@ -1629,12 +1629,27 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { console.error(e); }
     }
 
-    function openMachineModal(isEdit) {
+    async function openMachineModal(isEdit) {
         if (machineModal) {
             machineModal.classList.add('active');
             machineModal.classList.add('show');
         }
         if (machineModalTitle) machineModalTitle.textContent = isEdit ? 'Edit Machine' : 'Add Machine';
+
+        const mDept = document.getElementById('machineDept');
+        if (mDept && mDept.options.length <= 1) {
+            try {
+                const res = await fetch('/api/departments');
+                if (res.ok) {
+                    const depts = await res.json();
+                    let html = '<option value="">-- Select Dept --</option>';
+                    depts.forEach(d => {
+                        html += `<option value="${d.name}">${d.name}</option>`;
+                    });
+                    mDept.innerHTML = html;
+                }
+            } catch(e) {}
+        }
     }
     function closeMachineModal() { 
         if (machineModal) {
@@ -1650,22 +1665,65 @@ document.addEventListener('DOMContentLoaded', () => {
     machineForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('machineId').value;
-        const deptVal = document.getElementById('machineDept') ? document.getElementById('machineDept').value : '';
+        const nameVal = (document.getElementById('machineName').value || '').trim();
+        const deptVal = document.getElementById('machineDept') ? document.getElementById('machineDept').value.trim() : '';
+
+        if (!nameVal) {
+            alert('Please enter a Machine Name');
+            return;
+        }
+
         const data = { 
-            name: document.getElementById('machineName').value, 
+            name: nameVal, 
             dept: deptVal,
-            department: deptVal 
+            department: deptVal,
+            status: 'Active'
         };
         const url = id ? `/api/machines/${id}` : '/api/machines';
-        await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-        closeMachineModal(); fetchMachines();
+        try {
+            const res = await fetch(url, { 
+                method: id ? 'PUT' : 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(data) 
+            });
+            if (res.ok) {
+                closeMachineModal();
+                const filterInputs = document.querySelectorAll('#machinesTable thead input');
+                filterInputs.forEach(inp => inp.value = '');
+                await fetchMachines();
+                alert(id ? 'Machine updated successfully!' : 'Machine added successfully!');
+            } else {
+                let errMsg = 'Failed to save machine';
+                try {
+                    const errData = await res.json();
+                    errMsg = errData.detail || errData.message || errMsg;
+                } catch (_) {
+                    errMsg = await res.text() || errMsg;
+                }
+                alert('Error saving machine: ' + errMsg);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Error saving machine: ' + (err.message || err));
+        }
     });
 
     window.deleteMachine = async (id) => {
         if (!checkAdminAccess()) return;
         if (confirm('Delete this machine?')) {
-            await fetch(`/api/machines/${id}`, { method: 'DELETE' });
-            fetchMachines();
+            try {
+                const res = await fetch(`/api/machines/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    await fetchMachines();
+                    alert('Machine deleted successfully!');
+                } else {
+                    const errMsg = await res.text();
+                    alert('Error deleting machine: ' + errMsg);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error deleting machine: ' + (err.message || err));
+            }
         }
     };
     window.editMachine = async (id) => {
@@ -1676,7 +1734,8 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('machineName').value = m.name || '';
             const mDept = document.getElementById('machineDept');
             if (mDept) mDept.value = m.department || m.dept || '';
-            openMachineModal(true);
+            await openMachineModal(true);
+            if (mDept) mDept.value = m.department || m.dept || '';
         }
     };
 

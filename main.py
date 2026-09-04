@@ -512,6 +512,24 @@ def run_startup_migrations():
                 conn.commit()
             except Exception:
                 pass
+            try:
+                conn.execute(text("ALTER TABLE machines ADD COLUMN IF NOT EXISTS dept TEXT;"))
+                conn.execute(text("ALTER TABLE machines ADD COLUMN IF NOT EXISTS department TEXT;"))
+                conn.execute(text("ALTER TABLE machines ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Active';"))
+                conn.execute(text("UPDATE machines SET dept = department WHERE (dept IS NULL OR dept = '') AND department IS NOT NULL;"))
+                conn.execute(text("UPDATE machines SET department = dept WHERE (department IS NULL OR department = '') AND dept IS NOT NULL;"))
+                conn.commit()
+            except Exception:
+                pass
+            try:
+                conn.execute(text("ALTER TABLE operators ADD COLUMN IF NOT EXISTS dept TEXT;"))
+                conn.execute(text("ALTER TABLE operators ADD COLUMN IF NOT EXISTS department TEXT;"))
+                conn.execute(text("ALTER TABLE operators ADD COLUMN IF NOT EXISTS designation TEXT DEFAULT 'Operator';"))
+                conn.execute(text("UPDATE operators SET dept = department WHERE (dept IS NULL OR dept = '') AND department IS NOT NULL;"))
+                conn.execute(text("UPDATE operators SET department = dept WHERE (department IS NULL OR department = '') AND dept IS NOT NULL;"))
+                conn.commit()
+            except Exception:
+                pass
             # Align sequences to MAX(id) for PostgreSQL
             if "postgresql" in str(engine.url):
                 for tbl in [
@@ -1056,13 +1074,109 @@ def get_machines(db: Session = Depends(get_db)):
         db.rollback()
         return []
 
-@app.post("/api/machines", response_model=MachineResponse)
-def create_machine(machine: MachineCreate, db: Session = Depends(get_db)):
-    db_m = models.Machine(**machine.model_dump())
-    db.add(db_m)
-    db.commit()
-    db.refresh(db_m)
-    return db_m
+@app.post("/api/machines")
+def create_machine(data: dict, db: Session = Depends(get_db)):
+    name = (data.get("name") or data.get("machine_name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Machine name cannot be empty")
+    dept = (data.get("department") or data.get("dept") or "General").strip()
+    status = (data.get("status") or "Active").strip()
+
+    # Check if duplicate
+    try:
+        existing = db.execute(text("SELECT id, name FROM machines WHERE UPPER(name) = :name"), {"name": name.upper()}).mappings().first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"Machine '{name}' already exists")
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+
+    # Sync postgres sequence if needed
+    try:
+        db.execute(text("SELECT setval(pg_get_serial_sequence('machines', 'id'), coalesce(max(id),0) + 1, false) FROM machines;"))
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    max_row = db.execute(text("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM machines")).mappings().first()
+    next_id = int(max_row.get("next_id")) if max_row and max_row.get("next_id") else 1
+
+    inserted = False
+    # Attempt 1: insert with both dept and department
+    try:
+        db.execute(text("INSERT INTO machines (id, name, dept, department, status) VALUES (:id, :name, :dept, :dept, :status)"),
+                   {"id": next_id, "name": name, "dept": dept, "status": status})
+        db.commit()
+        inserted = True
+    except Exception:
+        db.rollback()
+
+    if not inserted:
+        # Attempt 2: insert with department
+        try:
+            db.execute(text("INSERT INTO machines (id, name, department) VALUES (:id, :name, :dept)"),
+                       {"id": next_id, "name": name, "dept": dept})
+            db.commit()
+            inserted = True
+        except Exception:
+            db.rollback()
+
+    if not inserted:
+        # Attempt 3: insert with dept
+        try:
+            db.execute(text("INSERT INTO machines (id, name, dept) VALUES (:id, :name, :dept)"),
+                       {"id": next_id, "name": name, "dept": dept})
+            db.commit()
+            inserted = True
+        except Exception:
+            db.rollback()
+
+    if not inserted:
+        # Attempt 4: without explicit id
+        try:
+            db.execute(text("INSERT INTO machines (name, department) VALUES (:name, :dept)"),
+                       {"name": name, "dept": dept})
+            db.commit()
+            inserted = True
+        except Exception:
+            db.rollback()
+
+    if not inserted:
+        # Attempt 5: models.Machine
+        try:
+            m_obj = models.Machine(name=name, dept=dept, status=status)
+            db.add(m_obj)
+            db.commit()
+            db.refresh(m_obj)
+            next_id = m_obj.id
+            inserted = True
+        except Exception as ex:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Failed to create machine: {ex}")
+
+    try:
+        created_row = db.execute(text("SELECT id, name, status FROM machines WHERE UPPER(name) = :name ORDER BY id DESC LIMIT 1"),
+                                 {"name": name.upper()}).mappings().first()
+        if created_row:
+            next_id = int(created_row.get("id"))
+    except Exception:
+        pass
+
+    try:
+        db.execute(text("SELECT setval(pg_get_serial_sequence('machines', 'id'), coalesce(max(id),0) + 1, false) FROM machines;"))
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    return {
+        "id": next_id,
+        "name": name,
+        "dept": dept,
+        "department": dept,
+        "status": status,
+        "message": "Machine created successfully"
+    }
 
 @app.post("/api/machines/import-excel")
 async def import_machines_excel(file: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -1109,29 +1223,82 @@ async def import_machines_excel(file: UploadFile = File(...), db: Session = Depe
     db.commit()
     return {"imported_count": imported_count, "message": f"Successfully imported {imported_count} new machines!"}
 
-@app.put("/api/machines/{machine_id}", response_model=MachineResponse)
-def update_machine(machine_id: int, machine: MachineCreate, db: Session = Depends(get_db)):
-    db_m = db.query(models.Machine).filter(models.Machine.id == machine_id).first()
-    if not db_m:
-        raise HTTPException(status_code=404, detail="Machine not found")
-    for k, v in machine.model_dump().items():
-        setattr(db_m, k, v)
-    db.commit()
-    db.refresh(db_m)
-    return db_m
+@app.put("/api/machines/{machine_id}")
+def update_machine(machine_id: int, data: dict, db: Session = Depends(get_db)):
+    name = (data.get("name") or data.get("machine_name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Machine name cannot be empty")
+    dept = (data.get("department") or data.get("dept") or "General").strip()
+    status = (data.get("status") or "Active").strip()
+
+    updated = False
+    try:
+        db.execute(text("UPDATE machines SET name = :name, dept = :dept, department = :dept, status = :status WHERE id = :id"),
+                   {"id": machine_id, "name": name, "dept": dept, "status": status})
+        db.commit()
+        updated = True
+    except Exception:
+        db.rollback()
+
+    if not updated:
+        try:
+            db.execute(text("UPDATE machines SET name = :name, department = :dept WHERE id = :id"),
+                       {"id": machine_id, "name": name, "dept": dept})
+            db.commit()
+            updated = True
+        except Exception:
+            db.rollback()
+
+    if not updated:
+        try:
+            db.execute(text("UPDATE machines SET name = :name, dept = :dept WHERE id = :id"),
+                       {"id": machine_id, "name": name, "dept": dept})
+            db.commit()
+            updated = True
+        except Exception as ex:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Failed to update machine: {ex}")
+
+    return {
+        "id": machine_id,
+        "name": name,
+        "dept": dept,
+        "department": dept,
+        "status": status,
+        "message": "Machine updated successfully"
+    }
 
 @app.delete("/api/machines/clear-all")
 def clear_all_machines(db: Session = Depends(get_db)):
-    db.query(models.Machine).delete()
-    db.commit()
+    try:
+        db.execute(text("DELETE FROM machines;"))
+        db.commit()
+    except Exception:
+        db.rollback()
+        db.query(models.Machine).delete()
+        db.commit()
     return {"message": "All machines cleared successfully!"}
 
 @app.delete("/api/machines/{machine_id}")
 def delete_machine(machine_id: int, db: Session = Depends(get_db)):
-    db_m = db.query(models.Machine).filter(models.Machine.id == machine_id).first()
-    if not db_m:
-        raise HTTPException(status_code=404, detail="Machine not found")
-    db.delete(db_m)
+    try:
+        db.execute(text("DELETE FROM machines WHERE id = :id"), {"id": machine_id})
+        db.commit()
+    except Exception:
+        db.rollback()
+        try:
+            db_m = db.query(models.Machine).filter(models.Machine.id == machine_id).first()
+            if db_m:
+                db.delete(db_m)
+                db.commit()
+            else:
+                raise HTTPException(status_code=404, detail="Machine not found")
+        except HTTPException:
+            raise
+        except Exception as ex:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Failed to delete machine: {ex}")
+    return {"message": "Machine deleted successfully"}
 @app.post("/api/machines/bulk_import")
 def bulk_import_machines(data: dict, db: Session = Depends(get_db)):
     machines = data.get("machines") or []
