@@ -149,7 +149,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     'reports': ['reports', 'rm_requirement', 'mc_util', 'oper_eff', 'bc_prod', 'att_vs_login'],
                     'maintenance': ['maintenance', 'bdslip', 'servicedetails'],
                     'hr': ['hr', 'attendance'],
-                    'service': ['service', 'service_setters', 'setters']
+                    'service': ['service', 'service_setters', 'setters'],
+                    'inspection': ['inspection']
                 };
                 const allowed = (!accessibleScreens || accessibleScreens.length === 0) || (groupScreens[group] ? groupScreens[group].some(s => accessibleScreens.includes(s) || accessibleScreens.includes(group)) : false);
                 tab.style.display = allowed ? 'inline-block' : 'none';
@@ -340,6 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebarProdLog = document.getElementById('sidebarProdLog');
     const sidebarDebur = document.getElementById('sidebarDebur');
     const sidebarInspection = document.getElementById('sidebarInspection');
+    const sidebarFinalInsp = document.getElementById('sidebarFinalInsp');
     
     const rawMaterialsSection = document.getElementById('rawMaterialsSection');
     const rmReceiptSection = document.getElementById('rmReceiptSection');
@@ -827,6 +829,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (sdSec) sdSec.style.display = 'block';
             addBtn.style.display = 'none';
             initServiceDetails();
+        }},
+        'sidebarFinalInsp': { tab: 'inspection', action: () => {
+            if (inspectionSection) inspectionSection.style.display = 'block';
+            addBtn.style.display = 'none';
+            if (importBtn) importBtn.style.display = 'none';
+            initInspection();
         }}
     };
 
@@ -836,6 +844,18 @@ document.addEventListener('DOMContentLoaded', () => {
             hideAllSections();
             document.querySelectorAll('.sub-tab:not(.action-tab)').forEach(btn => btn.classList.remove('active'));
             tab.classList.add('active');
+
+            const parentGroup = tab.closest('.sub-group');
+            if (parentGroup && (parentGroup.style.display === 'none' || !parentGroup.style.display)) {
+                hideAllSubmenus();
+                parentGroup.style.display = 'flex';
+                const groupId = parentGroup.id.replace('submenu', '').toLowerCase();
+                const mainTab = Array.from(document.querySelectorAll('.main-tab')).find(mt => (mt.getAttribute('data-group') || '').toLowerCase() === groupId);
+                if (mainTab) {
+                    document.querySelectorAll('.main-tab').forEach(b => b.classList.remove('active'));
+                    mainTab.classList.add('active');
+                }
+            }
             
             const config = subTabs[tab.id];
             if (config) {

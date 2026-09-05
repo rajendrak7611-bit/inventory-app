@@ -54,7 +54,7 @@
             <div class="main-tab" id="sidebarInventory" data-group="inventory">Inventory</div>
             <div class="main-tab" id="sidebarProduction" data-group="production">Production</div>
             <div class="main-tab" id="sidebarToolCrib" data-group="toolcrib">Tool Crib</div>
-            <div class="main-tab" id="sidebarInspection" data-screen="inspection">Inspection</div>
+            <div class="main-tab" id="sidebarInspection" data-group="inspection">Inspection</div>
             <div class="main-tab" id="sidebarReports" data-group="reports">Reports</div>
             <div class="main-tab" id="sidebarMaintenance" data-group="maintenance">Maintenance</div>
             <div class="main-tab" id="sidebarHR" data-group="hr">HR</div>
@@ -112,6 +112,9 @@
                 <button class="sub-tab" id="sidebarInsertCpc" data-screen="insertcpc">Insert CPC</button>
                 <button class="sub-tab" id="sidebarInsertConsumption" data-screen="insertconsumption">Insert Consumption</button>
                 <button class="sub-tab" id="sidebarInsertStock" data-screen="insertstock">Insert Stock</button>
+            </div>
+            <div class="sub-group" id="submenuInspection" style="display: none;">
+                <button class="sub-tab" id="sidebarFinalInsp" data-screen="inspection">Final Insp</button>
             </div>
             <div class="sub-group" id="submenuReports" style="display: none;">
                 <button class="sub-tab" id="sidebarRmRequirement" data-screen="rm_requirement">RM Requirement</button>
@@ -1893,7 +1896,7 @@
             <!-- Inspection Section -->
             <div class="table-container" id="inspectionSection" style="display: none; padding: 2rem; color: var(--text-main);">
                 <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 20px;">
-                    <h2 style="margin: 0;">Inspection</h2>
+                    <h2 style="margin: 0;">Final Inspection</h2>
                     <select id="inspDeptSelect" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
                         <option value="">-- Select Dept --</option>
                     </select>
@@ -4434,6 +4437,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10059"></script>
+    <script src="/static/app.js?v=10060"></script>
 </body>
 </html>
