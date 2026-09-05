@@ -5290,8 +5290,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const kpiDesp = document.getElementById('kpiWiproTotalDespatch');
         if (kpiDesp) kpiDesp.textContent = totalDespatch.toLocaleString();
 
-        // Standard requested columns: Part No, Schedule Qty, opn 20, opn 30, ... opn 70, Cumulative Qty Produced, RFD, Despatch
-        // We include customer as well for full filtering convenience
+        // Standard requested columns: Part No, Customer, Schedule Qty, opn 20, opn 30, ... opn 70, RFD, Despatch
         const opCols = ["20", "30", "40", "50", "60", "70"];
 
         // Build 2-Tier Table Header
@@ -5307,13 +5306,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         thRow1 += `
-                <th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10; background: #059669; border-left: 1px solid #047857;">Cumulative Produced (Month)</th>
                 <th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10; background: #475569; border-left: 1px solid #64748b;">RFD</th>
                 <th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10; background: #1e293b; border-left: 1px solid #334155;">Despatch</th>
             </tr>
         `;
 
-        const totalCols = 3 + opCols.length + 3;
+        const totalCols = 3 + opCols.length + 2;
         let thRow2 = `<tr style="background: #f1f5f9;">`;
         for (let c = 0; c < totalCols; c++) {
             if (c === totalCols - 1) {
@@ -5358,13 +5356,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     bodyHtml += `<td style="padding: 8px 12px; text-align: right; color: #64748b; font-weight: 500; border-left: 1px solid #f1f5f9;">0</td>`;
                 }
             });
-
-            // Cumulative Qty Produced during Month
-            if (p.cumulative_qty > 0) {
-                bodyHtml += `<td style="padding: 8px 12px; text-align: right; font-weight: 700; color: #059669; background: rgba(5, 150, 105, 0.08); border-left: 1px solid #a7f3d0;" title="Cumulative quantity produced across all operations in month">${p.cumulative_qty.toLocaleString()}</td>`;
-            } else {
-                bodyHtml += `<td style="padding: 8px 12px; text-align: right; color: #64748b; border-left: 1px solid #f1f5f9;">0</td>`;
-            }
 
             // RFD
             if (p.rfd > 0) {
