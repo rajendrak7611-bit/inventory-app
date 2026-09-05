@@ -13487,7 +13487,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchInsertConsumptionReport() {
         const tbody = document.getElementById('insertConsumptionBody');
         if (!tbody) return;
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 25px; color: #64748b;">Loading consumption data...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 25px; color: #64748b;">Loading consumption data...</td></tr>';
 
         const fromDate = document.getElementById('insertConsumFromDate')?.value || '';
         const toDate = document.getElementById('insertConsumToDate')?.value || '';
@@ -13495,17 +13495,68 @@ document.addEventListener('DOMContentLoaded', () => {
         const filterPart = (document.getElementById('insertConsumFilterPart')?.value || '').trim();
 
         try {
-            const [issuesRes, partsRes, deptsRes] = await Promise.all([
+            const [issuesRes, partsRes, deptsRes, mastersRes, receiptsRes] = await Promise.all([
                 fetch('/api/insert_issues'),
                 fetch('/api/partmaster'),
-                fetch('/api/departments')
+                fetch('/api/departments'),
+                fetch('/api/insert_masters'),
+                fetch('/api/insert_receipts')
             ]);
 
             const issues = await issuesRes.json();
             const parts = await partsRes.json();
             const depts = await deptsRes.json();
+            const masters = await mastersRes.json();
+            const receipts = await receiptsRes.json();
 
             populateInsertConsumFilterDropdowns(issues, parts, depts);
+
+            // Build Rate Maps from Insert Receipts & Insert Masters (matches Insert CPC logic)
+            const receiptIdRateMap = {};
+            const batchSpecRateMap = {};
+            const specRateMap = {};
+
+            if (Array.isArray(receipts)) {
+                receipts.forEach(r => {
+                    const rate = parseFloat(r.rate) || 0;
+                    if (r.id) receiptIdRateMap[String(r.id)] = rate;
+
+                    const cleanSpec = (r.insert_spec || '').replace(/\s+/g, '').toLowerCase();
+                    const cleanBatch = (r.batch_no || '').replace(/\s+/g, '').toLowerCase();
+
+                    if (cleanBatch && cleanSpec && rate > 0) {
+                        batchSpecRateMap[`${cleanBatch}_${cleanSpec}`] = rate;
+                    }
+                    if (cleanSpec && rate > 0) {
+                        specRateMap[cleanSpec] = rate;
+                    }
+                });
+            }
+
+            if (Array.isArray(masters)) {
+                masters.forEach(m => {
+                    const cleanSpec = (m.insert_spec || m.name || '').replace(/\s+/g, '').toLowerCase();
+                    const rate = parseFloat(m.rate || m.cost || m.price || 0) || 0;
+                    if (cleanSpec && rate > 0 && !specRateMap[cleanSpec]) {
+                        specRateMap[cleanSpec] = rate;
+                    }
+                });
+            }
+
+            const getRateForInsert = (item, rawSpec) => {
+                if (item.receipt_id && receiptIdRateMap[String(item.receipt_id)] > 0) {
+                    return receiptIdRateMap[String(item.receipt_id)];
+                }
+                const cleanBatch = (item.batch_no || '').replace(/\s+/g, '').toLowerCase();
+                const cleanSpec = (rawSpec || item.insert_spec || '').replace(/\s+/g, '').toLowerCase();
+                if (cleanBatch && cleanSpec && batchSpecRateMap[`${cleanBatch}_${cleanSpec}`] > 0) {
+                    return batchSpecRateMap[`${cleanBatch}_${cleanSpec}`];
+                }
+                if (cleanSpec && specRateMap[cleanSpec] > 0) {
+                    return specRateMap[cleanSpec];
+                }
+                return 0;
+            };
 
             // Filter issues by date period and optional department filter
             const filteredIssues = (Array.isArray(issues) ? issues : []).filter(item => {
@@ -13543,6 +13594,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const totalIssued = parseFloat(item.qty_issued) || 0;
                 if (totalIssued <= 0) return;
                 const qtyPerUsage = totalIssued / usages.length;
+                const rate = getRateForInsert(item, rawSpec);
 
                 usages.forEach(u => {
                     const rawPart = (u.partno || item.partno || '').trim();
@@ -13556,10 +13608,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             dept: rawDept,
                             partno: rawPart,
                             insert_spec: rawSpec,
-                            qty: 0
+                            qty: 0,
+                            cost: 0
                         };
                     }
                     aggMap[groupKey].qty += qtyPerUsage;
+                    aggMap[groupKey].cost += (qtyPerUsage * rate);
                 });
             });
 
@@ -13577,7 +13631,7 @@ document.addEventListener('DOMContentLoaded', () => {
             applyInsertConsumColFilters();
         } catch (err) {
             console.error('Error in fetchInsertConsumptionReport:', err);
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 25px; color: #ef4444;">Failed to load consumption report. Please try again.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 25px; color: #ef4444;">Failed to load consumption report. Please try again.</td></tr>';
         }
     }
 
@@ -13645,6 +13699,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         const qStr = Number.isInteger(row.qty) ? String(row.qty) : row.qty.toFixed(2);
                         return qStr.includes(f);
                     }
+                    if (colIdx === '4') {
+                        const cStr = (row.cost || 0).toFixed(2);
+                        return cStr.includes(f);
+                    }
                     return true;
                 });
             });
@@ -13656,7 +13714,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderInsertConsumptionTable(rows) {
         const tbody = document.getElementById('insertConsumptionBody');
         const footerQty = document.getElementById('insertConsumFooterQty');
+        const footerCost = document.getElementById('insertConsumFooterCost');
         const kpiTotalQty = document.getElementById('insertConsumKpiTotalQty');
+        const kpiTotalCost = document.getElementById('insertConsumKpiTotalCost');
         const kpiUniqueParts = document.getElementById('insertConsumKpiUniqueParts');
         const kpiUniqueSpecs = document.getElementById('insertConsumKpiUniqueSpecs');
         const kpiTotalRows = document.getElementById('insertConsumKpiTotalRows');
@@ -13665,9 +13725,11 @@ document.addEventListener('DOMContentLoaded', () => {
         tbody.innerHTML = '';
 
         if (!rows || rows.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 25px; color: #64748b;">No insert consumption data found for the selected period.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 25px; color: #64748b;">No insert consumption data found for the selected period.</td></tr>';
             if (footerQty) footerQty.textContent = '0';
+            if (footerCost) footerCost.textContent = '₹0.00';
             if (kpiTotalQty) kpiTotalQty.textContent = '0';
+            if (kpiTotalCost) kpiTotalCost.textContent = '₹0.00';
             if (kpiUniqueParts) kpiUniqueParts.textContent = '0';
             if (kpiUniqueSpecs) kpiUniqueSpecs.textContent = '0';
             if (kpiTotalRows) kpiTotalRows.textContent = '0';
@@ -13675,6 +13737,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         let totalQty = 0;
+        let totalCost = 0;
         const partSet = new Set();
         const specSet = new Set();
 
@@ -13682,6 +13745,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         rows.forEach((row, idx) => {
             totalQty += row.qty;
+            totalCost += (row.cost || 0);
             if (row.partno) partSet.add(row.partno.trim());
             if (row.insert_spec) specSet.add(row.insert_spec.trim());
 
@@ -13690,12 +13754,14 @@ document.addEventListener('DOMContentLoaded', () => {
             tr.style.borderBottom = '1px solid #e2e8f0';
 
             const qtyFormatted = Number.isInteger(row.qty) ? row.qty : row.qty.toFixed(2);
+            const costFormatted = (row.cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
             tr.innerHTML = `
                 <td style="padding: 9px 14px; border-right: 1px solid #e2e8f0; font-weight: 500; color: #334155;">${escapeHtml(row.dept)}</td>
                 <td style="padding: 9px 14px; border-right: 1px solid #e2e8f0; font-weight: 600; color: #0284c7;">${escapeHtml(row.partno)}</td>
                 <td style="padding: 9px 14px; border-right: 1px solid #e2e8f0; font-weight: 500; color: #1e293b;">${escapeHtml(row.insert_spec)}</td>
-                <td style="padding: 9px 14px; text-align: right; font-weight: 700; color: #0f172a;">${qtyFormatted}</td>
+                <td style="padding: 9px 14px; border-right: 1px solid #e2e8f0; text-align: right; font-weight: 700; color: #0f172a;">${qtyFormatted}</td>
+                <td style="padding: 9px 14px; text-align: right; font-weight: 600; color: #b45309;">₹${costFormatted}</td>
             `;
             fragment.appendChild(tr);
         });
@@ -13703,15 +13769,25 @@ document.addEventListener('DOMContentLoaded', () => {
         tbody.appendChild(fragment);
 
         const totalQtyFormatted = Number.isInteger(totalQty) ? totalQty : totalQty.toFixed(2);
+        const totalCostFormatted = totalCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
         if (footerQty) footerQty.textContent = totalQtyFormatted;
+        if (footerCost) footerCost.textContent = `₹${totalCostFormatted}`;
         if (kpiTotalQty) kpiTotalQty.textContent = totalQtyFormatted;
+        if (kpiTotalCost) kpiTotalCost.textContent = `₹${totalCostFormatted}`;
         if (kpiUniqueParts) kpiUniqueParts.textContent = partSet.size;
         if (kpiUniqueSpecs) kpiUniqueSpecs.textContent = specSet.size;
         if (kpiTotalRows) kpiTotalRows.textContent = rows.length;
     }
 
     // Insert Consumption Event Listeners
+    document.getElementById('generateInsertConsumBtn')?.addEventListener('click', fetchInsertConsumptionReport);
     document.getElementById('filterInsertConsumBtn')?.addEventListener('click', fetchInsertConsumptionReport);
+    document.getElementById('insertConsumFromDate')?.addEventListener('change', fetchInsertConsumptionReport);
+    document.getElementById('insertConsumToDate')?.addEventListener('change', fetchInsertConsumptionReport);
+    document.getElementById('insertConsumFilterDept')?.addEventListener('change', fetchInsertConsumptionReport);
+    document.getElementById('insertConsumFilterPart')?.addEventListener('change', fetchInsertConsumptionReport);
+
     document.getElementById('resetInsertConsumBtn')?.addEventListener('click', () => {
         const fromInput = document.getElementById('insertConsumFromDate');
         const toInput = document.getElementById('insertConsumToDate');
@@ -13739,9 +13815,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const toDate = document.getElementById('insertConsumToDate')?.value || '';
 
         // Header
-        exportData.push(['Dept', 'Part No', 'Insert Spec', 'Qty']);
+        exportData.push(['Dept', 'Part No', 'Insert Spec', 'Qty', 'Cost (₹)']);
 
         let totalQty = 0;
+        let totalCost = 0;
         allInsertConsumRows.forEach(row => {
             // Respect active column filters if any
             const filters = Object.entries(activeInsertConsumColFilters).filter(([_, val]) => val && val.trim() !== '');
@@ -13755,21 +13832,27 @@ document.addEventListener('DOMContentLoaded', () => {
                         const qStr = Number.isInteger(row.qty) ? String(row.qty) : row.qty.toFixed(2);
                         return qStr.includes(f);
                     }
+                    if (colIdx === '4') {
+                        const cStr = (row.cost || 0).toFixed(2);
+                        return cStr.includes(f);
+                    }
                     return true;
                 });
                 if (!match) return;
             }
 
             totalQty += row.qty;
+            totalCost += (row.cost || 0);
             exportData.push([
                 row.dept,
                 row.partno,
                 row.insert_spec,
-                Number.isInteger(row.qty) ? row.qty : Number(row.qty.toFixed(2))
+                Number.isInteger(row.qty) ? row.qty : Number(row.qty.toFixed(2)),
+                Number((row.cost || 0).toFixed(2))
             ]);
         });
 
-        exportData.push(['Total', '', '', Number.isInteger(totalQty) ? totalQty : Number(totalQty.toFixed(2))]);
+        exportData.push(['Total', '', '', Number.isInteger(totalQty) ? totalQty : Number(totalQty.toFixed(2)), Number(totalCost.toFixed(2))]);
 
         const ws = XLSX.utils.aoa_to_sheet(exportData);
         const wb = XLSX.utils.book_new();
