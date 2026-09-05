@@ -102,6 +102,7 @@
                 <button class="sub-tab" id="sidebarProdLog" data-screen="prodlog">Prod Log</button>
                 <button class="sub-tab" id="sidebarDebur" data-screen="debur">Debur</button>
                 <button class="sub-tab" id="sidebarBcStatus" data-screen="bc_status">BC Status</button>
+                <button class="sub-tab" id="sidebarWiproStatus" data-screen="wipro_status">Wipro Status</button>
             </div>
             <div class="sub-group" id="submenuToolcrib" style="display: none;">
                 <button class="sub-tab" id="sidebarInsertMaster" data-screen="insertmaster">Insert/Tap Master</button>
@@ -1820,6 +1821,74 @@
                     </table>
                 </div>
             </div>
+
+            <!-- WIPRO Status Section -->
+            <div class="table-container" id="wiproStatusSection" style="display: none; padding: 1.75rem; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; color: var(--text-main); margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <!-- Header & Controls -->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 40px; height: 40px; border-radius: 8px; background: linear-gradient(135deg, #059669, #047857); display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 1.25rem;">
+                            <i class="fas fa-industry"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; font-size: 1.35rem; font-weight: 700; color: #0f172a;">Wipro Status</h2>
+                            <p style="margin: 2px 0 0 0; font-size: 0.82rem; color: #64748b;">Monthly Production, Operation Quantities, Cumulative Produced, RFD & Despatch for WIPRO Department</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 6px; background: #f8fafc; padding: 4px 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                            <label for="wiproStatusMonth" style="font-size: 0.85rem; font-weight: 600; color: #475569; margin: 0;"><i class="far fa-calendar-alt"></i> Month:</label>
+                            <input type="month" id="wiproStatusMonth" style="border: none; background: transparent; font-size: 0.85rem; font-weight: 600; color: #0f172a; outline: none; cursor: pointer;">
+                        </div>
+                        <select id="wiproStatusCustomerSelect" style="padding: 0.45rem 0.75rem; border-radius: 6px; border: 1px solid #cbd5e1; background-color: #ffffff; color: #334155; font-size: 0.85rem; font-weight: 500;">
+                            <option value="">-- All Customers --</option>
+                        </select>
+                        <input type="text" id="wiproStatusSearch" placeholder="🔍 Search Part No..." style="padding: 0.45rem 0.75rem; border-radius: 6px; border: 1px solid #cbd5e1; background-color: #ffffff; color: #334155; font-size: 0.85rem; width: 160px;">
+                        <button id="wiproStatusRefreshBtn" class="btn btn-primary" style="padding: 0.45rem 0.9rem; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; background: #059669; border-color: #059669;">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                        <button id="wiproStatusExportBtn" class="btn btn-outline" style="padding: 0.45rem 0.9rem; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; border-color: #059669; color: #059669;">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- KPI Metric Cards -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.85rem 1rem;">
+                        <div style="font-size: 0.75rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Total WIPRO Parts</div>
+                        <div id="kpiWiproTotalParts" style="font-size: 1.4rem; font-weight: 700; color: #0f172a; margin-top: 4px;">0</div>
+                    </div>
+                    <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 0.85rem 1rem;">
+                        <div style="font-size: 0.75rem; font-weight: 600; color: #1e40af; text-transform: uppercase;">Schedule Qty</div>
+                        <div id="kpiWiproTotalSchedule" style="font-size: 1.4rem; font-weight: 700; color: #1d4ed8; margin-top: 4px;">0</div>
+                    </div>
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 0.85rem 1rem;">
+                        <div style="font-size: 0.75rem; font-weight: 600; color: #166534; text-transform: uppercase;">Cumulative Produced</div>
+                        <div id="kpiWiproTotalCumulative" style="font-size: 1.4rem; font-weight: 700; color: #15803d; margin-top: 4px;">0</div>
+                    </div>
+                    <div style="background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 8px; padding: 0.85rem 1rem;">
+                        <div style="font-size: 0.75rem; font-weight: 600; color: #6b21a8; text-transform: uppercase;">RFD (Month)</div>
+                        <div id="kpiWiproTotalRfd" style="font-size: 1.4rem; font-weight: 700; color: #7e22ce; margin-top: 4px;">0</div>
+                    </div>
+                    <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 0.85rem 1rem;">
+                        <div style="font-size: 0.75rem; font-weight: 600; color: #92400e; text-transform: uppercase;">Despatch (Month)</div>
+                        <div id="kpiWiproTotalDespatch" style="font-size: 1.4rem; font-weight: 700; color: #b45309; margin-top: 4px;">0</div>
+                    </div>
+                </div>
+
+                <!-- Table Container -->
+                <div style="max-height: 700px; overflow-x: auto; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <table id="wiproStatusTable" style="width: 100%; border-collapse: separate; border-spacing: 0; white-space: nowrap; font-size: 0.85rem;">
+                        <thead id="wiproStatusThead">
+                            <!-- Populated dynamically by JS -->
+                        </thead>
+                        <tbody id="wiproStatusBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
             
             <!-- Inspection Section -->
             <div class="table-container" id="inspectionSection" style="display: none; padding: 2rem; color: var(--text-main);">
@@ -2448,6 +2517,7 @@
                                     <label><input type="checkbox" value="prodlog"> Prod Log</label>
                                     <label><input type="checkbox" value="debur"> Debur</label>
                                     <label><input type="checkbox" value="bc_status"> BC Status</label>
+                                    <label><input type="checkbox" value="wipro_status"> Wipro Status</label>
                                     <label><input type="checkbox" value="inspection"> Inspection</label>
                                     <label><input type="checkbox" value="reports"> Reports</label>
                                     <label><input type="checkbox" value="bc_prod"> BC Prod</label>
@@ -4364,6 +4434,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10057"></script>
+    <script src="/static/app.js?v=10058"></script>
 </body>
 </html>

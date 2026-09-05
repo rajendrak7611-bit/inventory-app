@@ -422,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
             'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'insertConsumptionSection', 'insertStockSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'dbBackupSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'resourceReqdSection', 'scheduleRunSection',
-            'scheduleStatusSection', 'prodLogSection', 'deburSection', 'bcStatusSection',
+            'scheduleStatusSection', 'prodLogSection', 'deburSection', 'bcStatusSection', 'wiproStatusSection',
             'inspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'serviceSettersSection', 'hrSection', 'attendanceSection', 'rfqSection', 'quoteSection'
         ];
         sections.forEach(id => {
@@ -803,6 +803,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (sec) sec.style.display = 'block'; 
             addBtn.style.display = 'none'; 
             initBcStatus(); 
+        }},
+        'sidebarWiproStatus': { tab: 'wipro_status', action: () => { 
+            const sec = document.getElementById('wiproStatusSection');
+            if (sec) sec.style.display = 'block'; 
+            addBtn.style.display = 'none'; 
+            initWiproStatus(); 
         }},
         'sidebarAttendance': { tab: 'attendance', action: () => {
             const attSec = document.getElementById('attendanceSection');
@@ -5131,6 +5137,264 @@ document.addEventListener('DOMContentLoaded', () => {
         const monthVal = monthInput ? (monthInput.value || '').trim() : '';
         const wb = XLSX.utils.table_to_book(table, { sheet: "BC_Status" });
         XLSX.writeFile(wb, `BC_Production_Status_${monthVal || new Date().toISOString().slice(0,7)}.xlsx`);
+    }
+
+    // --- WIPRO Status Implementation ---
+    let currentWiproStatusData = null;
+    let wiproStatusListenersAttached = false;
+
+    function initWiproStatus() {
+        const monthInput = document.getElementById('wiproStatusMonth');
+        if (monthInput && !monthInput.value) {
+            const now = new Date();
+            monthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        }
+
+        if (!wiproStatusListenersAttached) {
+            wiproStatusListenersAttached = true;
+
+            const mInput = document.getElementById('wiproStatusMonth');
+            if (mInput) {
+                mInput.addEventListener('change', () => fetchWiproStatus());
+            }
+
+            const custSelect = document.getElementById('wiproStatusCustomerSelect');
+            if (custSelect) {
+                custSelect.addEventListener('change', () => {
+                    if (currentWiproStatusData) renderWiproStatus(currentWiproStatusData);
+                });
+            }
+
+            const searchInput = document.getElementById('wiproStatusSearch');
+            if (searchInput) {
+                searchInput.addEventListener('input', () => {
+                    if (currentWiproStatusData) renderWiproStatus(currentWiproStatusData);
+                });
+            }
+
+            const refreshBtn = document.getElementById('wiproStatusRefreshBtn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', () => fetchWiproStatus());
+            }
+
+            const exportBtn = document.getElementById('wiproStatusExportBtn');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', () => exportWiproStatusExcel());
+            }
+        }
+
+        fetchWiproStatus();
+    }
+
+    async function fetchWiproStatus() {
+        const tbody = document.getElementById('wiproStatusBody');
+        const monthInput = document.getElementById('wiproStatusMonth');
+        const monthVal = monthInput ? (monthInput.value || '').trim() : '';
+
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="25" style="text-align: center; padding: 2.5rem; color: #059669; font-weight: 600;"><i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i> Loading Wipro Status data for ' + (monthVal || 'current month') + '...</td></tr>';
+        }
+
+        const refreshBtn = document.getElementById('wiproStatusRefreshBtn');
+        const origBtnHtml = refreshBtn ? refreshBtn.innerHTML : '';
+        if (refreshBtn) {
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+        }
+
+        try {
+            const url = monthVal ? `/api/production/wipro_status?month=${encodeURIComponent(monthVal)}` : '/api/production/wipro_status';
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`Server returned ${res.status}`);
+            const data = await res.json();
+            currentWiproStatusData = data;
+
+            // Populate customer dropdown
+            populateWiproStatusCustomers(data.parts);
+
+            renderWiproStatus(data);
+        } catch (err) {
+            console.error('fetchWiproStatus error:', err);
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="25" style="text-align: center; padding: 2rem; color: #ef4444; font-weight: 600;">Failed to load Wipro Status data: ${err.message}</td></tr>`;
+            }
+        } finally {
+            if (refreshBtn) {
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = origBtnHtml;
+            }
+        }
+    }
+
+    function populateWiproStatusCustomers(parts) {
+        const custSelect = document.getElementById('wiproStatusCustomerSelect');
+        if (!custSelect) return;
+        const currentVal = custSelect.value;
+        const customers = [...new Set((parts || []).map(p => (p.customer || '').trim()).filter(c => c && c !== '-'))].sort();
+        
+        let html = '<option value="">-- All Customers --</option>';
+        customers.forEach(c => {
+            html += `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`;
+        });
+        custSelect.innerHTML = html;
+        if (currentVal && customers.includes(currentVal)) {
+            custSelect.value = currentVal;
+        }
+    }
+
+    function renderWiproStatus(data) {
+        const thead = document.getElementById('wiproStatusThead');
+        const tbody = document.getElementById('wiproStatusBody');
+        if (!thead || !tbody || !data) return;
+
+        const custFilter = (document.getElementById('wiproStatusCustomerSelect')?.value || '').trim().toUpperCase();
+        const searchFilter = (document.getElementById('wiproStatusSearch')?.value || '').trim().toUpperCase();
+
+        const allParts = data.parts || [];
+
+        // Filter parts
+        const filteredParts = allParts.filter(p => {
+            const pno = (p.partno || '').trim().toUpperCase();
+            const cust = (p.customer || '').trim().toUpperCase();
+            if (custFilter && cust !== custFilter) return false;
+            if (searchFilter && !pno.includes(searchFilter)) return false;
+            return true;
+        });
+
+        // Calculate KPIs
+        let totalPartsCount = filteredParts.length;
+        let totalScheduleQty = 0;
+        let totalCumulativeQty = 0;
+        let totalRfd = 0;
+        let totalDespatch = 0;
+
+        filteredParts.forEach(p => {
+            totalScheduleQty += (p.schedule_qty || 0);
+            totalCumulativeQty += (p.cumulative_qty || 0);
+            totalRfd += (p.rfd || 0);
+            totalDespatch += (p.despatch || 0);
+        });
+
+        const kpiParts = document.getElementById('kpiWiproTotalParts');
+        if (kpiParts) kpiParts.textContent = totalPartsCount.toLocaleString();
+
+        const kpiSched = document.getElementById('kpiWiproTotalSchedule');
+        if (kpiSched) kpiSched.textContent = totalScheduleQty.toLocaleString();
+
+        const kpiCum = document.getElementById('kpiWiproTotalCumulative');
+        if (kpiCum) kpiCum.textContent = totalCumulativeQty.toLocaleString();
+
+        const kpiRfd = document.getElementById('kpiWiproTotalRfd');
+        if (kpiRfd) kpiRfd.textContent = totalRfd.toLocaleString();
+
+        const kpiDesp = document.getElementById('kpiWiproTotalDespatch');
+        if (kpiDesp) kpiDesp.textContent = totalDespatch.toLocaleString();
+
+        // Standard requested columns: Part No, Schedule Qty, opn 20, opn 30, ... opn 70, Cumulative Qty Produced, RFD, Despatch
+        // We include customer as well for full filtering convenience
+        const opCols = ["20", "30", "40", "50", "60", "70"];
+
+        // Build 2-Tier Table Header
+        let thRow1 = `
+            <tr style="background: #1e293b; color: #ffffff; font-weight: 600;">
+                <th style="padding: 9px 12px; text-align: left; position: sticky; top: 0; z-index: 10;">Part No</th>
+                <th style="padding: 9px 12px; text-align: left; position: sticky; top: 0; z-index: 10;">Customer</th>
+                <th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10;">Schedule Qty</th>
+        `;
+
+        opCols.forEach(op => {
+            thRow1 += `<th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10; background: #334155; border-left: 1px solid #475569;">Opn ${escapeHtml(op)}</th>`;
+        });
+
+        thRow1 += `
+                <th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10; background: #059669; border-left: 1px solid #047857;">Cumulative Produced (Month)</th>
+                <th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10; background: #475569; border-left: 1px solid #64748b;">RFD</th>
+                <th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10; background: #1e293b; border-left: 1px solid #334155;">Despatch</th>
+            </tr>
+        `;
+
+        const totalCols = 3 + opCols.length + 3;
+        let thRow2 = `<tr style="background: #f1f5f9;">`;
+        for (let c = 0; c < totalCols; c++) {
+            if (c === totalCols - 1) {
+                thRow2 += `<th style="padding: 4px 6px; text-align: right;"><button type="button" class="clear-table-filters-btn btn btn-text" style="font-size: 0.75rem; color: #ef4444; padding: 2px 6px; font-weight: 600; cursor: pointer; display: none;">Clear</button></th>`;
+            } else {
+                thRow2 += `<th style="padding: 4px 6px;"><input type="text" class="table-col-filter" data-col="${c}" placeholder="Filter..." style="width: 100%; padding: 3px 6px; font-size: 0.78rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff;"></th>`;
+            }
+        }
+        thRow2 += `</tr>`;
+
+        thead.innerHTML = thRow1 + thRow2;
+
+        // Build Rows
+        if (filteredParts.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${totalCols}" style="text-align: center; padding: 2.5rem; color: #64748b; font-weight: 500;">No WIPRO parts found matching the selected filters.</td></tr>`;
+            return;
+        }
+
+        let bodyHtml = '';
+        filteredParts.forEach((p, idx) => {
+            const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+            bodyHtml += `<tr style="background: ${rowBg}; border-bottom: 1px solid #e2e8f0; transition: background 0.15s ease;">`;
+            
+            // Part No
+            bodyHtml += `<td style="padding: 8px 12px; font-weight: 700; color: #0f172a;"><span style="display: inline-block; padding: 2px 7px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 4px; color: #065f46;">${escapeHtml(p.partno)}</span></td>`;
+            
+            // Customer
+            bodyHtml += `<td style="padding: 8px 12px; color: #475569; font-weight: 500;">${escapeHtml(p.customer || '-')}</td>`;
+            
+            // Schedule Qty
+            const schedClass = p.schedule_qty > 0 ? 'font-weight: 700; color: #0284c7;' : 'color: #94a3b8;';
+            bodyHtml += `<td style="padding: 8px 12px; text-align: right; ${schedClass}">${p.schedule_qty ? p.schedule_qty.toLocaleString() : '0'}</td>`;
+
+            // Operation Columns: opn 20 to opn 70
+            opCols.forEach(op => {
+                const opInfo = p.operations ? p.operations[op] : null;
+                if (!opInfo || !opInfo.has_op) {
+                    bodyHtml += `<td style="padding: 8px 12px; text-align: center; color: #cbd5e1; font-weight: 500; border-left: 1px solid #f1f5f9;">-</td>`;
+                } else if (opInfo.qty > 0) {
+                    bodyHtml += `<td style="padding: 8px 12px; text-align: right; font-weight: 700; color: #059669; background: rgba(5, 150, 105, 0.05); border-left: 1px solid #f1f5f9;" title="Opn ${escapeHtml(op)} produced in month">${opInfo.qty.toLocaleString()}</td>`;
+                } else {
+                    bodyHtml += `<td style="padding: 8px 12px; text-align: right; color: #64748b; font-weight: 500; border-left: 1px solid #f1f5f9;">0</td>`;
+                }
+            });
+
+            // Cumulative Qty Produced during Month
+            if (p.cumulative_qty > 0) {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; font-weight: 700; color: #059669; background: rgba(5, 150, 105, 0.08); border-left: 1px solid #a7f3d0;" title="Cumulative quantity produced across all operations in month">${p.cumulative_qty.toLocaleString()}</td>`;
+            } else {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; color: #64748b; border-left: 1px solid #f1f5f9;">0</td>`;
+            }
+
+            // RFD
+            if (p.rfd > 0) {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; font-weight: 700; color: #7c3aed; background: rgba(124, 58, 237, 0.05); border-left: 1px solid #f1f5f9;" title="Ready for Despatch">${p.rfd.toLocaleString()}</td>`;
+            } else {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; color: #64748b; border-left: 1px solid #f1f5f9;">0</td>`;
+            }
+
+            // Despatch
+            if (p.despatch > 0) {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; font-weight: 700; color: #b45309; background: rgba(245, 158, 11, 0.05); border-left: 1px solid #f1f5f9;" title="Despatched in month">${p.despatch.toLocaleString()}</td>`;
+            } else {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; color: #64748b; border-left: 1px solid #f1f5f9;">0</td>`;
+            }
+
+            bodyHtml += `</tr>`;
+        });
+
+        tbody.innerHTML = bodyHtml;
+
+        applyTableColFilters('wiproStatusTable');
+    }
+
+    function exportWiproStatusExcel() {
+        const table = document.getElementById('wiproStatusTable');
+        if (!table) return;
+        const monthInput = document.getElementById('wiproStatusMonth');
+        const monthVal = monthInput ? (monthInput.value || '').trim() : '';
+        const wb = XLSX.utils.table_to_book(table, { sheet: "WIPRO_Status" });
+        XLSX.writeFile(wb, `WIPRO_Production_Status_${monthVal || new Date().toISOString().slice(0,7)}.xlsx`);
     }
 
     function createInspectionRow(containerId) {
