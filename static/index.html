@@ -109,6 +109,7 @@
                 <button class="sub-tab" id="sidebarInsertReceipt" data-screen="insertreceipt">Insert/Tap Receipt</button>
                 <button class="sub-tab" id="sidebarInsertIssue" data-screen="insertissue">Insert/Tap Issue</button>
                 <button class="sub-tab" id="sidebarInsertCpc" data-screen="insertcpc">Insert CPC</button>
+                <button class="sub-tab" id="sidebarInsertConsumption" data-screen="insertconsumption">Insert Consumption</button>
                 <button class="sub-tab" id="sidebarInsertStock" data-screen="insertstock">Insert Stock</button>
             </div>
             <div class="sub-group" id="submenuReports" style="display: none;">
@@ -563,6 +564,98 @@
                     </thead>
                     <tbody id="insertCpcBody">
                     </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Insert Consumption Section -->
+        <div class="table-container" id="insertConsumptionSection" style="display: none; padding: 1.5rem; color: var(--text-main); background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 2rem;">
+            <!-- Header & Filter Bar -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 12px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 38px; height: 38px; border-radius: 8px; background: #ecfdf5; display: flex; align-items: center; justify-content: center; color: #059669; font-size: 1.2rem;">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                    <div>
+                        <h2 style="margin: 0; font-size: 1.35rem; font-weight: 700; color: #0f172a;">Insert Consumption Report</h2>
+                        <span style="font-size: 0.8rem; color: #64748b;">Summary of insert consumption by Department, Part Number, and Insert Spec</span>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">From:</label>
+                        <input type="date" id="insertConsumFromDate" style="padding: 0.35rem 0.55rem; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff; color: #0f172a;">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">To:</label>
+                        <input type="date" id="insertConsumToDate" style="padding: 0.35rem 0.55rem; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff; color: #0f172a;">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Dept:</label>
+                        <select id="insertConsumFilterDept" style="padding: 0.35rem 0.55rem; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff; color: #0f172a; min-width: 130px;">
+                            <option value="">All Depts</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: #475569;">Part:</label>
+                        <select id="insertConsumFilterPart" style="padding: 0.35rem 0.55rem; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff; color: #0f172a; min-width: 140px;">
+                            <option value="">All Parts</option>
+                        </select>
+                    </div>
+                    <button id="filterInsertConsumBtn" class="btn btn-primary" style="padding: 0.38rem 0.9rem; font-size: 0.82rem; font-weight: 600;">Filter</button>
+                    <button id="resetInsertConsumBtn" class="btn btn-outline" style="padding: 0.38rem 0.8rem; font-size: 0.82rem;">Reset</button>
+                    <button id="exportInsertConsumBtn" class="btn btn-outline" style="padding: 0.38rem 0.9rem; font-size: 0.82rem; font-weight: 600; color: #16a34a; border-color: #86efac; background: #f0fdf4; display: flex; align-items: center; gap: 4px;">
+                        <i class="fas fa-file-excel"></i> Export Excel
+                    </button>
+                </div>
+            </div>
+
+            <!-- KPI Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 1.5rem;">
+                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: #16a34a; text-transform: uppercase;">Total Consumed Qty</div>
+                    <div id="insertConsumKpiTotalQty" style="font-size: 1.6rem; font-weight: 700; color: #15803d; margin-top: 4px;">0</div>
+                </div>
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: #2563eb; text-transform: uppercase;">Unique Parts</div>
+                    <div id="insertConsumKpiUniqueParts" style="font-size: 1.6rem; font-weight: 700; color: #1d4ed8; margin-top: 4px;">0</div>
+                </div>
+                <div style="background: #fdf4ff; border: 1px solid #f5d0fe; border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: #a855f7; text-transform: uppercase;">Unique Insert Specs</div>
+                    <div id="insertConsumKpiUniqueSpecs" style="font-size: 1.6rem; font-weight: 700; color: #7e22ce; margin-top: 4px;">0</div>
+                </div>
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; text-align: center;">
+                    <div style="font-size: 0.8rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Total Rows</div>
+                    <div id="insertConsumKpiTotalRows" style="font-size: 1.6rem; font-weight: 700; color: #334155; margin-top: 4px;">0</div>
+                </div>
+            </div>
+
+            <!-- Table Container with Sticky Headers & Column Filters -->
+            <div style="overflow-x: auto; max-height: calc(100vh - 380px); overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff;">
+                <table id="insertConsumptionTable" style="width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.88rem;">
+                    <thead>
+                        <tr style="background: #f1f5f9;">
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 10px 14px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #e2e8f0; font-weight: 700; color: #334155; text-align: left; width: 22%;">Dept</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 10px 14px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #e2e8f0; font-weight: 700; color: #334155; text-align: left; width: 28%;">Part No</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 10px 14px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #e2e8f0; font-weight: 700; color: #334155; text-align: left; width: 35%;">Insert Spec</th>
+                            <th style="position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 10px 14px; border-bottom: 1px solid #cbd5e1; font-weight: 700; color: #334155; text-align: right; width: 15%;">Qty</th>
+                        </tr>
+                        <tr style="background: #e2e8f0;">
+                            <th style="position: sticky; top: 41px; z-index: 19; padding: 4px; border-right: 1px solid #cbd5e1;"><input type="text" class="table-col-filter insert-consum-col-filter" data-col="0" placeholder="Filter Dept..." style="width: 100%; padding: 3px 6px; font-size: 0.78rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 41px; z-index: 19; padding: 4px; border-right: 1px solid #cbd5e1;"><input type="text" class="table-col-filter insert-consum-col-filter" data-col="1" placeholder="Filter Part No..." style="width: 100%; padding: 3px 6px; font-size: 0.78rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 41px; z-index: 19; padding: 4px; border-right: 1px solid #cbd5e1;"><input type="text" class="table-col-filter insert-consum-col-filter" data-col="2" placeholder="Filter Insert Spec..." style="width: 100%; padding: 3px 6px; font-size: 0.78rem; border: 1px solid #cbd5e1; border-radius: 4px;"></th>
+                            <th style="position: sticky; top: 41px; z-index: 19; padding: 4px;"><input type="text" class="table-col-filter insert-consum-col-filter" data-col="3" placeholder="Filter Qty..." style="width: 100%; padding: 3px 6px; font-size: 0.78rem; border: 1px solid #cbd5e1; border-radius: 4px; text-align: right;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="insertConsumptionBody">
+                        <tr><td colspan="4" style="text-align: center; padding: 25px; color: #64748b;">Loading consumption data...</td></tr>
+                    </tbody>
+                    <tfoot style="position: sticky; bottom: 0; z-index: 15; background: #f8fafc; font-weight: 700; border-top: 2px solid #cbd5e1;">
+                        <tr>
+                            <td colspan="3" style="padding: 10px 14px; text-align: right; color: #334155;">Total Quantity:</td>
+                            <td id="insertConsumFooterQty" style="padding: 10px 14px; text-align: right; color: #15803d; font-size: 1rem;">0</td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
@@ -2331,6 +2424,7 @@
                                     <label><input type="checkbox" value="drillmaster"> Drill Master</label>
                                     <label><input type="checkbox" value="insertreceipt"> Insert/Tap Receipt</label>
                                     <label><input type="checkbox" value="insertissue"> Insert/Tap Issue</label>
+                                    <label><input type="checkbox" value="insertconsumption"> Insert Consumption</label>
                                     <label><input type="checkbox" value="insertstock"> Insert Stock</label>
                                     <label><input type="checkbox" value="partmaster"> Part Master</label>
                                     <label><input type="checkbox" value="machines"> Machines</label>
@@ -4261,6 +4355,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10055"></script>
+    <script src="/static/app.js?v=10056"></script>
 </body>
 </html>

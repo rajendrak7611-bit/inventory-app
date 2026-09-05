@@ -7012,6 +7012,80 @@ def get_insert_issues(db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/insert_consumption")
+def get_insert_consumption(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    department: Optional[str] = None,
+    partno: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    try:
+        query = "SELECT date, department, partno, opn_no, insert_spec, qty_issued, usages FROM insert_issues WHERE 1=1"
+        params = {}
+        if date_from:
+            query += " AND date >= :date_from"
+            params["date_from"] = date_from
+        if date_to:
+            query += " AND date <= :date_to"
+            params["date_to"] = date_to
+        if department:
+            query += " AND LOWER(department) = LOWER(:department)"
+            params["department"] = department
+
+        rows = db.execute(text(query), params).mappings().all()
+        agg_map = {}
+
+        for r in rows:
+            raw_dept = (r.get("department") or "WIPRO").strip() or "WIPRO"
+            raw_spec = (r.get("insert_spec") or "").strip()
+            if not raw_spec:
+                continue
+
+            usages = []
+            raw_usages = r.get("usages")
+            if raw_usages:
+                try:
+                    import json
+                    parsed = raw_usages
+                    while isinstance(parsed, str):
+                        parsed = json.loads(parsed)
+                    if isinstance(parsed, list):
+                        usages = parsed
+                except Exception:
+                    pass
+
+            if not usages:
+                usages = [{"partno": r.get("partno") or "", "opn_no": r.get("opn_no") or ""}]
+
+            total_issued = float(r.get("qty_issued") or 0.0)
+            if total_issued <= 0:
+                continue
+            qty_per_usage = total_issued / len(usages)
+
+            for u in usages:
+                raw_part = (u.get("partno") or r.get("partno") or "").strip()
+                if not raw_part:
+                    continue
+                if partno and raw_part.lower() != partno.strip().lower():
+                    continue
+
+                key = (raw_dept.upper(), raw_part.upper(), raw_spec.upper())
+                if key not in agg_map:
+                    agg_map[key] = {
+                        "dept": raw_dept,
+                        "partno": raw_part,
+                        "insert_spec": raw_spec,
+                        "qty": 0.0
+                    }
+                agg_map[key]["qty"] += qty_per_usage
+
+        result = list(agg_map.values())
+        result.sort(key=lambda x: (x["dept"].lower(), x["partno"].lower(), x["insert_spec"].lower()))
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/insert_issues/{id}")
 def get_insert_issue(id: int, db: Session = Depends(get_db)):
     try:

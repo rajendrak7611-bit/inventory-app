@@ -420,7 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const sections = [
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection', 'bcProdSection', 'attVsLoginSection',
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
-            'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'insertStockSection', 'partMasterSection', 'machinesSection',
+            'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'insertConsumptionSection', 'insertStockSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'dbBackupSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'resourceReqdSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection', 'bcStatusSection',
             'inspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'serviceSettersSection', 'hrSection', 'attendanceSection', 'rfqSection', 'quoteSection'
@@ -744,6 +744,13 @@ document.addEventListener('DOMContentLoaded', () => {
             importBtn.style.display = 'none';
             addBtn.style.display = 'none';
             fetchInsertCpcReport();
+        }},
+        'sidebarInsertConsumption': { tab: 'insertconsumption', action: () => {
+            const sec = document.getElementById('insertConsumptionSection');
+            if (sec) sec.style.display = 'block';
+            importBtn.style.display = 'none';
+            addBtn.style.display = 'none';
+            initInsertConsumptionReport();
         }},
         'sidebarInsertStock': { tab: 'insertstock', action: () => {
             const sec = document.getElementById('insertStockSection');
@@ -13456,6 +13463,328 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!table) return;
         const wb = XLSX.utils.table_to_book(table, { sheet: "Insert_CPC_Report" });
         XLSX.writeFile(wb, `Insert_CPC_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    });
+
+    // --- Insert Consumption Report Implementation ---
+    let allInsertConsumRows = [];
+    let activeInsertConsumColFilters = {};
+
+    function initInsertConsumptionReport() {
+        const fromInput = document.getElementById('insertConsumFromDate');
+        const toInput = document.getElementById('insertConsumToDate');
+        if (fromInput && !fromInput.value) {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            fromInput.value = `${yyyy}-${mm}-01`;
+        }
+        if (toInput && !toInput.value) {
+            toInput.value = new Date().toISOString().slice(0, 10);
+        }
+        fetchInsertConsumptionReport();
+    }
+
+    async function fetchInsertConsumptionReport() {
+        const tbody = document.getElementById('insertConsumptionBody');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 25px; color: #64748b;">Loading consumption data...</td></tr>';
+
+        const fromDate = document.getElementById('insertConsumFromDate')?.value || '';
+        const toDate = document.getElementById('insertConsumToDate')?.value || '';
+        const filterDept = (document.getElementById('insertConsumFilterDept')?.value || '').trim();
+        const filterPart = (document.getElementById('insertConsumFilterPart')?.value || '').trim();
+
+        try {
+            const [issuesRes, partsRes, deptsRes] = await Promise.all([
+                fetch('/api/insert_issues'),
+                fetch('/api/partmaster'),
+                fetch('/api/departments')
+            ]);
+
+            const issues = await issuesRes.json();
+            const parts = await partsRes.json();
+            const depts = await deptsRes.json();
+
+            populateInsertConsumFilterDropdowns(issues, parts, depts);
+
+            // Filter issues by date period and optional department filter
+            const filteredIssues = (Array.isArray(issues) ? issues : []).filter(item => {
+                const d = formatExcelDate(item.date);
+                if (fromDate && d < fromDate) return false;
+                if (toDate && d > toDate) return false;
+                if (filterDept && (item.department || '').trim().toLowerCase() !== filterDept.toLowerCase()) return false;
+                return true;
+            });
+
+            // Aggregate map keyed by dept__partno__insertspec
+            const aggMap = {};
+
+            filteredIssues.forEach(item => {
+                const rawDept = (item.department || 'WIPRO').trim() || 'WIPRO';
+                const rawSpec = (item.insert_spec || '').trim();
+                if (!rawSpec) return;
+
+                let usages = [];
+                if (item.usages) {
+                    try {
+                        let parsed = item.usages;
+                        while (typeof parsed === 'string') parsed = JSON.parse(parsed);
+                        if (Array.isArray(parsed)) usages = parsed;
+                    } catch(e) {}
+                }
+
+                if (!usages || !Array.isArray(usages) || usages.length === 0) {
+                    usages = [{
+                        partno: item.partno || '',
+                        opn_no: item.opn_no || ''
+                    }];
+                }
+
+                const totalIssued = parseFloat(item.qty_issued) || 0;
+                if (totalIssued <= 0) return;
+                const qtyPerUsage = totalIssued / usages.length;
+
+                usages.forEach(u => {
+                    const rawPart = (u.partno || item.partno || '').trim();
+                    if (!rawPart) return;
+                    if (filterPart && rawPart.toLowerCase() !== filterPart.toLowerCase()) return;
+
+                    const groupKey = `${rawDept.toUpperCase()}___${rawPart.toUpperCase()}___${rawSpec.toUpperCase()}`;
+
+                    if (!aggMap[groupKey]) {
+                        aggMap[groupKey] = {
+                            dept: rawDept,
+                            partno: rawPart,
+                            insert_spec: rawSpec,
+                            qty: 0
+                        };
+                    }
+                    aggMap[groupKey].qty += qtyPerUsage;
+                });
+            });
+
+            allInsertConsumRows = Object.values(aggMap).sort((a, b) => {
+                const dCmp = a.dept.localeCompare(b.dept, undefined, { numeric: true, sensitivity: 'base' });
+                if (dCmp !== 0) return dCmp;
+                const pCmp = a.partno.localeCompare(b.partno, undefined, { numeric: true, sensitivity: 'base' });
+                if (pCmp !== 0) return pCmp;
+                return a.insert_spec.localeCompare(b.insert_spec, undefined, { numeric: true, sensitivity: 'base' });
+            });
+
+            activeInsertConsumColFilters = {};
+            document.querySelectorAll('.insert-consum-col-filter').forEach(inp => inp.value = '');
+
+            applyInsertConsumColFilters();
+        } catch (err) {
+            console.error('Error in fetchInsertConsumptionReport:', err);
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 25px; color: #ef4444;">Failed to load consumption report. Please try again.</td></tr>';
+        }
+    }
+
+    function populateInsertConsumFilterDropdowns(issues, parts, depts) {
+        const deptSelect = document.getElementById('insertConsumFilterDept');
+        const partSelect = document.getElementById('insertConsumFilterPart');
+        if (!deptSelect || !partSelect) return;
+
+        if (deptSelect.options.length <= 1) {
+            const deptSet = new Set();
+            if (Array.isArray(issues)) {
+                issues.forEach(i => { if (i.department) deptSet.add(i.department.trim()); });
+            }
+            if (Array.isArray(depts)) {
+                depts.forEach(d => { if (d.name) deptSet.add(d.name.trim()); });
+            }
+            Array.from(deptSet).sort().forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d;
+                opt.textContent = d;
+                deptSelect.appendChild(opt);
+            });
+        }
+
+        if (partSelect.options.length <= 1) {
+            const partSet = new Set();
+            if (Array.isArray(issues)) {
+                issues.forEach(i => {
+                    if (i.partno) partSet.add(i.partno.trim());
+                    if (i.usages) {
+                        try {
+                            let parsed = i.usages;
+                            while (typeof parsed === 'string') parsed = JSON.parse(parsed);
+                            if (Array.isArray(parsed)) {
+                                parsed.forEach(u => { if (u.partno) partSet.add(u.partno.trim()); });
+                            }
+                        } catch(e) {}
+                    }
+                });
+            }
+            if (Array.isArray(parts)) {
+                parts.forEach(p => { if (p.partno) partSet.add(p.partno.trim()); });
+            }
+            Array.from(partSet).sort().forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.textContent = p;
+                partSelect.appendChild(opt);
+            });
+        }
+    }
+
+    function applyInsertConsumColFilters() {
+        let filtered = allInsertConsumRows;
+
+        const filters = Object.entries(activeInsertConsumColFilters).filter(([_, val]) => val && val.trim() !== '');
+        if (filters.length > 0) {
+            filtered = filtered.filter(row => {
+                return filters.every(([colIdx, filterVal]) => {
+                    const f = filterVal.trim().toLowerCase();
+                    if (colIdx === '0') return (row.dept || '').toLowerCase().includes(f);
+                    if (colIdx === '1') return (row.partno || '').toLowerCase().includes(f);
+                    if (colIdx === '2') return (row.insert_spec || '').toLowerCase().includes(f);
+                    if (colIdx === '3') {
+                        const qStr = Number.isInteger(row.qty) ? String(row.qty) : row.qty.toFixed(2);
+                        return qStr.includes(f);
+                    }
+                    return true;
+                });
+            });
+        }
+
+        renderInsertConsumptionTable(filtered);
+    }
+
+    function renderInsertConsumptionTable(rows) {
+        const tbody = document.getElementById('insertConsumptionBody');
+        const footerQty = document.getElementById('insertConsumFooterQty');
+        const kpiTotalQty = document.getElementById('insertConsumKpiTotalQty');
+        const kpiUniqueParts = document.getElementById('insertConsumKpiUniqueParts');
+        const kpiUniqueSpecs = document.getElementById('insertConsumKpiUniqueSpecs');
+        const kpiTotalRows = document.getElementById('insertConsumKpiTotalRows');
+
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        if (!rows || rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 25px; color: #64748b;">No insert consumption data found for the selected period.</td></tr>';
+            if (footerQty) footerQty.textContent = '0';
+            if (kpiTotalQty) kpiTotalQty.textContent = '0';
+            if (kpiUniqueParts) kpiUniqueParts.textContent = '0';
+            if (kpiUniqueSpecs) kpiUniqueSpecs.textContent = '0';
+            if (kpiTotalRows) kpiTotalRows.textContent = '0';
+            return;
+        }
+
+        let totalQty = 0;
+        const partSet = new Set();
+        const specSet = new Set();
+
+        const fragment = document.createDocumentFragment();
+
+        rows.forEach((row, idx) => {
+            totalQty += row.qty;
+            if (row.partno) partSet.add(row.partno.trim());
+            if (row.insert_spec) specSet.add(row.insert_spec.trim());
+
+            const tr = document.createElement('tr');
+            tr.style.background = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+            tr.style.borderBottom = '1px solid #e2e8f0';
+
+            const qtyFormatted = Number.isInteger(row.qty) ? row.qty : row.qty.toFixed(2);
+
+            tr.innerHTML = `
+                <td style="padding: 9px 14px; border-right: 1px solid #e2e8f0; font-weight: 500; color: #334155;">${escapeHtml(row.dept)}</td>
+                <td style="padding: 9px 14px; border-right: 1px solid #e2e8f0; font-weight: 600; color: #0284c7;">${escapeHtml(row.partno)}</td>
+                <td style="padding: 9px 14px; border-right: 1px solid #e2e8f0; font-weight: 500; color: #1e293b;">${escapeHtml(row.insert_spec)}</td>
+                <td style="padding: 9px 14px; text-align: right; font-weight: 700; color: #0f172a;">${qtyFormatted}</td>
+            `;
+            fragment.appendChild(tr);
+        });
+
+        tbody.appendChild(fragment);
+
+        const totalQtyFormatted = Number.isInteger(totalQty) ? totalQty : totalQty.toFixed(2);
+        if (footerQty) footerQty.textContent = totalQtyFormatted;
+        if (kpiTotalQty) kpiTotalQty.textContent = totalQtyFormatted;
+        if (kpiUniqueParts) kpiUniqueParts.textContent = partSet.size;
+        if (kpiUniqueSpecs) kpiUniqueSpecs.textContent = specSet.size;
+        if (kpiTotalRows) kpiTotalRows.textContent = rows.length;
+    }
+
+    // Insert Consumption Event Listeners
+    document.getElementById('filterInsertConsumBtn')?.addEventListener('click', fetchInsertConsumptionReport);
+    document.getElementById('resetInsertConsumBtn')?.addEventListener('click', () => {
+        const fromInput = document.getElementById('insertConsumFromDate');
+        const toInput = document.getElementById('insertConsumToDate');
+        if (fromInput) {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            fromInput.value = `${yyyy}-${mm}-01`;
+        }
+        if (toInput) toInput.value = new Date().toISOString().slice(0, 10);
+        if (document.getElementById('insertConsumFilterDept')) document.getElementById('insertConsumFilterDept').value = '';
+        if (document.getElementById('insertConsumFilterPart')) document.getElementById('insertConsumFilterPart').value = '';
+        activeInsertConsumColFilters = {};
+        document.querySelectorAll('.insert-consum-col-filter').forEach(inp => inp.value = '');
+        fetchInsertConsumptionReport();
+    });
+
+    document.getElementById('exportInsertConsumBtn')?.addEventListener('click', () => {
+        const table = document.getElementById('insertConsumptionTable');
+        if (!table) return;
+
+        // Build clean export data without filter inputs
+        const exportData = [];
+        const fromDate = document.getElementById('insertConsumFromDate')?.value || '';
+        const toDate = document.getElementById('insertConsumToDate')?.value || '';
+
+        // Header
+        exportData.push(['Dept', 'Part No', 'Insert Spec', 'Qty']);
+
+        let totalQty = 0;
+        allInsertConsumRows.forEach(row => {
+            // Respect active column filters if any
+            const filters = Object.entries(activeInsertConsumColFilters).filter(([_, val]) => val && val.trim() !== '');
+            if (filters.length > 0) {
+                const match = filters.every(([colIdx, filterVal]) => {
+                    const f = filterVal.trim().toLowerCase();
+                    if (colIdx === '0') return (row.dept || '').toLowerCase().includes(f);
+                    if (colIdx === '1') return (row.partno || '').toLowerCase().includes(f);
+                    if (colIdx === '2') return (row.insert_spec || '').toLowerCase().includes(f);
+                    if (colIdx === '3') {
+                        const qStr = Number.isInteger(row.qty) ? String(row.qty) : row.qty.toFixed(2);
+                        return qStr.includes(f);
+                    }
+                    return true;
+                });
+                if (!match) return;
+            }
+
+            totalQty += row.qty;
+            exportData.push([
+                row.dept,
+                row.partno,
+                row.insert_spec,
+                Number.isInteger(row.qty) ? row.qty : Number(row.qty.toFixed(2))
+            ]);
+        });
+
+        exportData.push(['Total', '', '', Number.isInteger(totalQty) ? totalQty : Number(totalQty.toFixed(2))]);
+
+        const ws = XLSX.utils.aoa_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Insert_Consumption");
+        const filename = `Insert_Consumption_${fromDate || 'all'}_to_${toDate || 'all'}.xlsx`;
+        XLSX.writeFile(wb, filename);
+    });
+
+    // Delegated event listener for column filter typing
+    document.addEventListener('input', (e) => {
+        if (e.target && e.target.classList.contains('insert-consum-col-filter')) {
+            const col = e.target.getAttribute('data-col');
+            activeInsertConsumColFilters[col] = e.target.value;
+            applyInsertConsumColFilters();
+        }
     });
 
     // --- Insert Stock Summary Implementation ---
