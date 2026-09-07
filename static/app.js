@@ -9199,12 +9199,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (mcUtilWhatsappPhone && !mcUtilWhatsappPhone.value) {
                 mcUtilWhatsappPhone.value = savedPhone;
             }
+            mcUtilWhatsappModal.style.display = 'flex';
             mcUtilWhatsappModal.classList.add('show');
         });
     }
 
     if (closeMcUtilWhatsappModalBtn && mcUtilWhatsappModal) {
         closeMcUtilWhatsappModalBtn.addEventListener('click', () => {
+            mcUtilWhatsappModal.style.display = 'none';
             mcUtilWhatsappModal.classList.remove('show');
         });
     }
@@ -9237,11 +9239,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.setItem('mc_util_whatsapp_phone', phone);
             }
 
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             let url = '';
             if (phone) {
                 url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
             } else {
-                url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+                url = isMobile 
+                    ? `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`
+                    : `https://web.whatsapp.com/send?text=${encodeURIComponent(text)}`;
             }
             window.open(url, '_blank');
         });
@@ -9249,6 +9254,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.addEventListener('click', (e) => {
         if (mcUtilWhatsappModal && e.target === mcUtilWhatsappModal) {
+            mcUtilWhatsappModal.style.display = 'none';
             mcUtilWhatsappModal.classList.remove('show');
         }
     });
