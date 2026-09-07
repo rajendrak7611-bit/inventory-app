@@ -8985,84 +8985,86 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch('/api/prodlog');
                 const allLogs = await res.json();
                 
-                // Filter
+                // Filter by department and date range
                 const filtered = allLogs.filter(l => {
-                    if (dept && (l.dept || '').toUpperCase() !== dept.toUpperCase()) return false;
-                    if (l.date < fromDate || l.date > toDate) return false;
+                    const lDept = (l.dept || l.department || '').trim().toUpperCase();
+                    if (dept && lDept !== dept.trim().toUpperCase()) return false;
+                    const lDate = (l.date || '').trim();
+                    if (lDate < fromDate || lDate > toDate) return false;
                     return true;
                 });
                 
-                // Collect unique idle reasons
-                const idleReasonsSet = new Set();
-                filtered.forEach(l => {
-                    if (l.idle_reason) idleReasonsSet.add(l.idle_reason.trim());
-                    if (l.idle_reason_2) idleReasonsSet.add(l.idle_reason_2.trim());
-                    if (l.idle_reason_3) idleReasonsSet.add(l.idle_reason_3.trim());
-                });
-                const idleReasons = Array.from(idleReasonsSet).filter(r => r).sort();
-                
-                // Group by machine
+                // Group by machine (ignore empty or invalid machine names)
                 const machineData = {};
                 filtered.forEach(l => {
-                    const mc = (l.machine || 'Unknown').trim();
+                    const mc = (l.machine || l.machine_name || '').trim();
+                    if (!mc || mc === '-' || mc.toLowerCase() === 'none' || mc.toLowerCase() === 'unknown') return;
+                    
                     if (!machineData[mc]) {
                         machineData[mc] = { runtime: 0, idleTotal: 0 };
-                        idleReasons.forEach(r => machineData[mc][r] = 0);
                     }
                     
-                    machineData[mc].runtime += (l.runtime || 0);
+                    machineData[mc].runtime += (parseFloat(l.runtime) || 0);
                     
-                    let idle1 = l.idle_hours || 0;
-                    let idle2 = l.idle_hours_2 || 0;
-                    let idle3 = l.idle_hours_3 || 0;
+                    const idle1 = parseFloat(l.idle_hours) || 0;
+                    const idle2 = parseFloat(l.idle_hours_2) || 0;
+                    const idle3 = parseFloat(l.idle_hours_3) || 0;
                     
                     machineData[mc].idleTotal += (idle1 + idle2 + idle3);
-                    
-                    if (l.idle_reason && idle1 > 0) machineData[mc][l.idle_reason.trim()] += idle1;
-                    if (l.idle_reason_2 && idle2 > 0) machineData[mc][l.idle_reason_2.trim()] += idle2;
-                    if (l.idle_reason_3 && idle3 > 0) machineData[mc][l.idle_reason_3.trim()] += idle3;
                 });
                 
-                // Render table
+                // Render table: only Machine, Run Time, Idle Time, Log Time, Util %
                 const thead = document.getElementById('mcUtilHead');
                 const tbody = document.getElementById('mcUtilBody');
                 
-                let headHtml = `<tr>
-                    <th>Machine</th>
-                    <th>Run Time</th>
-                    <th>Idle Time</th>
-                    <th>Log Time</th>
-                    <th>Util %</th>`;
-                idleReasons.forEach(r => {
-                    headHtml += `<th>${r}</th>`;
-                });
-                headHtml += `</tr>`;
-                thead.innerHTML = headHtml;
+                thead.innerHTML = `<tr>
+                    <th style="text-align: left; padding: 10px 14px;">Machine</th>
+                    <th style="text-align: right; padding: 10px 14px;">Run Time</th>
+                    <th style="text-align: right; padding: 10px 14px;">Idle Time</th>
+                    <th style="text-align: right; padding: 10px 14px;">Log Time</th>
+                    <th style="text-align: right; padding: 10px 14px;">Util %</th>
+                </tr>`;
                 
                 tbody.innerHTML = '';
                 
                 const sortedMachines = Object.keys(machineData).sort();
                 if (sortedMachines.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="${5 + idleReasons.length}" style="text-align:center; color: var(--text-muted);">No data found for selected period</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-muted); padding: 15px;">No machine data found for selected period</td></tr>`;
                 } else {
-                    let totalRowHtml = '';
+                    let rowsHtml = '';
+                    let totalRunTime = 0;
+                    let totalIdleTime = 0;
+                    let totalLogTime = 0;
+                    
                     sortedMachines.forEach(mc => {
                         const d = machineData[mc];
                         const logTime = d.runtime + d.idleTotal;
-                        const utilPercent = (d.runtime / 21) * 100;
-                        let rowHtml = `<tr>
-                            <td style="font-weight: 500;">${mc}</td>
-                            <td>${d.runtime.toFixed(2)}</td>
-                            <td>${d.idleTotal.toFixed(2)}</td>
-                            <td>${logTime.toFixed(2)}</td>
-                            <td>${utilPercent.toFixed(2)}%</td>`;
-                        idleReasons.forEach(r => {
-                            rowHtml += `<td>${d[r] ? d[r].toFixed(2) : '-'}</td>`;
-                        });
-                        rowHtml += `</tr>`;
-                        totalRowHtml += rowHtml;
+                        // util% = (runtime / log time) * 100
+                        const utilPercent = logTime > 0 ? (d.runtime / logTime) * 100 : 0;
+                        
+                        totalRunTime += d.runtime;
+                        totalIdleTime += d.idleTotal;
+                        totalLogTime += logTime;
+                        
+                        rowsHtml += `<tr>
+                            <td style="font-weight: 600; text-align: left; padding: 8px 14px;">${escapeHtml(mc)}</td>
+                            <td style="text-align: right; padding: 8px 14px;">${d.runtime.toFixed(2)}</td>
+                            <td style="text-align: right; padding: 8px 14px;">${d.idleTotal.toFixed(2)}</td>
+                            <td style="text-align: right; padding: 8px 14px; font-weight: 600;">${logTime.toFixed(2)}</td>
+                            <td style="text-align: right; padding: 8px 14px; font-weight: 700; color: #0284c7;">${utilPercent.toFixed(2)}%</td>
+                        </tr>`;
                     });
-                    tbody.innerHTML = totalRowHtml;
+                    
+                    const overallUtil = totalLogTime > 0 ? (totalRunTime / totalLogTime) * 100 : 0;
+                    rowsHtml += `<tr style="background: #f1f5f9; font-weight: 700; border-top: 2px solid #cbd5e1;">
+                        <td style="text-align: left; padding: 10px 14px;">Total</td>
+                        <td style="text-align: right; padding: 10px 14px;">${totalRunTime.toFixed(2)}</td>
+                        <td style="text-align: right; padding: 10px 14px;">${totalIdleTime.toFixed(2)}</td>
+                        <td style="text-align: right; padding: 10px 14px;">${totalLogTime.toFixed(2)}</td>
+                        <td style="text-align: right; padding: 10px 14px; color: #0284c7;">${overallUtil.toFixed(2)}%</td>
+                    </tr>`;
+                    
+                    tbody.innerHTML = rowsHtml;
                 }
                 
             } catch(e) {
