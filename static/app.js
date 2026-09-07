@@ -9001,19 +9001,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!mc || mc === '-' || mc.toLowerCase() === 'none' || mc.toLowerCase() === 'unknown') return;
                     
                     if (!machineData[mc]) {
-                        machineData[mc] = { runtime: 0, idleTotal: 0 };
+                        machineData[mc] = { runtime: 0, idleTotal: 0, byDate: {} };
                     }
                     
-                    machineData[mc].runtime += (parseFloat(l.runtime) || 0);
-                    
+                    const rTime = parseFloat(l.runtime) || 0;
                     const idle1 = parseFloat(l.idle_hours) || 0;
                     const idle2 = parseFloat(l.idle_hours_2) || 0;
                     const idle3 = parseFloat(l.idle_hours_3) || 0;
-                    
-                    machineData[mc].idleTotal += (idle1 + idle2 + idle3);
+                    const iTotal = idle1 + idle2 + idle3;
+
+                    machineData[mc].runtime += rTime;
+                    machineData[mc].idleTotal += iTotal;
+
+                    const lDate = (l.date || '').trim();
+                    if (lDate) {
+                        if (!machineData[mc].byDate[lDate]) {
+                            machineData[mc].byDate[lDate] = { runtime: 0, idleTotal: 0 };
+                        }
+                        machineData[mc].byDate[lDate].runtime += rTime;
+                        machineData[mc].byDate[lDate].idleTotal += iTotal;
+                    }
                 });
                 
-                // Render table: only Machine, Run Time, Idle Time, Log Time, Util %
+                // Render table: Machine, Run Time, Idle Time, Log Time, Actual Time, Util %
                 const thead = document.getElementById('mcUtilHead');
                 const tbody = document.getElementById('mcUtilBody');
                 
@@ -9022,6 +9032,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <th style="text-align: right; padding: 10px 14px;">Run Time</th>
                     <th style="text-align: right; padding: 10px 14px;">Idle Time</th>
                     <th style="text-align: right; padding: 10px 14px;">Log Time</th>
+                    <th style="text-align: right; padding: 10px 14px;">Actual Time</th>
                     <th style="text-align: right; padding: 10px 14px;">Util %</th>
                 </tr>`;
                 
@@ -9029,38 +9040,57 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const sortedMachines = Object.keys(machineData).sort();
                 if (sortedMachines.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color: var(--text-muted); padding: 15px;">No machine data found for selected period</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color: var(--text-muted); padding: 15px;">No machine data found for selected period</td></tr>`;
                 } else {
                     let rowsHtml = '';
                     let totalRunTime = 0;
                     let totalIdleTime = 0;
                     let totalLogTime = 0;
+                    let totalActualTime = 0;
                     
                     sortedMachines.forEach(mc => {
                         const d = machineData[mc];
                         const logTime = d.runtime + d.idleTotal;
-                        // util% = (runtime / log time) * 100
-                        const utilPercent = logTime > 0 ? (d.runtime / logTime) * 100 : 0;
+
+                        // Actual Time logic:
+                        // If log time >= 22, actual time = log time; if log time < 22, actual time = 21
+                        let actualTime = 0;
+                        const dates = Object.keys(d.byDate);
+                        if (dates.length > 0) {
+                            dates.forEach(dt => {
+                                const day = d.byDate[dt];
+                                const dayLog = day.runtime + day.idleTotal;
+                                actualTime += (dayLog >= 22 ? dayLog : 21);
+                            });
+                        } else {
+                            actualTime = logTime >= 22 ? logTime : 21;
+                        }
+
+                        // util% = (runtime / actual time) * 100
+                        const utilPercent = actualTime > 0 ? (d.runtime / actualTime) * 100 : 0;
                         
                         totalRunTime += d.runtime;
                         totalIdleTime += d.idleTotal;
                         totalLogTime += logTime;
+                        totalActualTime += actualTime;
                         
                         rowsHtml += `<tr>
                             <td style="font-weight: 600; text-align: left; padding: 8px 14px;">${escapeHtml(mc)}</td>
                             <td style="text-align: right; padding: 8px 14px;">${d.runtime.toFixed(2)}</td>
                             <td style="text-align: right; padding: 8px 14px;">${d.idleTotal.toFixed(2)}</td>
                             <td style="text-align: right; padding: 8px 14px; font-weight: 600;">${logTime.toFixed(2)}</td>
+                            <td style="text-align: right; padding: 8px 14px; font-weight: 600;">${actualTime.toFixed(2)}</td>
                             <td style="text-align: right; padding: 8px 14px; font-weight: 700; color: #0284c7;">${utilPercent.toFixed(2)}%</td>
                         </tr>`;
                     });
                     
-                    const overallUtil = totalLogTime > 0 ? (totalRunTime / totalLogTime) * 100 : 0;
+                    const overallUtil = totalActualTime > 0 ? (totalRunTime / totalActualTime) * 100 : 0;
                     rowsHtml += `<tr style="background: #f1f5f9; font-weight: 700; border-top: 2px solid #cbd5e1;">
                         <td style="text-align: left; padding: 10px 14px;">Total</td>
                         <td style="text-align: right; padding: 10px 14px;">${totalRunTime.toFixed(2)}</td>
                         <td style="text-align: right; padding: 10px 14px;">${totalIdleTime.toFixed(2)}</td>
                         <td style="text-align: right; padding: 10px 14px;">${totalLogTime.toFixed(2)}</td>
+                        <td style="text-align: right; padding: 10px 14px;">${totalActualTime.toFixed(2)}</td>
                         <td style="text-align: right; padding: 10px 14px; color: #0284c7;">${overallUtil.toFixed(2)}%</td>
                     </tr>`;
                     
