@@ -8994,9 +8994,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Exclude specific machines for BC department: leadwell, new 2 way, pc, tapping 1
                     const effectiveDept = lDept || (dept ? dept.trim().toUpperCase() : '');
+                    const mcNorm = (l.machine || l.machine_name || '').toLowerCase().replace(/\s+/g, ' ').trim();
                     if (effectiveDept === 'BC') {
-                        const mcNorm = (l.machine || l.machine_name || '').toLowerCase().replace(/\s+/g, ' ').trim();
                         if (mcNorm === 'leadwell' || mcNorm === 'new 2 way' || mcNorm === 'new 2way' || mcNorm === 'pc' || mcNorm === 'tapping 1' || mcNorm === 'tapping1') {
+                            return false;
+                        }
+                    }
+                    // Exclude specific machines for SPIDER department: HT, NH22-1
+                    if (effectiveDept === 'SPIDER') {
+                        if (mcNorm === 'ht' || mcNorm === 'nh22-1' || mcNorm === 'nh22 - 1' || mcNorm === 'nh 22-1' || mcNorm === 'nh-22-1') {
                             return false;
                         }
                     }
@@ -9011,9 +9017,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!mc || mc === '-' || mc.toLowerCase() === 'none' || mc.toLowerCase() === 'unknown') return;
                     
                     const lDept = (l.dept || l.department || dept || '').trim().toUpperCase();
+                    const mcNorm = mc.toLowerCase().replace(/\s+/g, ' ').trim();
                     if (lDept === 'BC') {
-                        const mcNorm = mc.toLowerCase().replace(/\s+/g, ' ').trim();
                         if (mcNorm === 'leadwell' || mcNorm === 'new 2 way' || mcNorm === 'new 2way' || mcNorm === 'pc' || mcNorm === 'tapping 1' || mcNorm === 'tapping1') {
+                            return;
+                        }
+                    }
+                    if (lDept === 'SPIDER') {
+                        if (mcNorm === 'ht' || mcNorm === 'nh22-1' || mcNorm === 'nh22 - 1' || mcNorm === 'nh 22-1' || mcNorm === 'nh-22-1') {
                             return;
                         }
                     }
