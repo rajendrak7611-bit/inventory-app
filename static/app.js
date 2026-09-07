@@ -9111,6 +9111,148 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- WhatsApp Machine Utilization Sharing ---
+    const whatsappMcUtilBtn = document.getElementById('whatsappMcUtilBtn');
+    const mcUtilWhatsappModal = document.getElementById('mcUtilWhatsappModal');
+    const closeMcUtilWhatsappModalBtn = document.getElementById('closeMcUtilWhatsappModalBtn');
+    const copyMcUtilWhatsappTextBtn = document.getElementById('copyMcUtilWhatsappTextBtn');
+    const sendMcUtilWhatsappConfirmBtn = document.getElementById('sendMcUtilWhatsappConfirmBtn');
+    const mcUtilWhatsappPhone = document.getElementById('mcUtilWhatsappPhone');
+    const mcUtilWhatsappPreview = document.getElementById('mcUtilWhatsappPreview');
+
+    function generateMcUtilWhatsappText() {
+        const fromDate = document.getElementById('mcUtilFromDate')?.value || '';
+        const toDate = document.getElementById('mcUtilToDate')?.value || '';
+        const deptSelect = document.getElementById('mcUtilDept');
+        let dept = 'ALL';
+        if (deptSelect) {
+            dept = deptSelect.options[deptSelect.selectedIndex]?.text || deptSelect.value || 'ALL';
+            if (dept.startsWith('--')) dept = 'ALL';
+        }
+
+        const tbody = document.getElementById('mcUtilBody');
+        if (!tbody) return '';
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        if (rows.length === 0 || (rows[0] && rows[0].innerText.includes('No machine data'))) {
+            return '';
+        }
+
+        let text = `🏭 *GRS ENGINEERING PVT LTD*\n`;
+        text += `📊 *MACHINE UTILIZATION REPORT*\n`;
+        text += `📅 *Period:* ${fromDate} to ${toDate}\n`;
+        text += `🏢 *Dept:* ${dept}\n\n`;
+
+        const colMcW = 13;
+        const colNumW = 6;
+
+        let tableStr = `${'Machine'.padEnd(colMcW)} ${'Run'.padStart(colNumW)} ${'Idle'.padStart(colNumW)} ${'Log'.padStart(colNumW)} ${'Act'.padStart(colNumW)} ${'Util%'.padStart(colNumW + 1)}\n`;
+        tableStr += `${'-'.repeat(colMcW + colNumW * 4 + colNumW + 6)}\n`;
+
+        let summaryTotal = null;
+
+        rows.forEach(r => {
+            const cells = Array.from(r.querySelectorAll('td')).map(td => td.innerText.trim());
+            if (cells.length >= 6) {
+                const mcName = cells[0];
+                const run = cells[1];
+                const idle = cells[2];
+                const log = cells[3];
+                const act = cells[4];
+                const util = cells[5];
+
+                if (mcName.toLowerCase() === 'total') {
+                    summaryTotal = { run, idle, log, act, util };
+                    tableStr += `${'-'.repeat(colMcW + colNumW * 4 + colNumW + 6)}\n`;
+                    tableStr += `${'TOTAL'.padEnd(colMcW)} ${run.padStart(colNumW)} ${idle.padStart(colNumW)} ${log.padStart(colNumW)} ${act.padStart(colNumW)} ${util.padStart(colNumW + 1)}\n`;
+                } else {
+                    const shortMc = mcName.length > colMcW ? mcName.substring(0, colMcW) : mcName.padEnd(colMcW);
+                    tableStr += `${shortMc} ${run.padStart(colNumW)} ${idle.padStart(colNumW)} ${log.padStart(colNumW)} ${act.padStart(colNumW)} ${util.padStart(colNumW + 1)}\n`;
+                }
+            }
+        });
+
+        text += '```\n' + tableStr + '```\n';
+
+        if (summaryTotal) {
+            text += `\n*Summary:*`;
+            text += `\n• *Total Run Time:* ${summaryTotal.run} hrs`;
+            text += `\n• *Total Idle Time:* ${summaryTotal.idle} hrs`;
+            text += `\n• *Total Log Time:* ${summaryTotal.log} hrs`;
+            text += `\n• *Total Actual Time:* ${summaryTotal.act} hrs`;
+            text += `\n• *Overall Utilization:* ${summaryTotal.util}\n`;
+        }
+
+        return text;
+    }
+
+    if (whatsappMcUtilBtn && mcUtilWhatsappModal) {
+        whatsappMcUtilBtn.addEventListener('click', () => {
+            const text = generateMcUtilWhatsappText();
+            if (!text) {
+                alert('Please generate the Machine Utilization Report first.');
+                return;
+            }
+            if (mcUtilWhatsappPreview) {
+                mcUtilWhatsappPreview.value = text;
+            }
+            const savedPhone = localStorage.getItem('mc_util_whatsapp_phone') || '';
+            if (mcUtilWhatsappPhone && !mcUtilWhatsappPhone.value) {
+                mcUtilWhatsappPhone.value = savedPhone;
+            }
+            mcUtilWhatsappModal.classList.add('show');
+        });
+    }
+
+    if (closeMcUtilWhatsappModalBtn && mcUtilWhatsappModal) {
+        closeMcUtilWhatsappModalBtn.addEventListener('click', () => {
+            mcUtilWhatsappModal.classList.remove('show');
+        });
+    }
+
+    if (copyMcUtilWhatsappTextBtn && mcUtilWhatsappPreview) {
+        copyMcUtilWhatsappTextBtn.addEventListener('click', () => {
+            const text = mcUtilWhatsappPreview.value;
+            if (!text) return;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Report copied to clipboard! You can paste (Ctrl+V) directly into WhatsApp or Email.');
+            }).catch(() => {
+                mcUtilWhatsappPreview.select();
+                document.execCommand('copy');
+                alert('Report copied to clipboard!');
+            });
+        });
+    }
+
+    if (sendMcUtilWhatsappConfirmBtn && mcUtilWhatsappPreview) {
+        sendMcUtilWhatsappConfirmBtn.addEventListener('click', () => {
+            const text = mcUtilWhatsappPreview.value;
+            if (!text) return;
+
+            let phone = (mcUtilWhatsappPhone?.value || '').trim();
+            phone = phone.replace(/\D/g, '');
+            if (phone.length === 10) {
+                phone = '91' + phone;
+            }
+            if (phone) {
+                localStorage.setItem('mc_util_whatsapp_phone', phone);
+            }
+
+            let url = '';
+            if (phone) {
+                url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+            } else {
+                url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+            }
+            window.open(url, '_blank');
+        });
+    }
+
+    window.addEventListener('click', (e) => {
+        if (mcUtilWhatsappModal && e.target === mcUtilWhatsappModal) {
+            mcUtilWhatsappModal.classList.remove('show');
+        }
+    });
+
     // --- OPERATOR EFFICIENCY REPORT LOGIC ---
     async function fetchOperEffReport() {
         const selectedDate = document.getElementById('operEffDate')?.value;
