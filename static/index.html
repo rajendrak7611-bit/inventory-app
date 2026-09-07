@@ -1679,11 +1679,15 @@
             
             <!-- Debur Section -->
             <div class="table-container" id="deburSection" style="display: none; padding: 2rem; color: var(--text-main);">
-                <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 20px;">
+                <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
                     <h2 style="margin: 0;">Debur</h2>
                     <select id="deburDeptSelect" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
                         <option value="">-- Select Dept --</option>
                     </select>
+                    <div style="display: flex; align-items: center; gap: 6px; background: #f8fafc; padding: 4px 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                        <label for="deburMonth" style="font-size: 0.85rem; font-weight: 600; color: #475569; margin: 0;"><i class="far fa-calendar-alt"></i> Month:</label>
+                        <input type="month" id="deburMonth" style="border: none; background: transparent; font-size: 0.85rem; font-weight: 600; color: #0f172a; outline: none; cursor: pointer;">
+                    </div>
                 </div>
                 
                 <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
@@ -1895,11 +1899,15 @@
             
             <!-- Inspection Section -->
             <div class="table-container" id="inspectionSection" style="display: none; padding: 2rem; color: var(--text-main);">
-                <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 20px;">
+                <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
                     <h2 style="margin: 0;">Final Inspection</h2>
                     <select id="inspDeptSelect" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
                         <option value="">-- Select Dept --</option>
                     </select>
+                    <div style="display: flex; align-items: center; gap: 6px; background: #f8fafc; padding: 4px 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                        <label for="inspMonth" style="font-size: 0.85rem; font-weight: 600; color: #475569; margin: 0;"><i class="far fa-calendar-alt"></i> Month:</label>
+                        <input type="month" id="inspMonth" style="border: none; background: transparent; font-size: 0.85rem; font-weight: 600; color: #0f172a; outline: none; cursor: pointer;">
+                    </div>
                 </div>
                 
                 <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
@@ -4437,6 +4445,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10060"></script>
+    <script src="/static/app.js?v=10061"></script>
 </body>
 </html>

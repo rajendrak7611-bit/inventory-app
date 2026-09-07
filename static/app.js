@@ -4586,8 +4586,50 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function initDebur() {
         try {
+            if (!document.getElementById('deburMonth').value) {
+                document.getElementById('deburMonth').value = new Date().toISOString().slice(0, 7);
+            }
             if (!document.getElementById('deburDate').value) {
                 document.getElementById('deburDate').valueAsDate = new Date();
+            }
+
+            const deburMonthEl = document.getElementById('deburMonth');
+            if (deburMonthEl && !deburMonthEl._hasChangeListener) {
+                deburMonthEl._hasChangeListener = true;
+                deburMonthEl.addEventListener('change', () => {
+                    const mVal = deburMonthEl.value;
+                    if (mVal) {
+                        const curDateVal = document.getElementById('deburDate').value;
+                        if (!curDateVal || !curDateVal.startsWith(mVal)) {
+                            const now = new Date();
+                            const currentMonthStr = now.toISOString().slice(0, 7);
+                            if (mVal === currentMonthStr) {
+                                document.getElementById('deburDate').value = now.toISOString().split('T')[0];
+                            } else {
+                                document.getElementById('deburDate').value = `${mVal}-01`;
+                            }
+                        }
+                    }
+                    fetchDeburStatus();
+                    fetchDeburLogs();
+                });
+            }
+
+            const deburDateEl = document.getElementById('deburDate');
+            if (deburDateEl && !deburDateEl._hasChangeListener) {
+                deburDateEl._hasChangeListener = true;
+                deburDateEl.addEventListener('change', () => {
+                    const dVal = deburDateEl.value;
+                    if (dVal && dVal.length >= 7) {
+                        const mVal = dVal.slice(0, 7);
+                        const monthInput = document.getElementById('deburMonth');
+                        if (monthInput && monthInput.value !== mVal) {
+                            monthInput.value = mVal;
+                            fetchDeburStatus();
+                            fetchDeburLogs();
+                        }
+                    }
+                });
             }
             
             if (deburAllParts.length === 0) {
@@ -4644,6 +4686,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const month = document.getElementById('deburMonth')?.value || (document.getElementById('deburDate')?.value || '').slice(0, 7) || new Date().toISOString().slice(0, 7);
+
         try {
             if (!deburAllParts || deburAllParts.length === 0) {
                 try {
@@ -4663,6 +4707,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const allLogs = logRes || [];
             const allPcReceiptLogs = pcReceiptRes || [];
             const allHtReceiptLogs = htReceiptRes || [];
+
+            // Filter logs for the selected month
+            const monthLogs = allLogs.filter(l => (l.date || '').startsWith(month));
+            const monthPcReceiptLogs = allPcReceiptLogs.filter(l => (l.date || '').startsWith(month));
+            const monthHtReceiptLogs = allHtReceiptLogs.filter(l => (l.date || '').startsWith(month));
 
             const masterDeptParts = (deburAllParts || [])
                 .filter(p => (p.department || '').trim().toUpperCase() === dept.trim().toUpperCase() || (p.dept || '').trim().toUpperCase() === dept.trim().toUpperCase())
@@ -4708,39 +4757,37 @@ document.addEventListener('DOMContentLoaded', () => {
                     const lastOp = operations[operations.length - 1];
                     const lastOpnClean = (lastOp.opn_no || '').trim().toLowerCase();
                     const lastDescClean = (lastOp.description || '').trim().toLowerCase();
-                    const lastMachClean = (lastOp.machine || '').trim().toLowerCase();
+                    const lastMachClean = (lastOp.machine || lastOp.machine_name || '').trim().toLowerCase();
 
                     const isLastPc = lastOpnClean === 'pc' || lastDescClean === 'pc' || lastDescClean.includes('powder coat') || lastDescClean.includes('pc') || lastMachClean === 'pc';
                     const isLastHt = lastOpnClean === 'ht' || lastOpnClean === '50' || lastDescClean === 'ht' || lastDescClean.includes('heat treat') || lastMachClean === 'ht';
 
-                    lastOpProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === lastOpnClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                    lastOpProd = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && ((l.opn_no || '').trim().toLowerCase() === lastOpnClean || (parseInt(l.opn_no) || -1) === (parseInt(lastOp.opn_no) || -2))).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
 
                     if (isLastPc || lastOpnClean.includes('pc')) {
-                        const pcRec = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                        const pcRec = monthPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                         lastOpProd = Math.max(lastOpProd, pcRec);
                     } else if (isLastHt) {
-                        const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                        const htRec = monthHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                         lastOpProd = Math.max(lastOpProd, htRec);
                     }
                 } else {
-                    const partLogs = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() !== 'debur' && (l.opn_no || '').toLowerCase() !== 'for ins' && (l.opn_no || '').toLowerCase() !== 'rfd');
-                    if (partLogs.length > 0) {
-                        const numericOps = partLogs.map(l => parseInt(l.opn_no) || 0).filter(n => n > 0);
-                        if (numericOps.length > 0) {
-                            const maxOp = Math.max(...numericOps);
-                            lastOpProd = partLogs.filter(l => (parseInt(l.opn_no) || 0) === maxOp).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                        }
+                    const partAllLogs = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && !['debur', 'for ins', 'rfd', 'rework', 'rejection', 'nc', 'idle'].includes((l.opn_no || '').toLowerCase()));
+                    const numericOps = partAllLogs.map(l => parseInt(l.opn_no) || 0).filter(n => n > 0);
+                    if (numericOps.length > 0) {
+                        const maxOp = Math.max(...numericOps);
+                        lastOpProd = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (parseInt(l.opn_no) || 0) === maxOp).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                     }
-                }
-
-                if (operations.length === 0) {
-                    const pcRecTotal = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                    const pcRecTotal = monthPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                     if (pcRecTotal > lastOpProd) {
                         lastOpProd = pcRecTotal;
                     }
                 }
 
-                const deburredProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                // Show only parts for which last operation completed during the month
+                if (lastOpProd <= 0) continue;
+
+                const deburredProd = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 
                 const balance = Math.max(0, lastOpProd - deburredProd);
                 
@@ -4758,6 +4805,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const qtyInput = document.getElementById('deburQty');
                     if (qtyInput) {
                         qtyInput.placeholder = `Max: ${balance}`;
+                        qtyInput.value = balance;
                     }
                     Array.from(tbody.children).forEach(r => r.style.background = '');
                     tr.style.background = '#e0f2fe';
@@ -4766,7 +4814,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             if (tbody.children.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">No parts pending debur</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">No parts pending debur for this month</td></tr>';
             }
         } catch (e) {
             console.error('Error fetching debur status', e);
@@ -4821,7 +4869,11 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch('/api/prodlog');
             const allLogs = await res.json();
-            const deburLogs = allLogs.filter(l => (l.opn_no || '').toLowerCase() === 'debur');
+            const month = document.getElementById('deburMonth')?.value || '';
+            let deburLogs = allLogs.filter(l => (l.opn_no || '').toLowerCase() === 'debur');
+            if (month) {
+                deburLogs = deburLogs.filter(l => (l.date || '').startsWith(month));
+            }
             
             // Sort descending by ID or Date to show newest first
             deburLogs.sort((a, b) => b.id - a.id);
@@ -4830,7 +4882,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tbody.innerHTML = '';
             
             if (deburLogs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">No debur logs found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">No debur logs found for this month.</td></tr>';
                 return;
             }
             
@@ -4841,7 +4893,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${log.date}</td>
                     <td>${log.operator || ''}</td>
                     <td>${log.partno}</td>
-                    <td>${log.run_time || ''}</td>
+                    <td>${log.run_time || log.runtime || ''}</td>
                     <td><span style="font-weight: 500;">${log.prod_qty || ''}</span></td>
                 `;
                 tbody.appendChild(tr);
@@ -5449,8 +5501,50 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function initInspection() {
         try {
+            if (!document.getElementById('inspMonth').value) {
+                document.getElementById('inspMonth').value = new Date().toISOString().slice(0, 7);
+            }
             if (!document.getElementById('inspDate').value) {
                 document.getElementById('inspDate').valueAsDate = new Date();
+            }
+
+            const inspMonthEl = document.getElementById('inspMonth');
+            if (inspMonthEl && !inspMonthEl._hasChangeListener) {
+                inspMonthEl._hasChangeListener = true;
+                inspMonthEl.addEventListener('change', () => {
+                    const mVal = inspMonthEl.value;
+                    if (mVal) {
+                        const curDateVal = document.getElementById('inspDate').value;
+                        if (!curDateVal || !curDateVal.startsWith(mVal)) {
+                            const now = new Date();
+                            const currentMonthStr = now.toISOString().slice(0, 7);
+                            if (mVal === currentMonthStr) {
+                                document.getElementById('inspDate').value = now.toISOString().split('T')[0];
+                            } else {
+                                document.getElementById('inspDate').value = `${mVal}-01`;
+                            }
+                        }
+                    }
+                    fetchInspectionStatus();
+                    fetchInspectionLogs();
+                });
+            }
+
+            const inspDateEl = document.getElementById('inspDate');
+            if (inspDateEl && !inspDateEl._hasChangeListener) {
+                inspDateEl._hasChangeListener = true;
+                inspDateEl.addEventListener('change', () => {
+                    const dVal = inspDateEl.value;
+                    if (dVal && dVal.length >= 7) {
+                        const mVal = dVal.slice(0, 7);
+                        const monthInput = document.getElementById('inspMonth');
+                        if (monthInput && monthInput.value !== mVal) {
+                            monthInput.value = mVal;
+                            fetchInspectionStatus();
+                            fetchInspectionLogs();
+                        }
+                    }
+                });
             }
             
             if (inspAllParts.length === 0) {
@@ -5509,6 +5603,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const month = document.getElementById('inspMonth')?.value || (document.getElementById('inspDate')?.value || '').slice(0, 7) || new Date().toISOString().slice(0, 7);
+
         try {
             if (!inspAllParts || inspAllParts.length === 0) {
                 try {
@@ -5525,6 +5621,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const allSchedules = schedRes || [];
             const allLogs = logRes || [];
 
+            // Filter logs for the selected month
+            const monthLogs = allLogs.filter(l => (l.date || '').startsWith(month));
+
             const masterDeptParts = (inspAllParts || [])
                 .filter(p => (p.department || '').trim().toUpperCase() === dept.trim().toUpperCase() || (p.dept || '').trim().toUpperCase() === dept.trim().toUpperCase())
                 .map(p => (p.partno || '').trim());
@@ -5533,7 +5632,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 .filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase())
                 .map(s => (s.partno || '').trim());
 
-            const prodLogDeptParts = allLogs
+            const prodLogDeptParts = monthLogs
                 .filter(l => (l.department || '').trim().toUpperCase() === dept.trim().toUpperCase() || (l.dept || '').trim().toUpperCase() === dept.trim().toUpperCase())
                 .map(l => (l.partno || '').trim());
 
@@ -5547,17 +5646,20 @@ document.addEventListener('DOMContentLoaded', () => {
             
             tbody.innerHTML = '';
             for (const partno of uniqueParts) {
-                const deburredTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const forInsLogTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
+                // On completion of debur to show for ins
+                const deburredTotal = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                
+                // If debur was not completed in this month, do not show for inspection
+                if (deburredTotal <= 0) continue;
 
-                const rfdProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const reworkProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const ncProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const rejectionProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rejection').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const forInsLogTotal = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const rfdProd = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const reworkProd = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const ncProd = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const rejectionProd = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rejection').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
 
                 const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
-                const balance = Math.max(0, effectiveForIns - totalInspected);
+                const balance = Math.max(0, deburredTotal - totalInspected);
                 
                 if (balance <= 0) continue;
                 
@@ -5573,6 +5675,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const rfdInput = document.getElementById('inspRFD');
                     if (rfdInput) {
                         rfdInput.placeholder = `Max: ${balance}`;
+                        rfdInput.value = balance;
+                    }
+                    if (typeof autoSumInspection === 'function') {
+                        autoSumInspection();
                     }
                     Array.from(tbody.children).forEach(r => r.style.background = '');
                     tr.style.background = '#e0f2fe';
@@ -5581,7 +5687,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             if (tbody.children.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">No parts pending inspection</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">No parts pending inspection for this month</td></tr>';
             }
         } catch (e) {
             console.error('Error fetching inspection status', e);
@@ -5713,7 +5819,11 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch('/api/prodlog');
             const allLogs = await res.json();
-            const inspLogs = allLogs.filter(l => (l.opn_no || '').toLowerCase() === 'for ins');
+            const month = document.getElementById('inspMonth')?.value || '';
+            let inspLogs = allLogs.filter(l => (l.opn_no || '').toLowerCase() === 'for ins');
+            if (month) {
+                inspLogs = inspLogs.filter(l => (l.date || '').startsWith(month));
+            }
             
             inspLogs.sort((a, b) => b.id - a.id);
             
@@ -5721,7 +5831,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tbody.innerHTML = '';
             
             if (inspLogs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted)">No inspection logs found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted)">No inspection logs found for this month.</td></tr>';
                 currentInspExportData = [];
                 return;
             }
