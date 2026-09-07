@@ -864,6 +864,28 @@ header .logo h1 {
         width: 100% !important;
         min-width: 100% !important;
     }
+
+    /* Mobile Optimization for Machine Utilization Report */
+    #mcUtilSection {
+        padding: 8px 4px !important;
+    }
+    #mcUtilSection .table-container {
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        overflow-x: auto !important;
+    }
+    #mcUtilTable {
+        width: 100% !important;
+        font-size: 0.72rem !important;
+        border-collapse: collapse;
+    }
+    #mcUtilTable th, 
+    #mcUtilTable td {
+        padding: 6px 3px !important;
+        font-size: 0.72rem !important;
+        letter-spacing: -0.2px;
+    }
 }
 
 /* --- HORIZONTAL MAIN & SUB MENU STYLING --- */

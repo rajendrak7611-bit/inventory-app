@@ -9140,13 +9140,8 @@ document.addEventListener('DOMContentLoaded', () => {
         let text = `🏭 *GRS ENGINEERING PVT LTD*\n`;
         text += `📊 *MACHINE UTILIZATION REPORT*\n`;
         text += `📅 *Period:* ${fromDate} to ${toDate}\n`;
-        text += `🏢 *Dept:* ${dept}\n\n`;
-
-        const colMcW = 13;
-        const colNumW = 6;
-
-        let tableStr = `${'Machine'.padEnd(colMcW)} ${'Run'.padStart(colNumW)} ${'Idle'.padStart(colNumW)} ${'Log'.padStart(colNumW)} ${'Act'.padStart(colNumW)} ${'Util%'.padStart(colNumW + 1)}\n`;
-        tableStr += `${'-'.repeat(colMcW + colNumW * 4 + colNumW + 6)}\n`;
+        text += `🏢 *Dept:* ${dept}\n`;
+        text += `━━━━━━━━━━━━━━━━━━━━━\n`;
 
         let summaryTotal = null;
 
@@ -9162,27 +9157,79 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (mcName.toLowerCase() === 'total') {
                     summaryTotal = { run, idle, log, act, util };
-                    tableStr += `${'-'.repeat(colMcW + colNumW * 4 + colNumW + 6)}\n`;
-                    tableStr += `${'TOTAL'.padEnd(colMcW)} ${run.padStart(colNumW)} ${idle.padStart(colNumW)} ${log.padStart(colNumW)} ${act.padStart(colNumW)} ${util.padStart(colNumW + 1)}\n`;
                 } else {
-                    const shortMc = mcName.length > colMcW ? mcName.substring(0, colMcW) : mcName.padEnd(colMcW);
-                    tableStr += `${shortMc} ${run.padStart(colNumW)} ${idle.padStart(colNumW)} ${log.padStart(colNumW)} ${act.padStart(colNumW)} ${util.padStart(colNumW + 1)}\n`;
+                    text += `*${mcName}* • *${util}*\n`;
+                    text += `Run: ${run} | Idle: ${idle} | Log: ${log} | Act: ${act}\n`;
+                    text += `─────────────────────\n`;
                 }
             }
         });
 
-        text += '```\n' + tableStr + '```\n';
-
         if (summaryTotal) {
-            text += `\n*Summary:*`;
-            text += `\n• *Total Run Time:* ${summaryTotal.run} hrs`;
-            text += `\n• *Total Idle Time:* ${summaryTotal.idle} hrs`;
-            text += `\n• *Total Log Time:* ${summaryTotal.log} hrs`;
-            text += `\n• *Total Actual Time:* ${summaryTotal.act} hrs`;
-            text += `\n• *Overall Utilization:* ${summaryTotal.util}\n`;
+            text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+            text += `🏆 *TOTAL SUMMARY:*\n`;
+            text += `• *Run Time:* ${summaryTotal.run} hrs\n`;
+            text += `• *Idle Time:* ${summaryTotal.idle} hrs\n`;
+            text += `• *Log Time:* ${summaryTotal.log} hrs\n`;
+            text += `• *Actual Time:* ${summaryTotal.act} hrs\n`;
+            text += `• *Overall Utilization:* *${summaryTotal.util}*\n`;
+            text += `━━━━━━━━━━━━━━━━━━━━━\n`;
         }
 
         return text;
+    }
+
+    async function generateMcUtilImageBlob() {
+        const table = document.getElementById('mcUtilTable');
+        if (!table || typeof html2canvas === 'undefined') return null;
+
+        const fromDate = document.getElementById('mcUtilFromDate')?.value || '';
+        const toDate = document.getElementById('mcUtilToDate')?.value || '';
+        const deptSelect = document.getElementById('mcUtilDept');
+        let dept = 'ALL';
+        if (deptSelect) {
+            dept = deptSelect.options[deptSelect.selectedIndex]?.text || deptSelect.value || 'ALL';
+            if (dept.startsWith('--')) dept = 'ALL';
+        }
+
+        const cloneContainer = document.createElement('div');
+        cloneContainer.style.position = 'fixed';
+        cloneContainer.style.top = '-9999px';
+        cloneContainer.style.left = '-9999px';
+        cloneContainer.style.width = '640px';
+        cloneContainer.style.background = '#ffffff';
+        cloneContainer.style.padding = '16px';
+        cloneContainer.style.fontFamily = "'Inter', Arial, sans-serif";
+        cloneContainer.style.color = '#1e293b';
+
+        cloneContainer.innerHTML = `
+            <div style="text-align: center; margin-bottom: 12px; border-bottom: 2px solid #0284c7; padding-bottom: 8px;">
+                <div style="font-size: 16px; font-weight: 800; color: #0f172a; letter-spacing: 0.5px;">GRS ENGINEERING PVT LTD</div>
+                <div style="font-size: 13px; font-weight: 700; color: #0284c7; margin-top: 2px;">MACHINE UTILIZATION REPORT</div>
+                <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+                    <strong>Period:</strong> ${fromDate} to ${toDate} &nbsp;|&nbsp; <strong>Dept:</strong> ${dept}
+                </div>
+            </div>
+            <div style="width: 100%;">
+                ${table.outerHTML}
+            </div>
+        `;
+
+        document.body.appendChild(cloneContainer);
+
+        try {
+            const canvas = await html2canvas(cloneContainer, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                useCORS: true
+            });
+            document.body.removeChild(cloneContainer);
+            return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        } catch (err) {
+            if (cloneContainer.parentNode) document.body.removeChild(cloneContainer);
+            console.error('html2canvas error:', err);
+            return null;
+        }
     }
 
     if (whatsappMcUtilBtn && mcUtilWhatsappModal) {
@@ -9216,12 +9263,98 @@ document.addEventListener('DOMContentLoaded', () => {
             const text = mcUtilWhatsappPreview.value;
             if (!text) return;
             navigator.clipboard.writeText(text).then(() => {
-                alert('Report copied to clipboard! You can paste (Ctrl+V) directly into WhatsApp or Email.');
+                alert('Report text copied to clipboard! You can paste (Ctrl+V) directly into WhatsApp or Email.');
             }).catch(() => {
                 mcUtilWhatsappPreview.select();
                 document.execCommand('copy');
-                alert('Report copied to clipboard!');
+                alert('Report text copied to clipboard!');
             });
+        });
+    }
+
+    const copyMcUtilImageBtn = document.getElementById('copyMcUtilImageBtn');
+    if (copyMcUtilImageBtn) {
+        copyMcUtilImageBtn.addEventListener('click', async () => {
+            const blob = await generateMcUtilImageBlob();
+            if (!blob) {
+                alert('Could not generate report image.');
+                return;
+            }
+            try {
+                await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blob })
+                ]);
+                alert('Report table HD Image copied to clipboard! You can paste (Ctrl+V) directly into WhatsApp or Email.');
+            } catch (err) {
+                alert('Clipboard image copy not supported by your browser. Please use "Download Image" instead.');
+            }
+        });
+    }
+
+    const downloadMcUtilImageBtn = document.getElementById('downloadMcUtilImageBtn');
+    if (downloadMcUtilImageBtn) {
+        downloadMcUtilImageBtn.addEventListener('click', async () => {
+            const blob = await generateMcUtilImageBlob();
+            if (!blob) {
+                alert('Could not generate report image.');
+                return;
+            }
+            const link = document.createElement('a');
+            link.download = `Machine_Utilization_Report_${new Date().toISOString().slice(0, 10)}.png`;
+            link.href = URL.createObjectURL(blob);
+            link.click();
+        });
+    }
+
+    const sendMcUtilWhatsappImageBtn = document.getElementById('sendMcUtilWhatsappImageBtn');
+    if (sendMcUtilWhatsappImageBtn) {
+        sendMcUtilWhatsappImageBtn.addEventListener('click', async () => {
+            const blob = await generateMcUtilImageBlob();
+            if (!blob) {
+                alert('Could not generate report image.');
+                return;
+            }
+
+            const file = new File([blob], `Machine_Utilization_${new Date().toISOString().slice(0,10)}.png`, { type: 'image/png' });
+
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                try {
+                    await navigator.share({
+                        files: [file],
+                        title: 'Machine Utilization Report',
+                        text: 'Machine Utilization Report - GRS Engineering'
+                    });
+                    return;
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.error('navigator.share failed:', err);
+                    }
+                }
+            }
+
+            try {
+                await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blob })
+                ]);
+                alert('Table HD Image copied to clipboard! Opening WhatsApp... Paste (Ctrl+V) directly into your chat.');
+                
+                let phone = (mcUtilWhatsappPhone?.value || '').trim().replace(/\D/g, '');
+                if (phone.length === 10) phone = '91' + phone;
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                let url = '';
+                if (phone) {
+                    url = `https://wa.me/${phone}`;
+                } else {
+                    url = isMobile ? `https://api.whatsapp.com/send` : `https://web.whatsapp.com/`;
+                }
+                window.open(url, '_blank');
+            } catch (copyErr) {
+                const link = document.createElement('a');
+                link.download = `Machine_Utilization_${new Date().toISOString().slice(0,10)}.png`;
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                alert('Report image downloaded! You can attach it directly in WhatsApp.');
+            }
         });
     }
 
