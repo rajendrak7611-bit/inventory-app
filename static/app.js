@@ -8991,6 +8991,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (dept && lDept !== dept.trim().toUpperCase()) return false;
                     const lDate = (l.date || '').trim();
                     if (lDate < fromDate || lDate > toDate) return false;
+
+                    // Exclude specific machines for BC department: leadwell, new 2 way, pc, tapping 1
+                    const effectiveDept = lDept || (dept ? dept.trim().toUpperCase() : '');
+                    if (effectiveDept === 'BC') {
+                        const mcNorm = (l.machine || l.machine_name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+                        if (mcNorm === 'leadwell' || mcNorm === 'new 2 way' || mcNorm === 'new 2way' || mcNorm === 'pc' || mcNorm === 'tapping 1' || mcNorm === 'tapping1') {
+                            return false;
+                        }
+                    }
+
                     return true;
                 });
                 
@@ -9000,6 +9010,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     const mc = (l.machine || l.machine_name || '').trim();
                     if (!mc || mc === '-' || mc.toLowerCase() === 'none' || mc.toLowerCase() === 'unknown') return;
                     
+                    const lDept = (l.dept || l.department || dept || '').trim().toUpperCase();
+                    if (lDept === 'BC') {
+                        const mcNorm = mc.toLowerCase().replace(/\s+/g, ' ').trim();
+                        if (mcNorm === 'leadwell' || mcNorm === 'new 2 way' || mcNorm === 'new 2way' || mcNorm === 'pc' || mcNorm === 'tapping 1' || mcNorm === 'tapping1') {
+                            return;
+                        }
+                    }
+
                     if (!machineData[mc]) {
                         machineData[mc] = { runtime: 0, idleTotal: 0, byDate: {} };
                     }
