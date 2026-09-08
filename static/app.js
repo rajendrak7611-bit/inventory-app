@@ -2092,6 +2092,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Build Table Header with Sticky Positioning & Light Green Holiday Headers
         let trHead = '<tr style="background-color: #f1f5f9; font-weight: bold;">';
+        trHead += '<th id="attSortSlnoTh" style="border: 1px solid #cbd5e1; padding: 6px; width: 60px; min-width: 50px; text-align: center; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10; cursor: pointer;" title="Click to sort by Sl No">Sl No</th>';
         trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 140px; text-align: left; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;">Name</th>';
         trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 80px; text-align: left; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;">Dept</th>';
         trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 110px; text-align: left; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;">Designation</th>';
@@ -2126,15 +2127,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (opRes.ok) allOperators = await opRes.json();
         } catch (e) { console.error(e); }
 
-        // Group operators in exact sequence from Operator Master and map past hours
+        // Group operators in exact sequence from Operator Master and map past hours & slno
         const empMap = {};
         if (Array.isArray(allOperators)) {
-            allOperators.forEach(op => {
+            allOperators.forEach((op, idx) => {
                 if (op && op.name) {
                     empMap[op.name] = {
+                        slno: null,
                         name: op.name,
                         dept: op.dept || op.department || '',
                         designation: op.designation || op.role || 'Operator',
+                        defaultOrder: idx + 1,
                         days: {}
                     };
                 }
@@ -2145,13 +2148,22 @@ document.addEventListener('DOMContentLoaded', () => {
             existingRecords.forEach(r => {
                 const ename = (r.employee_name || '').trim();
                 if (!ename) return;
+                const recSlno = (r.slno !== undefined && r.slno !== null && Number(r.slno) > 0) ? Number(r.slno) : null;
                 if (!empMap[ename]) {
                     empMap[ename] = {
+                        slno: recSlno,
                         name: ename,
                         dept: r.dept || '',
                         designation: r.designation || 'Operator',
+                        defaultOrder: 99999,
                         days: {}
                     };
+                } else {
+                    if (recSlno !== null) {
+                        empMap[ename].slno = recSlno;
+                    }
+                    if (r.dept) empMap[ename].dept = r.dept;
+                    if (r.designation) empMap[ename].designation = r.designation;
                 }
                 empMap[ename].days[r.day] = r.hours;
             });
@@ -2159,11 +2171,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let empList = Object.values(empMap);
 
+        // Sort empList by slno:
+        // Rows with slno > 0 come first in numerical order; otherwise keep defaultOrder
+        empList.sort((a, b) => {
+            const aHasSl = a.slno !== null && a.slno !== undefined && a.slno > 0;
+            const bHasSl = b.slno !== null && b.slno !== undefined && b.slno > 0;
+            if (aHasSl && bHasSl) return a.slno - b.slno;
+            if (aHasSl) return -1;
+            if (bHasSl) return 1;
+            return (a.defaultOrder || 0) - (b.defaultOrder || 0);
+        });
+
+        // Ensure every employee has an assigned slno (defaulting sequentially 1, 2, 3...)
+        let curSl = 1;
+        empList.forEach((emp, index) => {
+            if (!emp.slno || emp.slno <= 0) {
+                emp.slno = curSl;
+            } else {
+                curSl = emp.slno;
+            }
+            curSl++;
+        });
+
         attendanceBody.innerHTML = '';
 
         if (empList.length === 0) {
             for (let i = 0; i < 5; i++) {
-                empList.push({ name: '', dept: '', designation: '', days: {} });
+                empList.push({ slno: i + 1, name: '', dept: '', designation: '', days: {} });
             }
         }
 
@@ -2172,7 +2206,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function addAttendanceRow(emp = { name: '', dept: '', designation: '', days: {} }, daysInMonth = 31, year = 2026, month = 8) {
+    function addAttendanceRow(emp = { slno: '', name: '', dept: '', designation: '', days: {} }, daysInMonth = 31, year = 2026, month = 8) {
         if (!attendanceMonthPicker) return;
         const monthVal = attendanceMonthPicker.value;
         if (monthVal) {
@@ -2184,10 +2218,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const holidaysSet = new Set(getHolidaysForMonth(monthVal));
 
+        // If slno is not passed, determine sequential slno based on previous row
+        let rowSlno = emp.slno;
+        if (rowSlno === undefined || rowSlno === null || rowSlno === '' || rowSlno === 0) {
+            const lastRow = attendanceBody ? attendanceBody.querySelector('tr:last-child') : null;
+            if (lastRow) {
+                const prevVal = parseInt(lastRow.querySelector('.att-slno')?.value, 10);
+                rowSlno = !isNaN(prevVal) ? (prevVal + 1) : (attendanceBody.querySelectorAll('tr').length + 1);
+            } else {
+                rowSlno = 1;
+            }
+        }
+
         const tr = document.createElement('tr');
         tr.style.height = '32px';
 
         let rowHtml = `
+            <td style="border: 1px solid #cbd5e1; padding: 2px; width: 60px; text-align: center;"><input type="text" inputmode="numeric" pattern="[0-9]*" class="att-slno" value="${rowSlno || ''}" placeholder="" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px 2px; text-align: center; background: transparent; font-weight: 600;"></td>
             <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-name" value="${emp.name || ''}" placeholder="Name" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;"></td>
             <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-dept" value="${emp.dept || ''}" placeholder="Dept" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;"></td>
             <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-desig" value="${emp.designation || 'Operator'}" placeholder="Designation" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;"></td>
@@ -2216,6 +2263,58 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.innerHTML = rowHtml;
         attendanceBody.appendChild(tr);
     }
+
+    // Auto-fill logic: when sl no filled in a row, subsequent rows to add 1 to previous row value
+    function handleAttendanceSlnoCascade(targetInput) {
+        if (!targetInput || !targetInput.classList.contains('att-slno')) return;
+        const raw = targetInput.value.trim();
+        if (raw === '') return;
+        let val = parseInt(raw, 10);
+        if (isNaN(val)) return;
+
+        let nextTr = targetInput.closest('tr')?.nextElementSibling;
+        while (nextTr) {
+            val++;
+            const nextInput = nextTr.querySelector('.att-slno');
+            if (nextInput) {
+                nextInput.value = val;
+            }
+            nextTr = nextTr.nextElementSibling;
+        }
+    }
+
+    attendanceBody?.addEventListener('input', (e) => {
+        if (e.target.classList.contains('att-slno')) {
+            handleAttendanceSlnoCascade(e.target);
+        }
+    });
+
+    attendanceBody?.addEventListener('change', (e) => {
+        if (e.target.classList.contains('att-slno')) {
+            handleAttendanceSlnoCascade(e.target);
+        }
+    });
+
+    // Helper to sort DOM rows by Sl No
+    function sortAttendanceRowsBySlno() {
+        if (!attendanceBody) return;
+        const rows = Array.from(attendanceBody.querySelectorAll('tr'));
+        rows.sort((a, b) => {
+            const vA = parseInt(a.querySelector('.att-slno')?.value, 10);
+            const vB = parseInt(b.querySelector('.att-slno')?.value, 10);
+            const numA = isNaN(vA) ? 999999 : vA;
+            const numB = isNaN(vB) ? 999999 : vB;
+            return numA - numB;
+        });
+        rows.forEach(r => attendanceBody.appendChild(r));
+    }
+
+    // Allow sorting rows by clicking on Sl No header
+    attendanceHead?.addEventListener('click', (e) => {
+        if (e.target && (e.target.id === 'attSortSlnoTh' || e.target.closest('#attSortSlnoTh'))) {
+            sortAttendanceRowsBySlno();
+        }
+    });
 
     // Arrow Key Navigation for Attendance Grid
     attendanceBody?.addEventListener('keydown', (e) => {
@@ -2246,21 +2345,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (targetInput) { targetInput.focus(); targetInput.select(); }
             }
         } else if (key === 'ArrowLeft') {
-            if (input.selectionStart === 0 && input.selectionEnd === 0) {
+            let atStart = false;
+            try {
+                atStart = (input.selectionStart === 0 && input.selectionEnd === 0);
+            } catch (err) {
+                atStart = true;
+            }
+            if (atStart) {
                 e.preventDefault();
                 const prevTd = currentTd.previousElementSibling;
                 if (prevTd) {
                     const targetInput = prevTd.querySelector('input');
-                    if (targetInput) { targetInput.focus(); targetInput.select(); }
+                    if (targetInput) { 
+                        targetInput.focus(); 
+                        try { targetInput.select(); } catch(e) {}
+                    }
                 }
             }
         } else if (key === 'ArrowRight') {
-            if (input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
+            let atEnd = false;
+            try {
+                atEnd = (input.selectionStart === input.value.length && input.selectionEnd === input.value.length);
+            } catch (err) {
+                atEnd = true;
+            }
+            if (atEnd) {
                 e.preventDefault();
                 const nextTd = currentTd.nextElementSibling;
                 if (nextTd) {
                     const targetInput = nextTd.querySelector('input');
-                    if (targetInput) { targetInput.focus(); targetInput.select(); }
+                    if (targetInput) { 
+                        targetInput.focus(); 
+                        try { targetInput.select(); } catch(e) {}
+                    }
                 }
             }
         }
@@ -2282,6 +2399,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const entries = [];
 
         rows.forEach(tr => {
+            const slno = parseInt(tr.querySelector('.att-slno')?.value, 10) || 0;
             const name = tr.querySelector('.att-name')?.value.trim();
             const dept = tr.querySelector('.att-dept')?.value.trim();
             const desig = tr.querySelector('.att-desig')?.value.trim();
@@ -2294,6 +2412,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (hrs !== '') {
                         hasHours = true;
                         entries.push({
+                            slno: slno,
                             employee_name: name,
                             dept: dept || '',
                             designation: desig || 'Operator',
@@ -2306,6 +2425,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Save employee details and designation even if no hours are entered yet
                 if (!hasHours) {
                     entries.push({
+                        slno: slno,
                         employee_name: name,
                         dept: dept || '',
                         designation: desig || 'Operator',
@@ -2346,8 +2466,8 @@ document.addEventListener('DOMContentLoaded', () => {
             daysInMonth = new Date(year, month, 0).getDate();
         }
 
-        // Build headers row
-        const headers = ['NAME', 'DEPT', 'DESIGNATION'];
+        // Build headers row with SL NO first
+        const headers = ['SL NO', 'NAME', 'DEPT', 'DESIGNATION'];
         for (let d = 1; d <= daysInMonth; d++) {
             headers.push(d.toString());
         }
@@ -2357,12 +2477,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Build data rows from table inputs
         const rows = document.querySelectorAll('#attendanceBody tr');
         rows.forEach(tr => {
+            const slnoVal = tr.querySelector('.att-slno')?.value.trim() || '';
             const name = tr.querySelector('.att-name')?.value.trim() || '';
             const dept = tr.querySelector('.att-dept')?.value.trim() || '';
             const desig = tr.querySelector('.att-desig')?.value.trim() || '';
 
             if (name || dept) {
-                const rowData = [name, dept, desig];
+                const rowData = [slnoVal ? (isNaN(Number(slnoVal)) ? slnoVal : Number(slnoVal)) : '', name, dept, desig];
                 const dayInputs = tr.querySelectorAll('.att-day-val');
                 dayInputs.forEach(input => {
                     const val = input.value.trim();

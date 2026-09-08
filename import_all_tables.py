@@ -430,6 +430,7 @@ def import_all_backup_tables():
                             pass
                         for a in att_data:
                             aid = int(safe_float(a.get("id"), 0))
+                            aslno = int(safe_float(a.get("slno"), 0))
                             ename = (a.get("employee_name") or a.get("name") or "").strip()
                             dept = (a.get("dept") or a.get("department") or "").strip()
                             desig = (a.get("designation") or "Operator").strip()
@@ -440,14 +441,14 @@ def import_all_backup_tables():
                                 try:
                                     if aid:
                                         conn2.execute(text("""
-                                            INSERT INTO attendances (id, employee_name, dept, designation, month_year, day, hours)
-                                            VALUES (:id, :employee_name, :dept, :designation, :month_year, :day, :hours);
-                                        """), {"id": aid, "employee_name": ename, "dept": dept, "designation": desig, "month_year": my, "day": day, "hours": hrs})
+                                            INSERT INTO attendances (id, slno, employee_name, dept, designation, month_year, day, hours)
+                                            VALUES (:id, :slno, :employee_name, :dept, :designation, :month_year, :day, :hours);
+                                        """), {"id": aid, "slno": aslno, "employee_name": ename, "dept": dept, "designation": desig, "month_year": my, "day": day, "hours": hrs})
                                     else:
                                         conn2.execute(text("""
-                                            INSERT INTO attendances (employee_name, dept, designation, month_year, day, hours)
-                                            VALUES (:employee_name, :dept, :designation, :month_year, :day, :hours);
-                                        """), {"employee_name": ename, "dept": dept, "designation": desig, "month_year": my, "day": day, "hours": hrs})
+                                            INSERT INTO attendances (slno, employee_name, dept, designation, month_year, day, hours)
+                                            VALUES (:slno, :employee_name, :dept, :designation, :month_year, :day, :hours);
+                                        """), {"slno": aslno, "employee_name": ename, "dept": dept, "designation": desig, "month_year": my, "day": day, "hours": hrs})
                                 except Exception:
                                     pass
 

@@ -243,6 +243,7 @@ class Attendance(Base):
     __tablename__ = "attendances"
 
     id = Column(Integer, primary_key=True, index=True)
+    slno = Column(Integer, nullable=True, default=0)
     employee_name = Column(String, index=True, nullable=False)
     dept = Column(String, nullable=True)
     designation = Column(String, default="Operator")

@@ -72,6 +72,11 @@ try:
             conn.commit()
         except Exception:
             pass
+        try:
+            conn.execute(text("ALTER TABLE attendances ADD COLUMN slno INTEGER DEFAULT 0;"))
+            conn.commit()
+        except Exception:
+            pass
 except Exception:
     pass
 
@@ -3995,12 +4000,13 @@ def bulk_import_raw_material_logs(items: list, db: Session = Depends(get_db)):
 def get_attendance(month_year: Optional[str] = None, db: Session = Depends(get_db)):
     try:
         if month_year:
-            rows = db.execute(text("SELECT * FROM attendances WHERE month_year = :my ORDER BY id ASC;"), {"my": month_year.strip()}).mappings().all()
+            rows = db.execute(text("SELECT * FROM attendances WHERE month_year = :my ORDER BY CASE WHEN slno IS NULL OR slno = 0 THEN 999999 ELSE slno END ASC, id ASC;"), {"my": month_year.strip()}).mappings().all()
         else:
-            rows = db.execute(text("SELECT * FROM attendances ORDER BY id ASC;")).mappings().all()
+            rows = db.execute(text("SELECT * FROM attendances ORDER BY CASE WHEN slno IS NULL OR slno = 0 THEN 999999 ELSE slno END ASC, id ASC;")).mappings().all()
         if rows:
             return [{
                 "id": r.get("id"),
+                "slno": int(r.get("slno") or 0),
                 "employee_name": r.get("employee_name") or "",
                 "dept": r.get("dept") or "",
                 "designation": r.get("designation") or "Operator",
@@ -4016,9 +4022,10 @@ def get_attendance(month_year: Optional[str] = None, db: Session = Depends(get_d
             q = db.query(models.Attendance)
             if month_year:
                 q = q.filter(models.Attendance.month_year == month_year.strip())
-            atts = q.order_by(models.Attendance.id.asc()).all()
+            atts = q.order_by(models.Attendance.slno.asc(), models.Attendance.id.asc()).all()
             return [{
                 "id": a.id,
+                "slno": getattr(a, "slno", 0) or 0,
                 "employee_name": a.employee_name,
                 "dept": a.dept or "",
                 "designation": a.designation or "Operator",
@@ -4052,6 +4059,7 @@ def save_attendance(data: dict, db: Session = Depends(get_db)):
         db.rollback()
 
     for entry in entries:
+        slno = int(entry.get("slno") or 0)
         ename = (entry.get("employee_name") or "").strip()
         if not ename:
             continue
@@ -4062,9 +4070,10 @@ def save_attendance(data: dict, db: Session = Depends(get_db)):
 
         try:
             db.execute(text("""
-                INSERT INTO attendances (employee_name, dept, designation, month_year, day, hours)
-                VALUES (:employee_name, :dept, :designation, :month_year, :day, :hours);
+                INSERT INTO attendances (slno, employee_name, dept, designation, month_year, day, hours)
+                VALUES (:slno, :employee_name, :dept, :designation, :month_year, :day, :hours);
             """), {
+                "slno": slno,
                 "employee_name": ename,
                 "dept": dept,
                 "designation": desig,
