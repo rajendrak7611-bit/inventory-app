@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 import re
 import os
 import json
+import calendar
 
 from database import engine, get_db, Base
 import models
@@ -4118,6 +4119,146 @@ def clear_all_attendance(db: Session = Depends(get_db)):
     except Exception:
         db.rollback()
     return {"message": "All attendance records cleared successfully"}
+
+# --- ATTENDANCE VS LOGIN HOURS REPORT ENDPOINT ---
+@app.get("/api/reports/att_vs_login")
+def get_att_vs_login_report(month_year: Optional[str] = None, dept: Optional[str] = None, db: Session = Depends(get_db)):
+    if not month_year:
+        month_year = datetime.datetime.now().strftime("%Y-%m")
+    
+    parts = month_year.strip().split("-")
+    try:
+        year, month = int(parts[0]), int(parts[1])
+        days_in_month = calendar.monthrange(year, month)[1]
+    except Exception:
+        days_in_month = 31
+
+    filter_dept = (dept or "").strip().upper()
+    if filter_dept.startswith("--") or filter_dept == "ALL":
+        filter_dept = ""
+
+    try:
+        # 1. Operators map: op_norm -> { "name": ..., "dept": ... }
+        op_rows = db.execute(text("SELECT * FROM operators")).mappings().all()
+        operators_info = {}
+        for r in op_rows:
+            nm = (r.get("name") or r.get("operator_name") or "").strip()
+            if not nm:
+                continue
+            dp = (r.get("department") or r.get("dept") or "").strip()
+            operators_info[nm.upper()] = {"name": nm, "dept": dp}
+
+        # 2. Attendance records for month_year
+        att_rows = db.execute(
+            text("SELECT employee_name, dept, day, hours FROM attendances WHERE month_year = :my"),
+            {"my": month_year.strip()}
+        ).mappings().all()
+
+        # 3. Production logs for month_year (date like YYYY-MM%)
+        prod_rows = db.execute(
+            text("SELECT operator, dept, date, runtime, idle_hours, idle_hours_2, idle_hours_3 FROM production_logs WHERE date LIKE :dt"),
+            {"dt": f"{month_year.strip()}%"}
+        ).mappings().all()
+    except Exception as ex:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(ex)}")
+
+    # Aggregate by operator
+    op_data = {}
+
+    def get_or_create_op(op_name, default_dept=""):
+        norm = op_name.strip().upper()
+        if norm not in op_data:
+            known = operators_info.get(norm, {})
+            disp_name = known.get("name") or op_name.strip()
+            disp_dept = known.get("dept") or default_dept or ""
+            op_data[norm] = {
+                "dept": disp_dept,
+                "operators": disp_name,
+                "days": {str(d): {"att_hours": 0.0, "login_hours": 0.0} for d in range(1, days_in_month + 1)},
+                "total_att": 0.0,
+                "total_login": 0.0,
+                "diff": 0.0
+            }
+        elif default_dept and not op_data[norm]["dept"]:
+            op_data[norm]["dept"] = default_dept
+        return op_data[norm]
+
+    # Process Attendance
+    for r in att_rows:
+        ename = (r.get("employee_name") or "").strip()
+        if not ename:
+            continue
+        day = int(r.get("day") or 0)
+        hrs_str = str(r.get("hours") or "").strip()
+        try:
+            hrs = float(hrs_str) if hrs_str else 0.0
+        except ValueError:
+            hrs = 0.0
+
+        item = get_or_create_op(ename, (r.get("dept") or "").strip())
+        if 1 <= day <= days_in_month:
+            day_key = str(day)
+            item["days"][day_key]["att_hours"] += hrs
+            item["total_att"] += hrs
+
+    # Process Production Logs
+    for l in prod_rows:
+        op = (l.get("operator") or "").strip()
+        if not op:
+            continue
+        dt_str = (l.get("date") or "").strip()
+        day = 0
+        if dt_str.startswith(month_year):
+            dt_parts = dt_str.split("-")
+            if len(dt_parts) >= 3:
+                try:
+                    day = int(dt_parts[2])
+                except ValueError:
+                    day = 0
+
+        rtime = float(l.get("runtime") or 0.0)
+        i1 = float(l.get("idle_hours") or 0.0)
+        i2 = float(l.get("idle_hours_2") or 0.0)
+        i3 = float(l.get("idle_hours_3") or 0.0)
+        login_h = rtime + i1 + i2 + i3
+
+        item = get_or_create_op(op, (l.get("dept") or "").strip())
+        if 1 <= day <= days_in_month:
+            day_key = str(day)
+            item["days"][day_key]["login_hours"] += login_h
+            item["total_login"] += login_h
+
+    # Seed operators from operator master
+    for norm, info in operators_info.items():
+        if not filter_dept or info["dept"].upper() == filter_dept:
+            get_or_create_op(info["name"], info["dept"])
+
+    # Finalize list and compute diffs
+    result_list = []
+    for norm, item in op_data.items():
+        if filter_dept and item["dept"].upper() != filter_dept:
+            continue
+        
+        # Round values
+        for d in range(1, days_in_month + 1):
+            d_key = str(d)
+            item["days"][d_key]["att_hours"] = round(item["days"][d_key]["att_hours"], 2)
+            item["days"][d_key]["login_hours"] = round(item["days"][d_key]["login_hours"], 2)
+
+        item["total_att"] = round(item["total_att"], 2)
+        item["total_login"] = round(item["total_login"], 2)
+        item["diff"] = round(item["total_att"] - item["total_login"], 2)
+        result_list.append(item)
+
+    # Sort by dept ASC, operators ASC
+    result_list.sort(key=lambda x: (x["dept"].upper(), x["operators"].upper()))
+
+    return {
+        "month_year": month_year,
+        "days_in_month": days_in_month,
+        "data": result_list
+    }
 
 # --- HT & PC LOGS CRUD & HELPER ENDPOINTS ---
 @app.get("/api/ht/spider_parts")
