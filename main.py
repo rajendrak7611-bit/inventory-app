@@ -509,10 +509,14 @@ def run_startup_migrations():
             except Exception:
                 pass
             try:
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password VARCHAR(255) DEFAULT '';"))
+                conn.execute(text("ALTER TABLE users ADD COLUMN password VARCHAR(255) DEFAULT '';"))
                 conn.commit()
             except Exception:
-                pass
+                try:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password VARCHAR(255) DEFAULT '';"))
+                    conn.commit()
+                except Exception:
+                    pass
             try:
                 conn.execute(text("ALTER TABLE machines ADD COLUMN IF NOT EXISTS dept TEXT;"))
                 conn.execute(text("ALTER TABLE machines ADD COLUMN IF NOT EXISTS department TEXT;"))
@@ -625,8 +629,6 @@ def login_user(login_data: UserLogin, db: Session = Depends(get_db)):
     
     if u == "admin" and p in ["admin", "admin123", "admin@123", "password", "123"]:
         return {"success": True, "username": "admin", "role": "admin", "token": "token-admin"}
-    if u == "guest" and p in ["guest", "guest123", "123"]:
-        return {"success": True, "username": "guest", "role": "guest", "token": "token-guest"}
 
     try:
         user_row = db.execute(text("SELECT * FROM users WHERE LOWER(username) = :u"), {"u": u}).mappings().first()
@@ -661,6 +663,60 @@ def login_user(login_data: UserLogin, db: Session = Depends(get_db)):
         print("Login ORM notice:", e)
 
     raise HTTPException(status_code=401, detail="Invalid username or password")
+
+class SessionVerifyRequest(BaseModel):
+    username: Optional[str] = None
+    token: Optional[str] = None
+
+@app.post("/api/auth/verify")
+@app.get("/api/auth/verify")
+def verify_session(req: Optional[SessionVerifyRequest] = None, username: Optional[str] = None, db: Session = Depends(get_db)):
+    u = ((req.username if req and req.username else username) or "").strip().lower()
+    if not u:
+        return {"valid": False, "detail": "No user session provided"}
+
+    try:
+        user_row = db.execute(text("SELECT id, username, role, accessible_screens FROM users WHERE LOWER(username) = :u"), {"u": u}).mappings().first()
+        if user_row:
+            return {
+                "valid": True,
+                "user": {
+                    "id": user_row.get("id"),
+                    "username": user_row.get("username"),
+                    "role": user_row.get("role") or "operator",
+                    "accessible_screens": user_row.get("accessible_screens") or "[]"
+                }
+            }
+    except Exception as e:
+        print("Verify DB notice:", e)
+
+    try:
+        user = db.query(models.User).filter(func.lower(models.User.username) == u).first()
+        if user:
+            return {
+                "valid": True,
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "role": user.role or "operator",
+                    "accessible_screens": getattr(user, "accessible_screens", "[]") or "[]"
+                }
+            }
+    except Exception as e:
+        print("Verify ORM notice:", e)
+
+    if u == "admin":
+        return {
+            "valid": True,
+            "user": {
+                "id": 1,
+                "username": "admin",
+                "role": "admin",
+                "accessible_screens": "[]"
+            }
+        }
+
+    return {"valid": False, "detail": "User account no longer exists or has been deleted."}
 
 # --- USER MANAGEMENT CRUD ---
 @app.get("/api/users")

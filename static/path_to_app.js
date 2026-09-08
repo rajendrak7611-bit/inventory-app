@@ -102,17 +102,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Access Control Logic
-        const isAdminUser = !userObj || !userObj.role || (userObj.role || '').toLowerCase() === 'admin' || (userObj.username || '').toLowerCase() === 'admin';
+        const isAdminUser = userObj && ((userObj.role || '').toLowerCase() === 'admin' || (userObj.username || '').toLowerCase() === 'admin');
         const allTabs = document.querySelectorAll('[data-screen]');
         let firstAvailableTab = null;
         let accessibleScreens = [];
         try {
-            accessibleScreens = JSON.parse(userObj.accessible_screens || '[]');
+            if (typeof userObj.accessible_screens === 'string') {
+                accessibleScreens = JSON.parse(userObj.accessible_screens || '[]');
+            } else if (Array.isArray(userObj.accessible_screens)) {
+                accessibleScreens = userObj.accessible_screens;
+            }
         } catch(e) {}
         
         allTabs.forEach(tab => {
             const screen = tab.getAttribute('data-screen');
-            const isAllowed = isAdminUser || (!accessibleScreens || accessibleScreens.length === 0) || accessibleScreens.includes(screen) || ((screen === 'rfq' || screen === 'quote') && (accessibleScreens.includes('sales') || accessibleScreens.includes('mfe') || accessibleScreens.includes('rfq') || accessibleScreens.includes('quote'))) || ((screen === 'rawmaterial' || screen === 'ht' || screen === 'pc') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) || (screen === 'attendance' && accessibleScreens.includes('hr')) || ((screen === 'bdslip' || screen === 'servicedetails') && (accessibleScreens.includes('maintenance') || accessibleScreens.includes('bdslip') || accessibleScreens.includes('servicedetails'))) || ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'tapmaster' || screen === 'insertreceipt' || screen === 'tapreceipt' || screen === 'insertissue' || screen === 'tapissue' || screen === 'insertcpc' || screen === 'insertstock') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib'))) || ((screen === 'rm_requirement' || screen === 'mc_util' || screen === 'oper_eff' || screen === 'reports') && accessibleScreens.includes('reports'));
+            const isAllowed = isAdminUser || (accessibleScreens && accessibleScreens.length > 0 && (
+                accessibleScreens.includes(screen) ||
+                ((screen === 'rfq' || screen === 'quote') && (accessibleScreens.includes('sales') || accessibleScreens.includes('mfe') || accessibleScreens.includes('rfq') || accessibleScreens.includes('quote'))) ||
+                ((screen === 'rawmaterial' || screen === 'ht' || screen === 'pc') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) ||
+                (screen === 'attendance' && accessibleScreens.includes('hr')) ||
+                ((screen === 'bdslip' || screen === 'servicedetails') && (accessibleScreens.includes('maintenance') || accessibleScreens.includes('bdslip') || accessibleScreens.includes('servicedetails'))) ||
+                ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'tapmaster' || screen === 'insertreceipt' || screen === 'tapreceipt' || screen === 'insertissue' || screen === 'tapissue' || screen === 'insertcpc' || screen === 'insertstock') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib'))) ||
+                ((screen === 'rm_requirement' || screen === 'mc_util' || screen === 'oper_eff' || screen === 'reports' || screen === 'att_vs_login' || screen === 'bc_prod') && accessibleScreens.includes('reports'))
+            ));
             if (isAllowed) {
                 tab.style.display = 'inline-block';
                 if (!firstAvailableTab) firstAvailableTab = tab;
@@ -136,9 +148,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     'toolcrib': ['insertmaster', 'drillmaster', 'products', 'insertreceipt', 'insertissue', 'insertcpc', 'insertstock'],
                     'reports': ['reports', 'rm_requirement', 'mc_util', 'oper_eff', 'bc_prod', 'att_vs_login'],
                     'maintenance': ['maintenance', 'bdslip', 'servicedetails'],
-                    'hr': ['hr', 'attendance']
+                    'hr': ['hr', 'attendance'],
+                    'service': ['service', 'service_setters', 'setters'],
+                    'inspection': ['inspection']
                 };
-                const allowed = (!accessibleScreens || accessibleScreens.length === 0) || (groupScreens[group] ? groupScreens[group].some(s => accessibleScreens.includes(s) || accessibleScreens.includes(group)) : false);
+                const allowed = (accessibleScreens && accessibleScreens.length > 0) && (groupScreens[group] ? groupScreens[group].some(s => accessibleScreens.includes(s) || accessibleScreens.includes(group)) : false);
                 tab.style.display = allowed ? 'inline-block' : 'none';
             }
         });
