@@ -1365,17 +1365,21 @@
                         <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--text-main);">Attendance Sheet</h2>
                         <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 0.9rem;">Log daily hours of presence for employees. Sundays are marked in light blue.</p>
                     </div>
-                    <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                         <label for="attendanceMonthPicker" style="font-weight: 600;">Month:</label>
                         <input type="month" id="attendanceMonthPicker" style="padding: 0.4rem 0.6rem; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; font-family: inherit;">
                         <button id="markHolidaysBtn" onclick="openHolidayModal()" class="btn btn-outline" style="border-color: #22c55e; color: #16a34a; font-weight: 600; padding: 0.4rem 0.8rem; display: inline-flex; align-items: center; gap: 6px;">
-                            <i class="fas fa-calendar-alt"></i> ≡ƒî┤ Mark Holidays
+                            <i class="fas fa-calendar-alt"></i> 🌴 Mark Holidays
                         </button>
-                        <button id="addAttendanceEmpBtn" class="btn btn-outline">+ Add Employee Row</button>
-                        <button id="saveAttendanceBtn" class="btn btn-primary">Save Attendance</button>
+                        <button id="addAttendanceEmpBtn" class="btn btn-outline" style="font-weight: 600;">+ Add Employee</button>
+                        <button id="copyPrevMonthAttBtn" class="btn btn-outline" style="border-color: #6366f1; color: #6366f1; font-weight: 600;" title="Copy employee list & order from previous month">📋 From Prev Month</button>
+                        <button id="loadFromOpMasterAttBtn" class="btn btn-outline" style="border-color: #0284c7; color: #0284c7; font-weight: 600;" title="Reset/load list from Operator Master">👥 From Op Master</button>
+                        <button id="saveAttendanceBtn" class="btn btn-primary" style="font-weight: 600;">Save Attendance</button>
                         <button id="exportAttendanceExcelBtn" class="btn btn-secondary">Export Excel</button>
                     </div>
                 </div>
+
+                <datalist id="attendanceOperatorDatalist"></datalist>
 
                 <div style="max-width: 100%; max-height: 70vh; overflow: auto; border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px;">
                     <table id="attendanceTable" style="width: 100%; border-collapse: collapse; text-align: center; font-size: 0.85rem;">
@@ -4496,6 +4500,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10069"></script>
+    <script src="/static/app.js?v=10070"></script>
 </body>
 </html>

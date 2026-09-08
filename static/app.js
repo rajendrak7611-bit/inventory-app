@@ -2078,10 +2078,29 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    async function renderAttendanceGrid() {
+    let cachedOperatorsForAtt = [];
+    async function loadOperatorsForDatalist() {
+        if (cachedOperatorsForAtt.length === 0) {
+            try {
+                const res = await fetch('/api/operators');
+                if (res.ok) cachedOperatorsForAtt = await res.json();
+            } catch (e) { console.error(e); }
+        }
+        const datalist = document.getElementById('attendanceOperatorDatalist');
+        if (datalist && Array.isArray(cachedOperatorsForAtt)) {
+            datalist.innerHTML = cachedOperatorsForAtt
+                .filter(op => op && op.name)
+                .map(op => `<option value="${op.name}">${op.dept ? op.dept + ' - ' : ''}${op.designation || 'Operator'}</option>`)
+                .join('');
+        }
+    }
+
+    async function renderAttendanceGrid(forceSource = null) {
         if (!attendanceMonthPicker || !attendanceHead || !attendanceBody) return;
         const monthVal = attendanceMonthPicker.value;
         if (!monthVal) return;
+
+        loadOperatorsForDatalist();
 
         const parts = monthVal.split('-');
         const year = parseInt(parts[0]);
@@ -2092,8 +2111,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Build Table Header with Sticky Positioning & Light Green Holiday Headers
         let trHead = '<tr style="background-color: #f1f5f9; font-weight: bold;">';
-        trHead += '<th id="attSortSlnoTh" style="border: 1px solid #cbd5e1; padding: 6px; width: 60px; min-width: 50px; text-align: center; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10; cursor: pointer;" title="Click to sort by Sl No">Sl No</th>';
-        trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 140px; text-align: left; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;">Name</th>';
+        trHead += '<th style="border: 1px solid #cbd5e1; padding: 4px; width: 34px; text-align: center; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;"></th>';
+        trHead += '<th id="attSortSlnoTh" style="border: 1px solid #cbd5e1; padding: 6px; width: 60px; min-width: 50px; text-align: center; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10; cursor: pointer;" title="Click to sort by Sl No">Sl No ⇅</th>';
+        trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 150px; text-align: left; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;">Name</th>';
         trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 80px; text-align: left; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;">Dept</th>';
         trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 110px; text-align: left; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;">Designation</th>';
 
@@ -2113,78 +2133,164 @@ document.addEventListener('DOMContentLoaded', () => {
         trHead += '</tr>';
         attendanceHead.innerHTML = trHead;
 
-        // Fetch existing attendance for this month
-        let existingRecords = [];
-        try {
-            const res = await fetch(`/api/attendance?month_year=${monthVal}`);
-            if (res.ok) existingRecords = await res.json();
-        } catch (e) { console.error(e); }
-
-        // Fetch operators to auto-populate employees if attendance is new
-        let allOperators = [];
-        try {
-            const opRes = await fetch('/api/operators');
-            if (opRes.ok) allOperators = await opRes.json();
-        } catch (e) { console.error(e); }
-
-        // Group operators in exact sequence from Operator Master and map past hours & slno
         const empMap = {};
-        if (Array.isArray(allOperators)) {
-            allOperators.forEach((op, idx) => {
-                if (op && op.name) {
-                    empMap[op.name] = {
-                        slno: null,
-                        name: op.name,
-                        dept: op.dept || op.department || '',
-                        designation: op.designation || op.role || 'Operator',
-                        defaultOrder: idx + 1,
-                        days: {}
-                    };
-                }
-            });
-        }
+        const empOrder = [];
 
-        if (Array.isArray(existingRecords)) {
-            existingRecords.forEach(r => {
-                const ename = (r.employee_name || '').trim();
-                if (!ename) return;
-                const recSlno = (r.slno !== undefined && r.slno !== null && Number(r.slno) > 0) ? Number(r.slno) : null;
-                if (!empMap[ename]) {
-                    empMap[ename] = {
-                        slno: recSlno,
-                        name: ename,
-                        dept: r.dept || '',
-                        designation: r.designation || 'Operator',
-                        defaultOrder: 99999,
-                        days: {}
-                    };
-                } else {
-                    if (recSlno !== null) {
-                        empMap[ename].slno = recSlno;
+        if (forceSource === 'operator_master') {
+            // Explicitly load/reset from Operator Master
+            try {
+                const opRes = await fetch('/api/operators');
+                if (opRes.ok) {
+                    const ops = await opRes.json();
+                    if (Array.isArray(ops)) {
+                        ops.forEach((op, idx) => {
+                            if (op && op.name) {
+                                empMap[op.name] = {
+                                    slno: idx + 1,
+                                    name: op.name,
+                                    dept: op.dept || op.department || '',
+                                    designation: op.designation || op.role || 'Operator',
+                                    order: idx,
+                                    days: {}
+                                };
+                                empOrder.push(op.name);
+                            }
+                        });
                     }
-                    if (r.dept) empMap[ename].dept = r.dept;
-                    if (r.designation) empMap[ename].designation = r.designation;
                 }
-                empMap[ename].days[r.day] = r.hours;
-            });
+            } catch (e) { console.error(e); }
+        } else if (forceSource === 'prev_month') {
+            // Explicitly copy from previous month
+            const prevDate = new Date(year, month - 2, 1);
+            const prevMonthVal = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+            try {
+                const prevRes = await fetch(`/api/attendance?month_year=${prevMonthVal}`);
+                if (prevRes.ok) {
+                    const prevRecords = await prevRes.json();
+                    if (Array.isArray(prevRecords) && prevRecords.length > 0) {
+                        prevRecords.forEach(r => {
+                            const ename = (r.employee_name || '').trim();
+                            if (!ename) return;
+                            const recSlno = (r.slno !== undefined && r.slno !== null && Number(r.slno) > 0) ? Number(r.slno) : null;
+                            if (!empMap[ename]) {
+                                empMap[ename] = {
+                                    slno: recSlno,
+                                    name: ename,
+                                    dept: r.dept || '',
+                                    designation: r.designation || 'Operator',
+                                    order: empOrder.length,
+                                    days: {}
+                                };
+                                empOrder.push(ename);
+                            }
+                        });
+                    }
+                }
+            } catch (e) { console.error(e); }
+        } else {
+            // Normal load: Check this month's attendance first
+            let existingRecords = [];
+            try {
+                const res = await fetch(`/api/attendance?month_year=${monthVal}`);
+                if (res.ok) existingRecords = await res.json();
+            } catch (e) { console.error(e); }
+
+            if (Array.isArray(existingRecords) && existingRecords.length > 0) {
+                // ATTENDANCE EXISTS FOR THIS MONTH - COMPLETELY INDEPENDENT OF OPERATOR MASTER
+                existingRecords.forEach(r => {
+                    const ename = (r.employee_name || '').trim();
+                    if (!ename) return;
+                    const recSlno = (r.slno !== undefined && r.slno !== null && Number(r.slno) > 0) ? Number(r.slno) : null;
+                    if (!empMap[ename]) {
+                        empMap[ename] = {
+                            slno: recSlno,
+                            name: ename,
+                            dept: r.dept || '',
+                            designation: r.designation || 'Operator',
+                            order: empOrder.length,
+                            days: {}
+                        };
+                        empOrder.push(ename);
+                    } else {
+                        if (recSlno !== null && (!empMap[ename].slno || empMap[ename].slno <= 0)) {
+                            empMap[ename].slno = recSlno;
+                        }
+                        if (r.dept && !empMap[ename].dept) empMap[ename].dept = r.dept;
+                        if (r.designation && !empMap[ename].designation) empMap[ename].designation = r.designation;
+                    }
+                    if (r.day > 0 && r.hours && r.hours.trim() !== '') {
+                        empMap[ename].days[r.day] = r.hours.trim();
+                    }
+                });
+            } else {
+                // NO RECORDS FOR THIS MONTH YET: Try inheriting from previous month
+                const prevDate = new Date(year, month - 2, 1);
+                const prevMonthVal = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+                let prevRecords = [];
+                try {
+                    const prevRes = await fetch(`/api/attendance?month_year=${prevMonthVal}`);
+                    if (prevRes.ok) prevRecords = await prevRes.json();
+                } catch (e) { console.error(e); }
+
+                if (Array.isArray(prevRecords) && prevRecords.length > 0) {
+                    prevRecords.forEach(r => {
+                        const ename = (r.employee_name || '').trim();
+                        if (!ename) return;
+                        const recSlno = (r.slno !== undefined && r.slno !== null && Number(r.slno) > 0) ? Number(r.slno) : null;
+                        if (!empMap[ename]) {
+                            empMap[ename] = {
+                                slno: recSlno,
+                                name: ename,
+                                dept: r.dept || '',
+                                designation: r.designation || 'Operator',
+                                order: empOrder.length,
+                                days: {}
+                            };
+                            empOrder.push(ename);
+                        }
+                    });
+                } else {
+                    // Fallback to Operator Master as initial seed
+                    try {
+                        const opRes = await fetch('/api/operators');
+                        if (opRes.ok) {
+                            const ops = await opRes.json();
+                            if (Array.isArray(ops)) {
+                                ops.forEach((op, idx) => {
+                                    if (op && op.name) {
+                                        empMap[op.name] = {
+                                            slno: idx + 1,
+                                            name: op.name,
+                                            dept: op.dept || op.department || '',
+                                            designation: op.designation || op.role || 'Operator',
+                                            order: idx,
+                                            days: {}
+                                        };
+                                        empOrder.push(op.name);
+                                    }
+                                });
+                            }
+                        }
+                    } catch (e) { console.error(e); }
+                }
+            }
         }
 
         let empList = Object.values(empMap);
 
         // Sort empList by slno:
-        // Rows with slno > 0 come first in numerical order; otherwise keep defaultOrder
         empList.sort((a, b) => {
             const aHasSl = a.slno !== null && a.slno !== undefined && a.slno > 0;
             const bHasSl = b.slno !== null && b.slno !== undefined && b.slno > 0;
             if (aHasSl && bHasSl) return a.slno - b.slno;
             if (aHasSl) return -1;
             if (bHasSl) return 1;
-            return (a.defaultOrder || 0) - (b.defaultOrder || 0);
+            return (a.order || 0) - (b.order || 0);
         });
 
         // Ensure every employee has an assigned slno (defaulting sequentially 1, 2, 3...)
         let curSl = 1;
-        empList.forEach((emp, index) => {
+        empList.forEach((emp) => {
             if (!emp.slno || emp.slno <= 0) {
                 emp.slno = curSl;
             } else {
@@ -2234,10 +2340,21 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.style.height = '32px';
 
         let rowHtml = `
-            <td style="border: 1px solid #cbd5e1; padding: 2px; width: 60px; text-align: center;"><input type="text" inputmode="numeric" pattern="[0-9]*" class="att-slno" value="${rowSlno || ''}" placeholder="" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px 2px; text-align: center; background: transparent; font-weight: 600;"></td>
-            <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-name" value="${emp.name || ''}" placeholder="Name" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;"></td>
-            <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-dept" value="${emp.dept || ''}" placeholder="Dept" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;"></td>
-            <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-desig" value="${emp.designation || 'Operator'}" placeholder="Designation" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;"></td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px; width: 34px; text-align: center;">
+                <button type="button" class="btn-att-del-row" title="Remove employee from sheet" style="border: 1px solid #fecaca; background: #fef2f2; color: #ef4444; border-radius: 4px; cursor: pointer; font-size: 0.8rem; padding: 1px 5px; font-weight: bold; line-height: 1.2;">✕</button>
+            </td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px; width: 60px; text-align: center;">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" class="att-slno" value="${rowSlno || ''}" placeholder="" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px 2px; text-align: center; background: transparent; font-weight: 600;">
+            </td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px;">
+                <input type="text" class="att-name" list="attendanceOperatorDatalist" value="${emp.name || ''}" placeholder="Name" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;">
+            </td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px;">
+                <input type="text" class="att-dept" value="${emp.dept || ''}" placeholder="Dept" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;">
+            </td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px;">
+                <input type="text" class="att-desig" value="${emp.designation || 'Operator'}" placeholder="Designation" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;">
+            </td>
         `;
 
         for (let d = 1; d <= daysInMonth; d++) {
@@ -2292,6 +2409,46 @@ document.addEventListener('DOMContentLoaded', () => {
     attendanceBody?.addEventListener('change', (e) => {
         if (e.target.classList.contains('att-slno')) {
             handleAttendanceSlnoCascade(e.target);
+        }
+    });
+
+    // Auto-complete Dept and Designation when Name is picked or typed
+    attendanceBody?.addEventListener('change', async (e) => {
+        if (e.target.classList.contains('att-name')) {
+            const enteredName = e.target.value.trim().toUpperCase();
+            if (!enteredName) return;
+            const tr = e.target.closest('tr');
+            if (!tr) return;
+
+            const deptInput = tr.querySelector('.att-dept');
+            const desigInput = tr.querySelector('.att-desig');
+
+            if (cachedOperatorsForAtt.length === 0) {
+                await loadOperatorsForDatalist();
+            }
+            const match = cachedOperatorsForAtt.find(o => (o.name || '').trim().toUpperCase() === enteredName);
+            if (match) {
+                if (deptInput && !deptInput.value.trim()) {
+                    deptInput.value = match.dept || match.department || '';
+                }
+                if (desigInput && (!desigInput.value.trim() || desigInput.value.trim() === 'Operator')) {
+                    desigInput.value = match.designation || match.role || 'Operator';
+                }
+            }
+        }
+    });
+
+    // Delete row button
+    attendanceBody?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.btn-att-del-row');
+        if (btn) {
+            const tr = btn.closest('tr');
+            if (tr) {
+                const ename = tr.querySelector('.att-name')?.value.trim();
+                if (!ename || confirm(`Remove "${ename}" from this month's attendance sheet?`)) {
+                    tr.remove();
+                }
+            }
         }
     });
 
@@ -2385,6 +2542,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('addAttendanceEmpBtn')?.addEventListener('click', () => {
         addAttendanceRow();
+        const newRow = attendanceBody.querySelector('tr:last-child');
+        newRow?.querySelector('.att-name')?.focus();
+    });
+
+    document.getElementById('copyPrevMonthAttBtn')?.addEventListener('click', () => {
+        if (confirm('Load employee list and order from previous month? (Any unsaved edits in current view will be replaced)')) {
+            renderAttendanceGrid('prev_month');
+        }
+    });
+
+    document.getElementById('loadFromOpMasterAttBtn')?.addEventListener('click', () => {
+        if (confirm('Reset and load all employees from Operator Master? (Any unsaved edits in current view will be replaced)')) {
+            renderAttendanceGrid('operator_master');
+        }
     });
 
     document.getElementById('saveAttendanceBtn')?.addEventListener('click', async () => {
@@ -2422,15 +2593,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
-                // Save employee details and designation even if no hours are entered yet
+                // Save employee details even if no hours entered yet (day: 0, hours: "")
                 if (!hasHours) {
                     entries.push({
                         slno: slno,
                         employee_name: name,
                         dept: dept || '',
                         designation: desig || 'Operator',
-                        day: 1,
-                        hours: "0"
+                        day: 0,
+                        hours: ""
                     });
                 }
             }
@@ -2446,9 +2617,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
             });
             if (res.ok) {
-                alert(`Attendance for ${monthVal} saved successfully!`);
+                const data = await res.json().catch(() => ({}));
+                alert(data.message || `Attendance for ${monthVal} saved successfully!`);
             } else {
-                alert('Failed to save attendance.');
+                const errData = await res.json().catch(() => ({}));
+                alert(`Failed to save attendance: ${errData.detail || 'Server error'}`);
             }
         } catch (e) {
             console.error(e);

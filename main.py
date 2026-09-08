@@ -59,26 +59,21 @@ try:
 except Exception as _ex:
     print("create_all notice:", _ex)
 
-# Auto migrate inspection_reports columns if missing
-try:
-    with engine.connect() as conn:
+# Auto migrate columns if missing
+def run_db_migrations():
+    migration_statements = [
+        "ALTER TABLE inspection_reports ADD COLUMN report_code VARCHAR;",
+        "ALTER TABLE inspection_reports ADD COLUMN prod_log_id INTEGER;",
+        "ALTER TABLE attendances ADD COLUMN slno INTEGER DEFAULT 0;",
+    ]
+    for sql in migration_statements:
         try:
-            conn.execute(text("ALTER TABLE inspection_reports ADD COLUMN report_code VARCHAR;"))
-            conn.commit()
+            with engine.begin() as conn:
+                conn.execute(text(sql))
         except Exception:
             pass
-        try:
-            conn.execute(text("ALTER TABLE inspection_reports ADD COLUMN prod_log_id INTEGER;"))
-            conn.commit()
-        except Exception:
-            pass
-        try:
-            conn.execute(text("ALTER TABLE attendances ADD COLUMN slno INTEGER DEFAULT 0;"))
-            conn.commit()
-        except Exception:
-            pass
-except Exception:
-    pass
+
+run_db_migrations()
 
 app = FastAPI(title="Production Management API")
 
@@ -4003,37 +3998,35 @@ def get_attendance(month_year: Optional[str] = None, db: Session = Depends(get_d
             rows = db.execute(text("SELECT * FROM attendances WHERE month_year = :my ORDER BY CASE WHEN slno IS NULL OR slno = 0 THEN 999999 ELSE slno END ASC, id ASC;"), {"my": month_year.strip()}).mappings().all()
         else:
             rows = db.execute(text("SELECT * FROM attendances ORDER BY CASE WHEN slno IS NULL OR slno = 0 THEN 999999 ELSE slno END ASC, id ASC;")).mappings().all()
-        if rows:
+        return [{
+            "id": r.get("id"),
+            "slno": int(r.get("slno") or 0) if "slno" in r else 0,
+            "employee_name": r.get("employee_name") or "",
+            "dept": r.get("dept") or "",
+            "designation": r.get("designation") or "Operator",
+            "month_year": r.get("month_year") or "",
+            "day": int(r.get("day") if r.get("day") is not None else 0),
+            "hours": str(r.get("hours") or ""),
+            "created_at": str(r.get("created_at") or "")
+        } for r in rows]
+    except Exception:
+        db.rollback()
+        try:
+            if month_year:
+                rows = db.execute(text("SELECT * FROM attendances WHERE month_year = :my ORDER BY id ASC;"), {"my": month_year.strip()}).mappings().all()
+            else:
+                rows = db.execute(text("SELECT * FROM attendances ORDER BY id ASC;")).mappings().all()
             return [{
                 "id": r.get("id"),
-                "slno": int(r.get("slno") or 0),
+                "slno": int(r.get("slno") or 0) if "slno" in r else 0,
                 "employee_name": r.get("employee_name") or "",
                 "dept": r.get("dept") or "",
                 "designation": r.get("designation") or "Operator",
                 "month_year": r.get("month_year") or "",
-                "day": int(r.get("day") or 1),
-                "hours": str(r.get("hours") or "0"),
+                "day": int(r.get("day") if r.get("day") is not None else 0),
+                "hours": str(r.get("hours") or ""),
                 "created_at": str(r.get("created_at") or "")
             } for r in rows]
-        return []
-    except Exception:
-        db.rollback()
-        try:
-            q = db.query(models.Attendance)
-            if month_year:
-                q = q.filter(models.Attendance.month_year == month_year.strip())
-            atts = q.order_by(models.Attendance.slno.asc(), models.Attendance.id.asc()).all()
-            return [{
-                "id": a.id,
-                "slno": getattr(a, "slno", 0) or 0,
-                "employee_name": a.employee_name,
-                "dept": a.dept or "",
-                "designation": a.designation or "Operator",
-                "month_year": a.month_year,
-                "day": a.day,
-                "hours": a.hours or "0",
-                "created_at": str(getattr(a, "created_at", "") or "")
-            } for a in atts]
         except Exception:
             db.rollback()
             return []
@@ -4045,6 +4038,13 @@ def save_attendance(data: dict, db: Session = Depends(get_db)):
 
     if not month_val:
         raise HTTPException(status_code=400, detail="month_year is required")
+
+    # Ensure slno column exists
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE attendances ADD COLUMN slno INTEGER DEFAULT 0;"))
+    except Exception:
+        pass
 
     try:
         db.execute(text("DELETE FROM attendances WHERE month_year = :my;"), {"my": month_val})
@@ -4058,6 +4058,7 @@ def save_attendance(data: dict, db: Session = Depends(get_db)):
     except Exception:
         db.rollback()
 
+    saved_count = 0
     for entry in entries:
         slno = int(entry.get("slno") or 0)
         ename = (entry.get("employee_name") or "").strip()
@@ -4065,8 +4066,8 @@ def save_attendance(data: dict, db: Session = Depends(get_db)):
             continue
         dept = (entry.get("dept") or "").strip()
         desig = (entry.get("designation") or "Operator").strip()
-        day = int(entry.get("day") or 1)
-        hrs = str(entry.get("hours") or "0")
+        day = int(entry.get("day") if entry.get("day") is not None else 0)
+        hrs = str(entry.get("hours") or "")
 
         try:
             db.execute(text("""
@@ -4081,11 +4082,31 @@ def save_attendance(data: dict, db: Session = Depends(get_db)):
                 "day": day,
                 "hours": hrs
             })
-        except Exception:
-            pass
+            saved_count += 1
+        except Exception as ex:
+            db.rollback()
+            try:
+                db.execute(text("""
+                    INSERT INTO attendances (employee_name, dept, designation, month_year, day, hours)
+                    VALUES (:employee_name, :dept, :designation, :month_year, :day, :hours);
+                """), {
+                    "employee_name": ename,
+                    "dept": dept,
+                    "designation": desig,
+                    "month_year": month_val,
+                    "day": day,
+                    "hours": hrs
+                })
+                saved_count += 1
+            except Exception:
+                db.rollback()
 
-    db.commit()
-    return {"message": f"Attendance for {month_val} saved successfully!"}
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    return {"message": f"Attendance for {month_val} saved successfully ({saved_count} records)!"}
 
 @app.delete("/api/attendance/clear-all")
 @app.delete("/api/attendance/all")
