@@ -150,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'maintenance': ['maintenance', 'bdslip', 'servicedetails'],
                     'hr': ['hr', 'attendance'],
                     'service': ['service', 'service_setters', 'setters'],
-                    'inspection': ['inspection']
+                    'inspection': ['inspection', 'line_insp']
                 };
                 const allowed = (accessibleScreens && accessibleScreens.length > 0) && (groupScreens[group] ? groupScreens[group].some(s => accessibleScreens.includes(s) || accessibleScreens.includes(group)) : false);
                 tab.style.display = allowed ? 'inline-block' : 'none';

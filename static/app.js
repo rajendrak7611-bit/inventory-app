@@ -192,7 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'maintenance': ['maintenance', 'bdslip', 'servicedetails'],
                     'hr': ['hr', 'attendance'],
                     'service': ['service', 'service_setters', 'setters'],
-                    'inspection': ['inspection']
+                    'inspection': ['inspection', 'line_insp']
                 };
                 const allowed = (accessibleScreens && accessibleScreens.length > 0) && (groupScreens[group] ? groupScreens[group].some(s => accessibleScreens.includes(s) || accessibleScreens.includes(group)) : false);
                 tab.style.display = allowed ? 'inline-block' : 'none';
@@ -384,6 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebarDebur = document.getElementById('sidebarDebur');
     const sidebarInspection = document.getElementById('sidebarInspection');
     const sidebarFinalInsp = document.getElementById('sidebarFinalInsp');
+    const sidebarLineInsp = document.getElementById('sidebarLineInsp');
     
     const rawMaterialsSection = document.getElementById('rawMaterialsSection');
     const rmReceiptSection = document.getElementById('rmReceiptSection');
@@ -403,6 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const prodLogSection = document.getElementById('prodLogSection');
     const deburSection = document.getElementById('deburSection');
     const inspectionSection = document.getElementById('inspectionSection');
+    const lineInspectionSection = document.getElementById('lineInspectionSection');
 
     // Products Elements
     const productsBody = document.getElementById('productsBody');
@@ -467,7 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'insertConsumptionSection', 'insertStockSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'dbBackupSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'resourceReqdSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection', 'bcStatusSection', 'wiproStatusSection',
-            'inspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'serviceSettersSection', 'hrSection', 'attendanceSection', 'rfqSection', 'quoteSection'
+            'inspectionSection', 'lineInspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'serviceSettersSection', 'hrSection', 'attendanceSection', 'rfqSection', 'quoteSection'
         ];
         sections.forEach(id => {
             const el = document.getElementById(id);
@@ -877,6 +879,12 @@ document.addEventListener('DOMContentLoaded', () => {
             addBtn.style.display = 'none';
             if (importBtn) importBtn.style.display = 'none';
             initInspection();
+        }},
+        'sidebarLineInsp': { tab: 'line_insp', action: () => {
+            if (lineInspectionSection) lineInspectionSection.style.display = 'block';
+            addBtn.style.display = 'none';
+            if (importBtn) importBtn.style.display = 'none';
+            initLineInspection();
         }}
     };
 
@@ -6309,6 +6317,763 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("Error exporting inspection logs:", err);
             alert("Failed to export inspection logs.");
         }
+    });
+
+    // ====== LINE INSPECTION LOGIC ======
+    let lineAllParts = [];
+    let lineAllMachines = [];
+    let lineAllOperators = [];
+    let lineTemplateParams = [];
+    let lineCurrentPartId = null;
+    let lineRecentRecords = [];
+
+    async function initLineInspection() {
+        const dateInput = document.getElementById('lineInspDate');
+        if (dateInput && !dateInput.value) {
+            dateInput.value = new Date().toISOString().slice(0, 10);
+        }
+
+        await Promise.all([
+            fetchLineParts(),
+            fetchLineMachines(),
+            fetchLineOperators(),
+            fetchLineInspectionRecords()
+        ]);
+    }
+
+    async function fetchLineParts() {
+        try {
+            const res = await fetch('/api/partmaster');
+            lineAllParts = await res.json();
+            const select = document.getElementById('linePartSelect');
+            if (!select) return;
+
+            const currentVal = select.value;
+            select.innerHTML = '<option value="">-- Select Part No --</option>';
+
+            lineAllParts.sort((a, b) => (a.partno || a.part_no || '').localeCompare(b.partno || b.part_no || ''));
+
+            lineAllParts.forEach(p => {
+                const pno = p.partno || p.part_no || '';
+                if (pno) {
+                    const desc = p.family || p.forge_pn || p.description || '';
+                    const opt = document.createElement('option');
+                    opt.value = pno;
+                    opt.textContent = `${pno}${desc ? ' - ' + desc : ''}`;
+                    opt.dataset.partId = p.id;
+                    opt.dataset.desc = desc;
+                    select.appendChild(opt);
+                }
+            });
+
+            if (currentVal) select.value = currentVal;
+        } catch (err) {
+            console.error('Error fetching parts for line inspection:', err);
+        }
+    }
+
+    async function fetchLineMachines() {
+        try {
+            const res = await fetch('/api/machines');
+            lineAllMachines = await res.json();
+            const select = document.getElementById('lineInspMachine');
+            if (!select) return;
+            select.innerHTML = '<option value="">-- Select Machine --</option>';
+            lineAllMachines.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.name;
+                opt.textContent = m.name;
+                select.appendChild(opt);
+            });
+        } catch (e) {
+            console.error('Error fetching machines:', e);
+        }
+    }
+
+    async function fetchLineOperators() {
+        try {
+            const res = await fetch('/api/operators');
+            lineAllOperators = await res.json();
+            const select = document.getElementById('lineInspOperator');
+            if (!select) return;
+            select.innerHTML = '<option value="">-- Select Operator --</option>';
+            lineAllOperators.forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.name;
+                opt.textContent = o.name;
+                select.appendChild(opt);
+            });
+        } catch (e) {
+            console.error('Error fetching operators:', e);
+        }
+    }
+
+    // Part Selection Listener
+    document.getElementById('linePartSelect')?.addEventListener('change', async (e) => {
+        const pno = e.target.value;
+        const selectedOpt = e.target.selectedOptions[0];
+        const partDescInput = document.getElementById('linePartDesc');
+        const tblHdrPartNo = document.getElementById('tblHdrPartNo');
+        const tblHdrPartDesc = document.getElementById('tblHdrPartDesc');
+        const opnSelect = document.getElementById('lineOpnSelect');
+        const opnDescInput = document.getElementById('lineOpnDesc');
+
+        if (!pno || !selectedOpt) {
+            if (partDescInput) partDescInput.value = '';
+            if (tblHdrPartNo) tblHdrPartNo.textContent = '--';
+            if (tblHdrPartDesc) tblHdrPartDesc.textContent = '--';
+            if (opnSelect) opnSelect.innerHTML = '<option value="">-- Select Opn No --</option>';
+            if (opnDescInput) opnDescInput.value = '';
+            lineCurrentPartId = null;
+            resetLineParamTable();
+            return;
+        }
+
+        const partId = selectedOpt.dataset.partId;
+        lineCurrentPartId = partId;
+        const desc = selectedOpt.dataset.desc || '';
+
+        if (partDescInput) partDescInput.value = desc;
+        if (tblHdrPartNo) tblHdrPartNo.textContent = pno;
+        if (tblHdrPartDesc) tblHdrPartDesc.textContent = desc || 'N/A';
+
+        // Fetch Operations for this part
+        if (opnSelect) {
+            opnSelect.innerHTML = '<option value="">-- Loading operations... --</option>';
+            try {
+                const res = await fetch(`/api/partmaster/${partId}/operations`);
+                const ops = await res.json();
+                opnSelect.innerHTML = '<option value="">-- Select Opn No --</option>';
+                if (Array.isArray(ops) && ops.length > 0) {
+                    ops.forEach(op => {
+                        const opt = document.createElement('option');
+                        opt.value = op.opn_no;
+                        opt.textContent = `${op.opn_no} - ${op.description || ''}`;
+                        opt.dataset.desc = op.description || '';
+                        opt.dataset.machine = op.machine || '';
+                        opnSelect.appendChild(opt);
+                    });
+                } else {
+                    opnSelect.innerHTML = '<option value="">No operations defined in Part Master</option>';
+                }
+            } catch (err) {
+                console.error('Error fetching part operations:', err);
+                opnSelect.innerHTML = '<option value="">-- Select Opn No --</option>';
+            }
+        }
+
+        if (opnDescInput) opnDescInput.value = '';
+        resetLineParamTable();
+    });
+
+    // Opn Selection Listener
+    document.getElementById('lineOpnSelect')?.addEventListener('change', async (e) => {
+        const opnNo = e.target.value;
+        const selectedOpt = e.target.selectedOptions[0];
+        const opnDescInput = document.getElementById('lineOpnDesc');
+        const tblHdrOpnNo = document.getElementById('tblHdrOpnNo');
+        const tblHdrOpnDesc = document.getElementById('tblHdrOpnDesc');
+        const partNo = document.getElementById('linePartSelect')?.value || '';
+
+        if (!opnNo || !selectedOpt) {
+            if (opnDescInput) opnDescInput.value = '';
+            if (tblHdrOpnNo) tblHdrOpnNo.textContent = '--';
+            if (tblHdrOpnDesc) tblHdrOpnDesc.textContent = '--';
+            resetLineParamTable();
+            return;
+        }
+
+        const opnDesc = selectedOpt.dataset.desc || '';
+        if (opnDescInput) opnDescInput.value = opnDesc;
+        if (tblHdrOpnNo) tblHdrOpnNo.textContent = opnNo;
+        if (tblHdrOpnDesc) tblHdrOpnDesc.textContent = opnDesc || 'N/A';
+
+        // Auto select machine if matching
+        const mc = selectedOpt.dataset.machine;
+        const machineSelect = document.getElementById('lineInspMachine');
+        if (mc && machineSelect) {
+            const found = Array.from(machineSelect.options).find(o => (o.value || '').toLowerCase() === mc.toLowerCase());
+            if (found) machineSelect.value = found.value;
+        }
+
+        await loadLineTemplateParameters(partNo, opnNo);
+    });
+
+    async function loadLineTemplateParameters(partNo, opnNo) {
+        const statusNotice = document.getElementById('lineTemplateStatusNotice');
+        try {
+            const res = await fetch(`/api/inspection-parameters?part_no=${encodeURIComponent(partNo)}&opn_no=${encodeURIComponent(opnNo)}`);
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+                lineTemplateParams = data.map((p, idx) => ({
+                    id: p.id,
+                    sl_no: p.sl_no || idx + 1,
+                    description: p.description || '',
+                    nominal_dimension: p.nominal_dimension !== null && p.nominal_dimension !== undefined ? p.nominal_dimension : '',
+                    lo_tol: p.lo_tol !== null && p.lo_tol !== undefined ? p.lo_tol : '',
+                    hi_tol: p.hi_tol !== null && p.hi_tol !== undefined ? p.hi_tol : ''
+                }));
+                if (statusNotice) {
+                    statusNotice.innerHTML = `<span style="color: #10b981; font-weight: 600;"><i class="fas fa-check-circle"></i> Loaded saved template with ${lineTemplateParams.length} parameter(s) for Part ${escapeHtml(partNo)} (Opn ${escapeHtml(opnNo)}).</span>`;
+                }
+            } else {
+                lineTemplateParams = [
+                    { sl_no: 1, description: '', nominal_dimension: '', lo_tol: '', hi_tol: '' },
+                    { sl_no: 2, description: '', nominal_dimension: '', lo_tol: '', hi_tol: '' },
+                    { sl_no: 3, description: '', nominal_dimension: '', lo_tol: '', hi_tol: '' },
+                    { sl_no: 4, description: '', nominal_dimension: '', lo_tol: '', hi_tol: '' },
+                    { sl_no: 5, description: '', nominal_dimension: '', lo_tol: '', hi_tol: '' }
+                ];
+                if (statusNotice) {
+                    statusNotice.innerHTML = `<span style="color: #d97706;"><i class="fas fa-info-circle"></i> No existing template for this operation. Fill parameters and click <b>'Save Template'</b>.</span>`;
+                }
+            }
+            renderLineParamRows();
+        } catch (err) {
+            console.error('Error loading template parameters:', err);
+        }
+    }
+
+    function resetLineParamTable() {
+        const tbody = document.getElementById('lineParamTableBody');
+        const statusNotice = document.getElementById('lineTemplateStatusNotice');
+        if (statusNotice) {
+            statusNotice.innerHTML = `<i class="fas fa-info-circle"></i> Please select a Part No and Opn No to load or configure the inspection template.`;
+        }
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="6" style="padding: 2rem; text-align: center; color: var(--text-muted);">Select Part No and Opn No above to load or create template.</td></tr>`;
+        }
+        lineTemplateParams = [];
+    }
+
+    function renderLineParamRows() {
+        const tbody = document.getElementById('lineParamTableBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        if (lineTemplateParams.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="padding: 1.5rem; text-align: center; color: var(--text-muted);">No parameter rows. Click "+ Add Parameter Row" to add one.</td></tr>`;
+            return;
+        }
+
+        lineTemplateParams.forEach((param, idx) => {
+            const tr = document.createElement('tr');
+            tr.dataset.idx = idx;
+            tr.style.borderBottom = '1px solid #e2e8f0';
+
+            const dimVal = param.nominal_dimension !== null && param.nominal_dimension !== undefined ? param.nominal_dimension : '';
+            const lowVal = param.lo_tol !== null && param.lo_tol !== undefined ? param.lo_tol : '';
+            const hiVal = param.hi_tol !== null && param.hi_tol !== undefined ? param.hi_tol : '';
+
+            tr.innerHTML = `
+                <td style="padding: 6px; text-align: left;">
+                    <input type="text" class="line-param-desc" value="${escapeHtml(param.description || '')}" placeholder="Param Description (e.g. Bore, OD)" style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-family: 'Inter', sans-serif;">
+                </td>
+                <td style="padding: 6px;">
+                    <input type="number" step="0.001" class="line-param-dim" value="${dimVal}" placeholder="100.0" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center; font-family: 'Inter', sans-serif;">
+                </td>
+                <td style="padding: 6px;">
+                    <input type="number" step="0.001" class="line-param-low" value="${lowVal}" placeholder="0.05" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center; font-family: 'Inter', sans-serif;">
+                </td>
+                <td style="padding: 6px;">
+                    <input type="number" step="0.001" class="line-param-hi" value="${hiVal}" placeholder="0.05" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center; font-family: 'Inter', sans-serif;">
+                </td>
+                <td style="padding: 6px; background: #f0fdf4;">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                        <input type="number" step="0.001" class="line-param-reading" placeholder="Observed Reading" style="width: 100%; padding: 6px; border: 1px solid #86efac; border-radius: 4px; text-align: center; font-weight: 700; font-family: 'Inter', sans-serif;">
+                        <span class="line-reading-badge" style="display: none; font-size: 0.75rem; font-weight: 700;"></span>
+                    </div>
+                </td>
+                <td style="padding: 6px; text-align: center;">
+                    <button type="button" class="line-del-row-btn btn btn-outline" title="Delete Row" style="padding: 2px 8px; font-size: 0.8rem; color: #ef4444; border-color: #ef4444;">✕</button>
+                </td>
+            `;
+
+            const descInput = tr.querySelector('.line-param-desc');
+            const dimInput = tr.querySelector('.line-param-dim');
+            const lowInput = tr.querySelector('.line-param-low');
+            const hiInput = tr.querySelector('.line-param-hi');
+            const readingInput = tr.querySelector('.line-param-reading');
+            const badge = tr.querySelector('.line-reading-badge');
+            const delBtn = tr.querySelector('.line-del-row-btn');
+
+            descInput.addEventListener('input', () => { lineTemplateParams[idx].description = descInput.value; });
+            dimInput.addEventListener('input', () => {
+                lineTemplateParams[idx].nominal_dimension = dimInput.value !== '' ? parseFloat(dimInput.value) : '';
+                validateLineReading(readingInput, badge, dimInput, lowInput, hiInput);
+            });
+            lowInput.addEventListener('input', () => {
+                lineTemplateParams[idx].lo_tol = lowInput.value !== '' ? parseFloat(lowInput.value) : '';
+                validateLineReading(readingInput, badge, dimInput, lowInput, hiInput);
+            });
+            hiInput.addEventListener('input', () => {
+                lineTemplateParams[idx].hi_tol = hiInput.value !== '' ? parseFloat(hiInput.value) : '';
+                validateLineReading(readingInput, badge, dimInput, lowInput, hiInput);
+            });
+
+            readingInput.addEventListener('input', () => {
+                validateLineReading(readingInput, badge, dimInput, lowInput, hiInput);
+                evaluateOverallLineStatus();
+            });
+
+            delBtn.addEventListener('click', () => {
+                lineTemplateParams.splice(idx, 1);
+                renderLineParamRows();
+            });
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    function validateLineReading(readingInput, badge, dimInput, lowInput, hiInput) {
+        const valStr = readingInput.value.trim();
+        if (!valStr) {
+            readingInput.style.background = '';
+            readingInput.style.borderColor = '#86efac';
+            readingInput.style.color = '';
+            badge.style.display = 'none';
+            return null;
+        }
+
+        const actual = parseFloat(valStr);
+        const dim = parseFloat(dimInput.value);
+        const low = Math.abs(parseFloat(lowInput.value) || 0);
+        const hi = Math.abs(parseFloat(hiInput.value) || 0);
+
+        if (isNaN(actual) || isNaN(dim)) {
+            readingInput.style.background = '';
+            badge.style.display = 'none';
+            return null;
+        }
+
+        const minVal = dim - low;
+        const maxVal = dim + hi;
+        const isOk = (actual >= minVal - 0.0001 && actual <= maxVal + 0.0001);
+
+        badge.style.display = 'inline-block';
+        if (isOk) {
+            readingInput.style.background = '#dcfce7';
+            readingInput.style.borderColor = '#22c55e';
+            readingInput.style.color = '#15803d';
+            badge.style.color = '#16a34a';
+            badge.textContent = '✔ OK';
+            return true;
+        } else {
+            readingInput.style.background = '#fee2e2';
+            readingInput.style.borderColor = '#ef4444';
+            readingInput.style.color = '#b91c1c';
+            badge.style.color = '#dc2626';
+            const diff = actual < minVal ? (actual - minVal).toFixed(3) : `+${(actual - maxVal).toFixed(3)}`;
+            badge.textContent = `✖ NOT OK (${diff})`;
+            return false;
+        }
+    }
+
+    function evaluateOverallLineStatus() {
+        const statusSelect = document.getElementById('lineInspStatus');
+        if (!statusSelect) return;
+
+        const readingInputs = Array.from(document.querySelectorAll('.line-param-reading'));
+        let hasFail = false;
+        let hasReadings = false;
+
+        readingInputs.forEach(input => {
+            const tr = input.closest('tr');
+            if (!tr) return;
+            const dimInput = tr.querySelector('.line-param-dim');
+            const lowInput = tr.querySelector('.line-param-low');
+            const hiInput = tr.querySelector('.line-param-hi');
+            const valStr = input.value.trim();
+            if (valStr) {
+                hasReadings = true;
+                const actual = parseFloat(valStr);
+                const dim = parseFloat(dimInput?.value);
+                const low = Math.abs(parseFloat(lowInput?.value) || 0);
+                const hi = Math.abs(parseFloat(hiInput?.value) || 0);
+                if (!isNaN(actual) && !isNaN(dim)) {
+                    if (actual < dim - low - 0.0001 || actual > dim + hi + 0.0001) {
+                        hasFail = true;
+                    }
+                }
+            }
+        });
+
+        if (hasReadings) {
+            statusSelect.value = hasFail ? 'Rejected' : 'Accepted';
+        }
+    }
+
+    // Add Row button
+    document.getElementById('lineAddRowBtn')?.addEventListener('click', () => {
+        const partNo = document.getElementById('linePartSelect')?.value;
+        if (!partNo) {
+            alert('Please select a Part No and Opn No first.');
+            return;
+        }
+        lineTemplateParams.push({
+            sl_no: lineTemplateParams.length + 1,
+            description: '',
+            nominal_dimension: '',
+            lo_tol: '',
+            hi_tol: ''
+        });
+        renderLineParamRows();
+    });
+
+    // Save Template button
+    document.getElementById('lineSaveTemplateBtn')?.addEventListener('click', async () => {
+        const partNo = document.getElementById('linePartSelect')?.value;
+        const opnNo = document.getElementById('lineOpnSelect')?.value;
+        const partDesc = document.getElementById('linePartDesc')?.value || '';
+        const opnDesc = document.getElementById('lineOpnDesc')?.value || '';
+
+        if (!partNo || !opnNo) {
+            alert('Please select both Part No and Opn No to save a template.');
+            return;
+        }
+
+        const validParams = [];
+        lineTemplateParams.forEach((p, idx) => {
+            const desc = (p.description || '').trim();
+            const dim = parseFloat(p.nominal_dimension);
+            if (desc || !isNaN(dim)) {
+                validParams.push({
+                    part_no: partNo,
+                    part_desc: partDesc,
+                    opn_no: opnNo,
+                    opn_desc: opnDesc,
+                    sl_no: idx + 1,
+                    description: desc || `Param ${idx + 1}`,
+                    nominal_dimension: !isNaN(dim) ? dim : 0.0,
+                    lo_tol: !isNaN(parseFloat(p.lo_tol)) ? Math.abs(parseFloat(p.lo_tol)) : 0.0,
+                    hi_tol: !isNaN(parseFloat(p.hi_tol)) ? Math.abs(parseFloat(p.hi_tol)) : 0.0
+                });
+            }
+        });
+
+        if (validParams.length === 0) {
+            alert('Please enter at least one parameter with a description or dimension before saving.');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/inspection-parameters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(validParams)
+            });
+            if (res.ok) {
+                alert(`Template for Part: ${partNo} (Opn: ${opnNo}) saved successfully with ${validParams.length} parameter(s)!`);
+                await loadLineTemplateParameters(partNo, opnNo);
+            } else {
+                alert('Failed to save inspection template.');
+            }
+        } catch (err) {
+            console.error('Error saving template:', err);
+            alert('Error saving inspection template.');
+        }
+    });
+
+    // Clear Values button
+    document.getElementById('lineClearInputsBtn')?.addEventListener('click', () => {
+        document.getElementById('linePartSlNo').value = '';
+        document.getElementById('lineInspRemarks').value = '';
+        document.querySelectorAll('.line-param-reading').forEach(inp => {
+            inp.value = '';
+            inp.style.background = '';
+            inp.style.borderColor = '#86efac';
+            inp.style.color = '';
+        });
+        document.querySelectorAll('.line-reading-badge').forEach(b => {
+            b.style.display = 'none';
+        });
+        document.getElementById('lineInspStatus').value = 'Accepted';
+    });
+
+    // Save Line Inspection Instance button
+    document.getElementById('lineSaveInstanceBtn')?.addEventListener('click', async () => {
+        const partNo = document.getElementById('linePartSelect')?.value;
+        const opnNo = document.getElementById('lineOpnSelect')?.value;
+        const partDesc = document.getElementById('linePartDesc')?.value || '';
+        const opnDesc = document.getElementById('lineOpnDesc')?.value || '';
+        const partSlNo = document.getElementById('linePartSlNo')?.value.trim();
+
+        if (!partNo || !opnNo) {
+            alert('Please select Part No and Opn No first.');
+            return;
+        }
+
+        if (!partSlNo) {
+            alert('Please enter the Part Sl No (Component Serial Number).');
+            document.getElementById('linePartSlNo')?.focus();
+            return;
+        }
+
+        const date = document.getElementById('lineInspDate')?.value || new Date().toISOString().slice(0, 10);
+        const shift = document.getElementById('lineInspShift')?.value || 'Shift 1';
+        const machine = document.getElementById('lineInspMachine')?.value || '';
+        const operator = document.getElementById('lineInspOperator')?.value || '';
+        const status = document.getElementById('lineInspStatus')?.value || 'Accepted';
+        const remarks = document.getElementById('lineInspRemarks')?.value || '';
+
+        const readings = [];
+        const rows = document.querySelectorAll('#lineParamTableBody tr');
+        rows.forEach(tr => {
+            const desc = tr.querySelector('.line-param-desc')?.value || '';
+            const dim = parseFloat(tr.querySelector('.line-param-dim')?.value) || 0;
+            const low = parseFloat(tr.querySelector('.line-param-low')?.value) || 0;
+            const hi = parseFloat(tr.querySelector('.line-param-hi')?.value) || 0;
+            const readingInp = tr.querySelector('.line-param-reading');
+            const actualVal = readingInp?.value.trim();
+            const actual = actualVal !== '' && !isNaN(parseFloat(actualVal)) ? parseFloat(actualVal) : null;
+            const isOk = actual !== null ? (actual >= dim - low - 0.0001 && actual <= dim + hi + 0.0001) : null;
+
+            readings.push({
+                desc: desc,
+                nominal: dim,
+                low: low,
+                hi: hi,
+                actual: actual,
+                status: isOk === true ? 'OK' : (isOk === false ? 'NOT OK' : '')
+            });
+        });
+
+        const payload = {
+            part_no: partNo,
+            part_desc: partDesc,
+            opn_no: opnNo,
+            opn_desc: opnDesc,
+            part_sl_no: partSlNo,
+            inspection_date: date,
+            shift: shift,
+            machine_name: machine,
+            operator_name: operator,
+            status: status,
+            remarks: remarks,
+            readings_json: JSON.stringify(readings)
+        };
+
+        try {
+            const res = await fetch('/api/line-inspections', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                alert(`Line Inspection for Part ${partNo} (Sl No: ${partSlNo}) saved successfully!`);
+                document.getElementById('linePartSlNo').value = '';
+                document.getElementById('lineInspRemarks').value = '';
+                document.querySelectorAll('.line-param-reading').forEach(inp => {
+                    inp.value = '';
+                    inp.style.background = '';
+                    inp.style.borderColor = '#86efac';
+                    inp.style.color = '';
+                });
+                document.querySelectorAll('.line-reading-badge').forEach(b => {
+                    b.style.display = 'none';
+                });
+                document.getElementById('lineInspStatus').value = 'Accepted';
+                document.getElementById('linePartSlNo')?.focus();
+
+                fetchLineInspectionRecords();
+            } else {
+                alert('Failed to save Line Inspection record.');
+            }
+        } catch (err) {
+            console.error('Error saving line inspection:', err);
+            alert('Error saving line inspection.');
+        }
+    });
+
+    async function fetchLineInspectionRecords() {
+        try {
+            const res = await fetch('/api/line-inspections');
+            lineRecentRecords = await res.json();
+            renderLineInspectionRecords();
+        } catch (err) {
+            console.error('Error fetching line inspections:', err);
+        }
+    }
+
+    function renderLineInspectionRecords() {
+        const tbody = document.getElementById('lineRecordsBody');
+        if (!tbody) return;
+        const filterVal = (document.getElementById('lineSearchFilter')?.value || '').trim().toLowerCase();
+
+        let records = lineRecentRecords || [];
+        if (filterVal) {
+            records = records.filter(r => 
+                (r.part_no || '').toLowerCase().includes(filterVal) ||
+                (r.part_sl_no || r.comp_sl_nos || '').toLowerCase().includes(filterVal) ||
+                (r.opn_no || '').toLowerCase().includes(filterVal) ||
+                (r.operator_name || '').toLowerCase().includes(filterVal) ||
+                (r.status || '').toLowerCase().includes(filterVal)
+            );
+        }
+
+        tbody.innerHTML = '';
+        if (records.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:2rem; color:var(--text-muted);">No line inspection records found.</td></tr>`;
+            return;
+        }
+
+        records.forEach((r, idx) => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--border-color)';
+
+            const status = r.status || 'Accepted';
+            let badgeStyle = 'background:#dcfce7; color:#16a34a;';
+            if (status.toLowerCase() === 'rejected') badgeStyle = 'background:#fee2e2; color:#dc2626;';
+            else if (status.toLowerCase() === 'rework') badgeStyle = 'background:#fef3c7; color:#d97706;';
+
+            tr.innerHTML = `
+                <td style="padding:8px; text-align:center; color:var(--text-muted);">${idx + 1}</td>
+                <td style="padding:8px;">${escapeHtml(r.inspection_date || '')}</td>
+                <td style="padding:8px;">${escapeHtml(r.shift || '')}</td>
+                <td style="padding:8px; font-weight:700; color:var(--primary-color);">${escapeHtml(r.part_no || '')}</td>
+                <td style="padding:8px;">${escapeHtml(r.part_desc || '')}</td>
+                <td style="padding:8px;">${escapeHtml(r.opn_no || '')}</td>
+                <td style="padding:8px;">${escapeHtml(r.opn_desc || '')}</td>
+                <td style="padding:8px; font-weight:700; color:#0f172a;">${escapeHtml(r.part_sl_no || r.comp_sl_nos || '')}</td>
+                <td style="padding:8px;">${escapeHtml(r.machine_name || '')}</td>
+                <td style="padding:8px;">${escapeHtml(r.operator_name || '')}</td>
+                <td style="padding:8px; text-align:center;">
+                    <span style="${badgeStyle} padding: 2px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">${escapeHtml(status)}</span>
+                </td>
+                <td style="padding:8px; text-align:center;">
+                    <div style="display:flex; gap:6px; justify-content:center;">
+                        <button type="button" class="btn btn-outline line-view-slip-btn" data-id="${r.id}" title="View Details" style="padding:2px 8px; font-size:0.8rem; color:#2563eb; border-color:#2563eb;">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline line-del-record-btn delete-btn" data-id="${r.id}" title="Delete Record" style="padding:2px 8px; font-size:0.8rem; color:#ef4444; border-color:#ef4444;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+
+            tr.querySelector('.line-view-slip-btn')?.addEventListener('click', () => viewLineInspectionDetails(r));
+            tr.querySelector('.line-del-record-btn')?.addEventListener('click', () => deleteLineInspectionRecord(r.id));
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    document.getElementById('lineSearchFilter')?.addEventListener('input', () => {
+        renderLineInspectionRecords();
+    });
+
+    function viewLineInspectionDetails(record) {
+        const modal = document.getElementById('lineViewModal');
+        const content = document.getElementById('lineViewModalContent');
+        if (!modal || !content) return;
+
+        let readings = [];
+        try {
+            readings = typeof record.readings_json === 'string' ? JSON.parse(record.readings_json || '[]') : record.readings_json || [];
+        } catch(e) {}
+
+        const status = record.status || 'Accepted';
+        let badgeColor = '#16a34a';
+        if (status.toLowerCase() === 'rejected') badgeColor = '#dc2626';
+        else if (status.toLowerCase() === 'rework') badgeColor = '#d97706';
+
+        let rowsHtml = '';
+        if (Array.isArray(readings) && readings.length > 0) {
+            readings.forEach((item, idx) => {
+                const isOk = item.status === 'OK';
+                const statusBadge = item.actual !== null && item.actual !== undefined ? 
+                    (isOk ? '<span style="color:#16a34a; font-weight:700;">✔ OK</span>' : '<span style="color:#dc2626; font-weight:700;">✖ NOT OK</span>') : 
+                    '<span style="color:#94a3b8;">--</span>';
+                rowsHtml += `
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                        <td style="padding:8px; text-align:center;">${idx + 1}</td>
+                        <td style="padding:8px; text-align:left; font-weight:500;">${escapeHtml(item.desc || '')}</td>
+                        <td style="padding:8px; text-align:center;">${item.nominal !== undefined ? item.nominal : '--'}</td>
+                        <td style="padding:8px; text-align:center;">-${item.low !== undefined ? item.low : '0'}</td>
+                        <td style="padding:8px; text-align:center;">+${item.hi !== undefined ? item.hi : '0'}</td>
+                        <td style="padding:8px; text-align:center; font-weight:700; background:#f0fdf4;">${item.actual !== null && item.actual !== undefined ? item.actual : '--'}</td>
+                        <td style="padding:8px; text-align:center;">${statusBadge}</td>
+                    </tr>
+                `;
+            });
+        } else {
+            rowsHtml = `<tr><td colspan="7" style="padding:1.5rem; text-align:center; color:var(--text-muted);">No individual parameter readings recorded.</td></tr>`;
+        }
+
+        content.innerHTML = `
+            <div style="border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <h3 style="margin: 0; font-size: 1.25rem; color: var(--text-main); display:flex; align-items:center; gap:8px;">
+                        <i class="fas fa-clipboard-check" style="color:#2563eb;"></i> Line Inspection Slip
+                    </h3>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">Traceability Code: <b>${escapeHtml(record.report_code || 'N/A')}</b></span>
+                </div>
+                <button type="button" class="btn btn-outline" onclick="window.print()" style="display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+                    <i class="fas fa-print"></i> Print
+                </button>
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; background:rgba(0,0,0,0.02); padding:12px; border-radius:8px; border:1px solid var(--border-color); margin-bottom:20px; font-size:0.9rem;">
+                <div><b>Part No:</b> <span style="color:#2563eb; font-weight:700;">${escapeHtml(record.part_no || '')}</span></div>
+                <div><b>Part Desc:</b> ${escapeHtml(record.part_desc || 'N/A')}</div>
+                <div><b>Part Sl No:</b> <span style="font-weight:700; color:#0f172a;">${escapeHtml(record.part_sl_no || record.comp_sl_nos || '')}</span></div>
+                <div><b>Opn No:</b> ${escapeHtml(record.opn_no || '')}</div>
+                <div><b>Opn Desc:</b> ${escapeHtml(record.opn_desc || 'N/A')}</div>
+                <div><b>Date:</b> ${escapeHtml(record.inspection_date || '')} (${escapeHtml(record.shift || '')})</div>
+                <div><b>Machine:</b> ${escapeHtml(record.machine_name || 'N/A')}</div>
+                <div><b>Inspector:</b> ${escapeHtml(record.operator_name || 'N/A')}</div>
+                <div><b>Status:</b> <span style="color:${badgeColor}; font-weight:700;">${escapeHtml(status)}</span></div>
+            </div>
+
+            ${record.remarks ? `<div style="margin-bottom:15px; font-size:0.85rem; color:#475569;"><b>Remarks:</b> ${escapeHtml(record.remarks)}</div>` : ''}
+
+            <table style="width:100%; border-collapse:collapse; border:1px solid var(--border-color); font-size:0.88rem;">
+                <thead>
+                    <tr style="background:#f8fafc; border-bottom:2px solid #cbd5e1;">
+                        <th style="padding:8px; text-align:center; width:40px;">#</th>
+                        <th style="padding:8px; text-align:left;">Desc</th>
+                        <th style="padding:8px; text-align:center;">Dim</th>
+                        <th style="padding:8px; text-align:center;">Low Tol</th>
+                        <th style="padding:8px; text-align:center;">Hi Tol</th>
+                        <th style="padding:8px; text-align:center; background:#ecfdf5;">Observed</th>
+                        <th style="padding:8px; text-align:center;">Result</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rowsHtml}
+                </tbody>
+            </table>
+        `;
+
+        modal.style.display = 'flex';
+    }
+
+    document.getElementById('closeLineViewModalBtn')?.addEventListener('click', () => {
+        const modal = document.getElementById('lineViewModal');
+        if (modal) modal.style.display = 'none';
+    });
+
+    async function deleteLineInspectionRecord(id) {
+        if (!checkAdminAccess()) return;
+        if (confirm('Are you sure you want to delete this Line Inspection record?')) {
+            try {
+                const res = await fetch(`/api/line-inspections/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    fetchLineInspectionRecords();
+                } else {
+                    alert('Failed to delete inspection record.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error deleting inspection record.');
+            }
+        }
+    }
+
+    // Export to Excel
+    document.getElementById('lineExportExcelBtn')?.addEventListener('click', () => {
+        window.location.href = '/api/export/line-inspections/excel';
     });
 
     // --- PROD LOG LOGIC ---

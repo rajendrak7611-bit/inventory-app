@@ -115,6 +115,7 @@
             </div>
             <div class="sub-group" id="submenuInspection" style="display: none;">
                 <button class="sub-tab" id="sidebarFinalInsp" data-screen="inspection">Final Insp</button>
+                <button class="sub-tab" id="sidebarLineInsp" data-screen="line_insp">Line Insp</button>
             </div>
             <div class="sub-group" id="submenuReports" style="display: none;">
                 <button class="sub-tab" id="sidebarRmRequirement" data-screen="rm_requirement">RM Requirement</button>
@@ -2032,6 +2033,220 @@
                     </table>
                 </div>
             </div>
+            
+            <!-- Line Inspection Section -->
+            <div class="table-container" id="lineInspectionSection" style="display: none; padding: 2rem; color: var(--text-main);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h2 style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-ruler-combined" style="color: var(--primary-color);"></i> Line Inspection
+                        </h2>
+                        <span style="font-size: 0.85rem; color: var(--text-muted);">Inspection parameter templates & serial number instance verification</span>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" id="lineExportExcelBtn" class="btn btn-outline" style="color: #10b981; border-color: #10b981; display: flex; align-items: center; gap: 6px; padding: 0.4rem 0.9rem;">
+                            <i class="fas fa-file-excel"></i> Export Records to Excel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Part & Operation Selection Bar -->
+                <div style="background: rgba(0, 0, 0, 0.02); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 20px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; align-items: end;">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="linePartSelect" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: block;">Part No</label>
+                            <select id="linePartSelect" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
+                                <option value="">-- Select Part No --</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="linePartDesc" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: block;">Part Desc</label>
+                            <input type="text" id="linePartDesc" readonly placeholder="Auto-filled from Part Master" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.05); color: var(--text-main); font-family: 'Inter', sans-serif;">
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="lineOpnSelect" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: block;">Opn No</label>
+                            <select id="lineOpnSelect" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
+                                <option value="">-- Select Opn No --</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="lineOpnDesc" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: block;">Opn Desc</label>
+                            <input type="text" id="lineOpnDesc" readonly placeholder="Auto-filled from Operation" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.05); color: var(--text-main); font-family: 'Inter', sans-serif;">
+                        </div>
+                    </div>
+                    <div id="lineTemplateStatusNotice" style="margin-top: 10px; font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-info-circle"></i> Please select a Part No and Opn No to load or configure the inspection template.
+                    </div>
+                </div>
+
+                <!-- Template Table & Sl No Instance Logging Container -->
+                <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 25px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">Line Inspection Format</h3>
+                            <span style="font-size: 0.8rem; color: var(--text-muted);">Save dimensional parameters as template, or record observed values for part serial numbers</span>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" id="lineAddRowBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; color: #2563eb; border-color: #2563eb; display: flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-plus"></i> Add Parameter Row
+                            </button>
+                            <button type="button" id="lineSaveTemplateBtn" class="btn btn-secondary" style="padding: 0.4rem 0.9rem; font-size: 0.85rem; background: #334155; color: white; display: flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-save"></i> Save Template
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Layout matching user sketch -->
+                    <div style="overflow-x: auto;">
+                        <table class="table" style="width: 100%; border-collapse: collapse; border: 1px solid var(--border-color); text-align: center;">
+                            <thead>
+                                <!-- Header Row 1: Part Info Header Summary -->
+                                <tr style="background: #f1f5f9; font-weight: 700; color: #1e293b; border-bottom: 2px solid #cbd5e1;">
+                                    <th style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 30%;">
+                                        Part No: <span id="tblHdrPartNo" style="color: #2563eb;">--</span>
+                                    </th>
+                                    <th style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 18%;">
+                                        Desc: <span id="tblHdrPartDesc" style="color: #475569;">--</span>
+                                    </th>
+                                    <th colspan="2" style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 22%;">
+                                        Opn No: <span id="tblHdrOpnNo" style="color: #2563eb;">--</span>
+                                    </th>
+                                    <th colspan="2" style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 30%;">
+                                        Opn Desc: <span id="tblHdrOpnDesc" style="color: #475569;">--</span>
+                                    </th>
+                                </tr>
+                                <!-- Header Row 2 & 3: Multi-level headers matching sketch -->
+                                <tr style="background: #f8fafc; font-weight: 600; color: #334155;">
+                                    <th rowspan="2" style="padding: 10px; border: 1px solid #cbd5e1; vertical-align: middle; text-align: left;">Desc</th>
+                                    <th rowspan="2" style="padding: 10px; border: 1px solid #cbd5e1; vertical-align: middle;">Dim</th>
+                                    <th colspan="2" style="padding: 6px; border: 1px solid #cbd5e1; background: #e2e8f0;">Tol</th>
+                                    <th rowspan="2" style="padding: 10px; border: 1px solid #cbd5e1; vertical-align: middle; background: #ecfdf5; color: #065f46;">sl No (Observed Reading)</th>
+                                    <th rowspan="2" style="padding: 10px; border: 1px solid #cbd5e1; vertical-align: middle; width: 60px;">Action</th>
+                                </tr>
+                                <tr style="background: #f8fafc; font-weight: 600; color: #475569;">
+                                    <th style="padding: 6px; border: 1px solid #cbd5e1; width: 11%;">Low</th>
+                                    <th style="padding: 6px; border: 1px solid #cbd5e1; width: 11%;">Hi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lineParamTableBody">
+                                <tr>
+                                    <td colspan="6" style="padding: 2rem; text-align: center; color: var(--text-muted);">
+                                        Select Part No and Opn No above to load or create template.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Instance Logging Metadata Panel -->
+                    <div style="margin-top: 25px; padding-top: 20px; border-top: 1px dashed var(--border-color);">
+                        <h4 style="margin: 0 0 15px 0; font-size: 0.95rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-barcode" style="color: #10b981;"></i> Log Inspection Instance for this Part
+                        </h4>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; align-items: end;">
+                            <div class="form-group" style="margin: 0;">
+                                <label for="linePartSlNo" style="font-weight: 700; font-size: 0.85rem; color: #0f172a; margin-bottom: 4px; display: block;">Part Sl No *</label>
+                                <input type="text" id="linePartSlNo" placeholder="e.g. 001, SN-24" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 2px solid #2563eb; background: var(--card-bg); color: var(--text-main); font-weight: 600; font-family: 'Inter', sans-serif;">
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label for="lineInspDate" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: block;">Date</label>
+                                <input type="date" id="lineInspDate" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label for="lineInspShift" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: block;">Shift</label>
+                                <select id="lineInspShift" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
+                                    <option value="Shift 1">Shift 1</option>
+                                    <option value="Shift 2">Shift 2</option>
+                                    <option value="Shift 3">Shift 3</option>
+                                    <option value="General">General</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label for="lineInspMachine" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: block;">Machine</label>
+                                <select id="lineInspMachine" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
+                                    <option value="">-- Select Machine --</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label for="lineInspOperator" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: block;">Inspector / Operator</label>
+                                <select id="lineInspOperator" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
+                                    <option value="">-- Select Operator --</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label for="lineInspStatus" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: block;">Status</label>
+                                <select id="lineInspStatus" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-weight: 600; font-family: 'Inter', sans-serif;">
+                                    <option value="Accepted" style="color: #16a34a;">Accepted (OK)</option>
+                                    <option value="Rejected" style="color: #dc2626;">Rejected</option>
+                                    <option value="Rework" style="color: #d97706;">Rework</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin: 0; grid-column: span 2;">
+                                <label for="lineInspRemarks" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: block;">Remarks</label>
+                                <input type="text" id="lineInspRemarks" placeholder="Optional notes / visual defects" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
+                            <button type="button" id="lineClearInputsBtn" class="btn btn-outline" style="padding: 0.5rem 1.2rem;">
+                                Clear Values
+                            </button>
+                            <button type="button" id="lineSaveInstanceBtn" class="btn btn-primary" style="padding: 0.5rem 1.8rem; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-check-circle"></i> Save Line Inspection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Line Inspection Records -->
+                <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">Recent Line Inspection Records</h3>
+                            <span style="font-size: 0.8rem; color: var(--text-muted);">Saved inspection instances per component serial number</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="text" id="lineSearchFilter" placeholder="Filter by Part / Sl No..." style="padding: 0.35rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.85rem; width: 200px;">
+                        </div>
+                    </div>
+
+                    <div style="max-height: 450px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: rgba(0,0,0,0.03); border-bottom: 2px solid var(--border-color);">
+                                    <th style="padding: 10px 8px; text-align: center; width: 50px;">#</th>
+                                    <th style="padding: 10px 8px; text-align: left;">Date</th>
+                                    <th style="padding: 10px 8px; text-align: left;">Shift</th>
+                                    <th style="padding: 10px 8px; text-align: left;">Part No</th>
+                                    <th style="padding: 10px 8px; text-align: left;">Part Desc</th>
+                                    <th style="padding: 10px 8px; text-align: left;">Opn No</th>
+                                    <th style="padding: 10px 8px; text-align: left;">Opn Desc</th>
+                                    <th style="padding: 10px 8px; text-align: left; font-weight: 700;">Part Sl No</th>
+                                    <th style="padding: 10px 8px; text-align: left;">Machine</th>
+                                    <th style="padding: 10px 8px; text-align: left;">Inspector</th>
+                                    <th style="padding: 10px 8px; text-align: center;">Status</th>
+                                    <th style="padding: 10px 8px; text-align: center; width: 120px;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lineRecordsBody">
+                                <tr>
+                                    <td colspan="12" style="text-align: center; padding: 2rem; color: var(--text-muted);">Loading inspection records...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Line Inspection View Details Modal -->
+            <div id="lineViewModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 99999; justify-content: center; align-items: center; padding: 1rem;">
+                <div style="background: var(--card-bg); border-radius: 12px; width: 100%; max-width: 750px; max-height: 90vh; overflow-y: auto; padding: 1.5rem; box-shadow: 0 10px 25px rgba(0,0,0,0.2); position: relative;">
+                    <button type="button" id="closeLineViewModalBtn" style="position: absolute; top: 1rem; right: 1rem; background: transparent; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-muted);">&times;</button>
+                    <div id="lineViewModalContent">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
 
             <!-- Prod Log Section -->
             <div class="table-container" id="prodLogSection" style="display: none; padding: 2rem; color: var(--text-main);">
@@ -2539,7 +2754,8 @@
                                     <label><input type="checkbox" value="debur"> Debur</label>
                                     <label><input type="checkbox" value="bc_status"> BC Status</label>
                                     <label><input type="checkbox" value="wipro_status"> Wipro Status</label>
-                                    <label><input type="checkbox" value="inspection"> Inspection</label>
+                                    <label><input type="checkbox" value="inspection"> Final Insp</label>
+                                    <label><input type="checkbox" value="line_insp"> Line Insp</label>
                                     <label><input type="checkbox" value="reports"> Reports</label>
                                     <label><input type="checkbox" value="bc_prod"> BC Prod</label>
                                     <label><input type="checkbox" value="maintenance"> Maintenance</label>
@@ -4500,6 +4716,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10072"></script>
+    <script src="/static/app.js?v=10073"></script>
 </body>
 </html>

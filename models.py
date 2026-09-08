@@ -218,7 +218,9 @@ class InspectionParameter(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     part_no = Column(String, index=True, nullable=False)
+    part_desc = Column(String, nullable=True)
     opn_no = Column(String, index=True, nullable=False)
+    opn_desc = Column(String, nullable=True)
     sl_no = Column(Integer, nullable=False, default=1)
     description = Column(String, nullable=False)
     nominal_dimension = Column(Float, default=0.0)
@@ -232,10 +234,17 @@ class InspectionReport(Base):
     report_code = Column(String, index=True, nullable=True)  # Unique Traceability ID e.g. W04-20-0828-001
     prod_log_id = Column(Integer, nullable=True)
     part_no = Column(String, index=True, nullable=False)
+    part_desc = Column(String, nullable=True)
     opn_no = Column(String, index=True, nullable=False)
-    batch_qty = Column(Integer, default=30)
+    opn_desc = Column(String, nullable=True)
+    part_sl_no = Column(String, index=True, nullable=True)  # Component Serial Number
+    batch_qty = Column(Integer, default=1)
     machine_name = Column(String, nullable=True)
     operator_name = Column(String, nullable=True)
+    shift = Column(String, nullable=True)
+    status = Column(String, nullable=True, default="Accepted")  # Accepted, Rejected, Rework
+    remarks = Column(Text, nullable=True)
+    inspection_date = Column(String, index=True, nullable=True)
     comp_sl_nos = Column(Text, nullable=True)  # Comma-separated component serial numbers, e.g. "10,11,12,13,14"
     readings_json = Column(Text, nullable=True) # JSON string mapping param_id -> { col_0: val, col_1: val ... }
 

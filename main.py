@@ -66,6 +66,15 @@ def run_db_migrations():
         "ALTER TABLE inspection_reports ADD COLUMN report_code VARCHAR;",
         "ALTER TABLE inspection_reports ADD COLUMN prod_log_id INTEGER;",
         "ALTER TABLE attendances ADD COLUMN slno INTEGER DEFAULT 0;",
+        "ALTER TABLE inspection_parameters ADD COLUMN part_desc VARCHAR;",
+        "ALTER TABLE inspection_parameters ADD COLUMN opn_desc VARCHAR;",
+        "ALTER TABLE inspection_reports ADD COLUMN part_desc VARCHAR;",
+        "ALTER TABLE inspection_reports ADD COLUMN opn_desc VARCHAR;",
+        "ALTER TABLE inspection_reports ADD COLUMN part_sl_no VARCHAR;",
+        "ALTER TABLE inspection_reports ADD COLUMN shift VARCHAR;",
+        "ALTER TABLE inspection_reports ADD COLUMN status VARCHAR DEFAULT 'Accepted';",
+        "ALTER TABLE inspection_reports ADD COLUMN remarks TEXT;",
+        "ALTER TABLE inspection_reports ADD COLUMN inspection_date VARCHAR;",
     ]
     for sql in migration_statements:
         try:
@@ -1009,7 +1018,9 @@ class ToolingResponse(ToolingBase):
 
 class InspectionParamBase(BaseModel):
     part_no: str
+    part_desc: Optional[str] = ""
     opn_no: str
+    opn_desc: Optional[str] = ""
     sl_no: Optional[int] = 1
     description: str
     nominal_dimension: Optional[float] = 0.0
@@ -1028,12 +1039,18 @@ class InspectionReportSave(BaseModel):
     report_code: Optional[str] = None
     prod_log_id: Optional[int] = None
     part_no: str
+    part_desc: Optional[str] = ""
     opn_no: str
-    batch_qty: Optional[int] = 30
+    opn_desc: Optional[str] = ""
+    part_sl_no: Optional[str] = ""
+    batch_qty: Optional[int] = 1
     machine_name: Optional[str] = None
     operator_name: Optional[str] = None
+    shift: Optional[str] = None
+    status: Optional[str] = "Accepted"
+    remarks: Optional[str] = ""
     inspection_date: Optional[str] = None
-    comp_sl_nos: Optional[str] = "1,2,3,4,5"
+    comp_sl_nos: Optional[str] = "1"
     readings_json: Optional[str] = "{}"
 
 
@@ -6245,26 +6262,6 @@ def get_inspection_parameters(part_no: str, opn_no: Optional[str] = None, db: Se
         query = query.filter(func.lower(models.InspectionParameter.opn_no) == clean_op)
     
     params = query.order_by(models.InspectionParameter.sl_no.asc()).all()
-
-    # Seed default parameters matching user template if none exist for this part & operation
-    if not params and opn_no:
-        for p in DEFAULT_INSPECTION_PARAMS:
-            db_param = models.InspectionParameter(
-                part_no=part_no.strip(),
-                opn_no=opn_no.strip(),
-                sl_no=p["sl_no"],
-                description=p["description"],
-                nominal_dimension=p["nominal_dimension"],
-                lo_tol=p["lo_tol"],
-                hi_tol=p["hi_tol"]
-            )
-            db.add(db_param)
-        db.commit()
-        params = db.query(models.InspectionParameter).filter(
-            func.lower(models.InspectionParameter.part_no) == clean_p,
-            func.lower(models.InspectionParameter.opn_no) == clean_op
-        ).order_by(models.InspectionParameter.sl_no.asc()).all()
-
     return params
 
 @app.post("/api/inspection-parameters")
@@ -6274,6 +6271,8 @@ def save_inspection_parameters(param_list: List[InspectionParamCreate], db: Sess
     
     p_no = param_list[0].part_no.strip()
     op_no = param_list[0].opn_no.strip()
+    p_desc = param_list[0].part_desc or ""
+    op_desc = param_list[0].opn_desc or ""
 
     db.query(models.InspectionParameter).filter(
         func.lower(models.InspectionParameter.part_no) == p_no.lower(),
@@ -6283,7 +6282,9 @@ def save_inspection_parameters(param_list: List[InspectionParamCreate], db: Sess
     for idx, item in enumerate(param_list, start=1):
         db_param = models.InspectionParameter(
             part_no=p_no,
+            part_desc=item.part_desc or p_desc,
             opn_no=op_no,
+            opn_desc=item.opn_desc or op_desc,
             sl_no=idx,
             description=item.description,
             nominal_dimension=item.nominal_dimension,
@@ -6343,10 +6344,16 @@ def get_inspection_report(part_no: str, opn_no: str, db: Session = Depends(get_d
         return {
             "report_code": next_code,
             "part_no": part_no,
+            "part_desc": "",
             "opn_no": opn_no,
+            "opn_desc": "",
+            "part_sl_no": "",
             "batch_qty": sch_batch_qty,
             "machine_name": "",
             "operator_name": "",
+            "shift": "",
+            "status": "Accepted",
+            "remarks": "",
             "inspection_date": get_now_ist().strftime("%Y-%m-%d"),
             "comp_sl_nos": "1",
             "readings_json": "{}"
@@ -6354,6 +6361,7 @@ def get_inspection_report(part_no: str, opn_no: str, db: Session = Depends(get_d
     return report
 
 @app.post("/api/inspection-reports")
+@app.post("/api/line-inspections")
 def save_inspection_report(req: InspectionReportSave, db: Session = Depends(get_db)):
     report_code = req.report_code
     if not report_code:
@@ -6364,21 +6372,40 @@ def save_inspection_report(req: InspectionReportSave, db: Session = Depends(get_
         report_code=report_code,
         prod_log_id=req.prod_log_id,
         part_no=req.part_no.strip(),
+        part_desc=req.part_desc or "",
         opn_no=req.opn_no.strip(),
-        batch_qty=req.batch_qty,
-        machine_name=req.machine_name,
-        operator_name=req.operator_name,
+        opn_desc=req.opn_desc or "",
+        part_sl_no=req.part_sl_no or req.comp_sl_nos or "",
+        batch_qty=req.batch_qty or 1,
+        machine_name=req.machine_name or "",
+        operator_name=req.operator_name or "",
+        shift=req.shift or "",
+        status=req.status or "Accepted",
+        remarks=req.remarks or "",
         inspection_date=req.inspection_date or get_now_ist().strftime("%Y-%m-%d"),
-        comp_sl_nos=req.comp_sl_nos,
-        readings_json=req.readings_json
+        comp_sl_nos=req.part_sl_no or req.comp_sl_nos or "1",
+        readings_json=req.readings_json or "{}"
     )
     db.add(report)
     db.commit()
     db.refresh(report)
 
-    return {"message": "Inspection Report saved successfully!", "report_code": report.report_code, "id": report.id}
+    return {"message": "Line Inspection saved successfully!", "report_code": report.report_code, "id": report.id}
+
+@app.get("/api/line-inspections")
+def get_line_inspections(part_no: Optional[str] = None, opn_no: Optional[str] = None, date: Optional[str] = None, limit: int = 100, db: Session = Depends(get_db)):
+    query = db.query(models.InspectionReport)
+    if part_no:
+        query = query.filter(func.lower(models.InspectionReport.part_no) == part_no.strip().lower())
+    if opn_no:
+        query = query.filter(func.lower(models.InspectionReport.opn_no) == opn_no.strip().lower())
+    if date:
+        query = query.filter(models.InspectionReport.inspection_date == date.strip())
+    reports = query.order_by(models.InspectionReport.id.desc()).limit(limit).all()
+    return reports
 
 @app.get("/api/inspection-reports/by-id/{report_id}")
+@app.get("/api/line-inspections/{report_id}")
 def get_inspection_report_by_id(report_id: int, db: Session = Depends(get_db)):
     r = db.query(models.InspectionReport).filter(models.InspectionReport.id == report_id).first()
     if not r:
@@ -6386,13 +6413,93 @@ def get_inspection_report_by_id(report_id: int, db: Session = Depends(get_db)):
     return r
 
 @app.delete("/api/inspection-reports/{report_id}")
+@app.delete("/api/line-inspections/{report_id}")
 def delete_inspection_report(report_id: int, db: Session = Depends(get_db)):
     r = db.query(models.InspectionReport).filter(models.InspectionReport.id == report_id).first()
     if not r:
         raise HTTPException(status_code=404, detail="Inspection report not found")
     db.delete(r)
     db.commit()
-    return {"message": "Inspection report deleted"}
+    return {"message": "Inspection record deleted successfully"}
+
+@app.get("/api/export/line-inspections/excel")
+def export_line_inspections_excel(part_no: Optional[str] = None, opn_no: Optional[str] = None, db: Session = Depends(get_db)):
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    query = db.query(models.InspectionReport)
+    if part_no:
+        query = query.filter(func.lower(models.InspectionReport.part_no) == part_no.strip().lower())
+    if opn_no:
+        query = query.filter(func.lower(models.InspectionReport.opn_no) == opn_no.strip().lower())
+    records = query.order_by(models.InspectionReport.id.desc()).all()
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Line Inspections"
+
+    header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    align_center = Alignment(horizontal="center", vertical="center")
+    align_left = Alignment(horizontal="left", vertical="center")
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E1'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='CBD5E1'),
+        bottom=Side(style='thin', color='CBD5E1')
+    )
+
+    headers = [
+        "Sl No", "Date", "Shift", "Part No", "Part Desc", "Opn No", "Opn Desc",
+        "Part Sl No", "Machine", "Inspector", "Status", "Remarks"
+    ]
+    ws.append(headers)
+    for col_idx in range(1, len(headers) + 1):
+        c = ws.cell(row=1, column=col_idx)
+        c.fill = header_fill
+        c.font = header_font
+        c.alignment = align_center
+
+    for idx, r in enumerate(records, start=1):
+        row_data = [
+            idx,
+            r.inspection_date or "",
+            r.shift or "",
+            r.part_no or "",
+            r.part_desc or "",
+            r.opn_no or "",
+            r.opn_desc or "",
+            r.part_sl_no or r.comp_sl_nos or "",
+            r.machine_name or "",
+            r.operator_name or "",
+            r.status or "Accepted",
+            r.remarks or ""
+        ]
+        ws.append(row_data)
+        row_num = ws.max_row
+        for col_idx in range(1, len(row_data) + 1):
+            cell = ws.cell(row=row_num, column=col_idx)
+            cell.border = thin_border
+            if col_idx in [1, 2, 3, 4, 6, 8, 11]:
+                cell.alignment = align_center
+            else:
+                cell.alignment = align_left
+
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    filename = f"Line_Inspection_Report_{get_now_ist().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return Response(
+        content=output.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 # --- Excel Export Endpoints ---
 @app.get("/api/export/production-logs/excel")
