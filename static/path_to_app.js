@@ -7392,6 +7392,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentDept = document.getElementById('prodLogDept')?.value || '';
         populateProdLogDeptFields(currentDept);
         
+        const isAdmin = typeof isUserAdmin === 'function' ? isUserAdmin() : (userObj && ((userObj.role || '').toLowerCase() === 'admin' || (userObj.username || '').toLowerCase() === 'admin'));
+        const deleteRangeBtn = document.getElementById('deleteProdLogsRangeBtn');
+        if (deleteRangeBtn) {
+            deleteRangeBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+        }
+
         fetchProdLogs();
     }
 
@@ -7581,7 +7587,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 };
-                actionTd.appendChild(delBtn);
+                const isAdminUser = typeof isUserAdmin === 'function' ? isUserAdmin() : (userObj && ((userObj.role || '').toLowerCase() === 'admin' || (userObj.username || '').toLowerCase() === 'admin'));
+                if (isAdminUser) {
+                    actionTd.appendChild(delBtn);
+                }
                 tr.appendChild(actionTd);
                 
                 tbody.appendChild(tr);
@@ -7898,6 +7907,195 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 console.error(err);
                 alert('Error updating log machine.');
+            }
+        });
+    }
+
+    // --- Delete Production Logs Range Modal Logic (Admin Only) ---
+    const deleteProdLogsRangeBtn = document.getElementById('deleteProdLogsRangeBtn');
+    const deleteProdLogsModal = document.getElementById('deleteProdLogsModal');
+    const deleteProdLogsRangeForm = document.getElementById('deleteProdLogsRangeForm');
+    const deleteProdLogModalDept = document.getElementById('deleteProdLogModalDept');
+    const deleteProdLogModalFromDate = document.getElementById('deleteProdLogModalFromDate');
+    const deleteProdLogModalToDate = document.getElementById('deleteProdLogModalToDate');
+    const deleteProdLogPreviewBox = document.getElementById('deleteProdLogPreviewBox');
+    const confirmDeleteProdLogsBtn = document.getElementById('confirmDeleteProdLogsBtn');
+    const closeDeleteProdLogsModalBtn = document.getElementById('closeDeleteProdLogsModalBtn');
+    const cancelDeleteProdLogsModalBtn = document.getElementById('cancelDeleteProdLogsModalBtn');
+
+    let currentDeleteRangeCount = 0;
+
+    function openDeleteProdLogsModal() {
+        const isAdmin = typeof isUserAdmin === 'function' ? isUserAdmin() : (userObj && ((userObj.role || '').toLowerCase() === 'admin' || (userObj.username || '').toLowerCase() === 'admin'));
+        if (!isAdmin) {
+            alert('Access Denied: Only administrators can delete production logs.');
+            return;
+        }
+
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        if (deleteProdLogModalFromDate && !deleteProdLogModalFromDate.value) {
+            deleteProdLogModalFromDate.value = `${y}-${m}-01`;
+        }
+        if (deleteProdLogModalToDate && !deleteProdLogModalToDate.value) {
+            deleteProdLogModalToDate.value = `${y}-${m}-${d}`;
+        }
+
+        const currentSelectedDept = document.getElementById('prodLogDept')?.value || '';
+        if (currentSelectedDept && deleteProdLogModalDept) {
+            deleteProdLogModalDept.value = currentSelectedDept;
+        }
+
+        if (deleteProdLogPreviewBox) {
+            deleteProdLogPreviewBox.style.display = 'none';
+            deleteProdLogPreviewBox.innerHTML = '';
+        }
+        if (confirmDeleteProdLogsBtn) {
+            confirmDeleteProdLogsBtn.disabled = true;
+        }
+
+        if (deleteProdLogsModal) deleteProdLogsModal.classList.add('show');
+        checkDeleteProdLogsPreview();
+    }
+
+    function closeDeleteProdLogsModal() {
+        if (deleteProdLogsModal) deleteProdLogsModal.classList.remove('show');
+    }
+
+    async function checkDeleteProdLogsPreview() {
+        const dept = deleteProdLogModalDept?.value || '';
+        const fromDate = deleteProdLogModalFromDate?.value || '';
+        const toDate = deleteProdLogModalToDate?.value || '';
+
+        if (!deleteProdLogPreviewBox || !confirmDeleteProdLogsBtn) return;
+
+        if (!dept || !fromDate || !toDate) {
+            deleteProdLogPreviewBox.style.display = 'none';
+            confirmDeleteProdLogsBtn.disabled = true;
+            return;
+        }
+
+        deleteProdLogPreviewBox.style.display = 'block';
+        deleteProdLogPreviewBox.style.background = '#f8fafc';
+        deleteProdLogPreviewBox.style.borderColor = '#e2e8f0';
+        deleteProdLogPreviewBox.innerHTML = '<i class="fas fa-spinner fa-spin" style="color: #0284c7;"></i> Checking matching records...';
+        confirmDeleteProdLogsBtn.disabled = true;
+
+        try {
+            const res = await fetch('/api/prodlog/preview-delete-range', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dept, from_date: fromDate, to_date: toDate })
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || 'Failed to preview records');
+            }
+
+            const data = await res.json();
+            currentDeleteRangeCount = data.count || 0;
+
+            if (currentDeleteRangeCount > 0) {
+                deleteProdLogPreviewBox.style.background = '#fef2f2';
+                deleteProdLogPreviewBox.style.borderColor = '#fecaca';
+                const partsStr = (data.sample_parts && data.sample_parts.length > 0) ? ` (Parts: ${data.sample_parts.join(', ')}${data.sample_parts.length >= 5 ? '...' : ''})` : '';
+                deleteProdLogPreviewBox.innerHTML = `
+                    <div style="color: #b91c1c; font-weight: 600; margin-bottom: 2px;">
+                        <i class="fas fa-exclamation-triangle" style="margin-right: 4px;"></i> Found <strong>${currentDeleteRangeCount}</strong> production logs ready to delete
+                    </div>
+                    <div style="color: #7f1d1d; font-size: 0.82rem;">
+                        Dept: <strong>${dept}</strong> | Range: <strong>${fromDate}</strong> to <strong>${toDate}</strong>${partsStr} | Total Qty: <strong>${data.total_qty || 0}</strong>
+                    </div>
+                `;
+                confirmDeleteProdLogsBtn.disabled = false;
+            } else {
+                deleteProdLogPreviewBox.style.background = '#f8fafc';
+                deleteProdLogPreviewBox.style.borderColor = '#e2e8f0';
+                deleteProdLogPreviewBox.innerHTML = `
+                    <div style="color: #64748b; font-weight: 500;">
+                        <i class="fas fa-info-circle" style="color: #3b82f6; margin-right: 4px;"></i> No production logs found for department <strong>${dept}</strong> in this date range.
+                    </div>
+                `;
+                confirmDeleteProdLogsBtn.disabled = true;
+            }
+        } catch (e) {
+            console.error(e);
+            deleteProdLogPreviewBox.style.background = '#fef2f2';
+            deleteProdLogPreviewBox.style.borderColor = '#fecaca';
+            deleteProdLogPreviewBox.innerHTML = `<span style="color: #ef4444;"><i class="fas fa-exclamation-circle"></i> ${e.message}</span>`;
+            confirmDeleteProdLogsBtn.disabled = true;
+        }
+    }
+
+    if (deleteProdLogsRangeBtn) deleteProdLogsRangeBtn.addEventListener('click', openDeleteProdLogsModal);
+    if (closeDeleteProdLogsModalBtn) closeDeleteProdLogsModalBtn.addEventListener('click', closeDeleteProdLogsModal);
+    if (cancelDeleteProdLogsModalBtn) cancelDeleteProdLogsModalBtn.addEventListener('click', closeDeleteProdLogsModal);
+
+    if (deleteProdLogModalDept) deleteProdLogModalDept.addEventListener('change', checkDeleteProdLogsPreview);
+    if (deleteProdLogModalFromDate) deleteProdLogModalFromDate.addEventListener('change', checkDeleteProdLogsPreview);
+    if (deleteProdLogModalToDate) deleteProdLogModalToDate.addEventListener('change', checkDeleteProdLogsPreview);
+
+    if (deleteProdLogsRangeForm) {
+        deleteProdLogsRangeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const dept = deleteProdLogModalDept?.value || '';
+            const fromDate = deleteProdLogModalFromDate?.value || '';
+            const toDate = deleteProdLogModalToDate?.value || '';
+
+            if (!dept || !fromDate || !toDate) {
+                alert('Please select Department, From Date, and To Date.');
+                return;
+            }
+
+            if (currentDeleteRangeCount <= 0) {
+                alert('No production logs found matching this criteria.');
+                return;
+            }
+
+            const confirmMsg = `⚠️ CRITICAL ACTION: Are you sure you want to PERMANENTLY DELETE ${currentDeleteRangeCount} production logs?\n\n` +
+                               `• Department: ${dept}\n` +
+                               `• From Date: ${fromDate}\n` +
+                               `• To Date: ${toDate}\n\n` +
+                               `This action CANNOT be undone! Do you want to proceed?`;
+
+            if (!confirm(confirmMsg)) return;
+
+            const origBtnText = confirmDeleteProdLogsBtn.innerHTML;
+            confirmDeleteProdLogsBtn.disabled = true;
+            confirmDeleteProdLogsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+
+            try {
+                const res = await fetch('/api/prodlog/delete-range', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        dept,
+                        from_date: fromDate,
+                        to_date: toDate,
+                        username: userObj?.username || '',
+                        role: userObj?.role || ''
+                    })
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.detail || 'Failed to delete logs.');
+                }
+
+                alert(data.message || `Successfully deleted ${data.deleted_count} logs.`);
+                closeDeleteProdLogsModal();
+                fetchProdLogs();
+                if (typeof fetchDeburStatus === 'function') fetchDeburStatus();
+                if (typeof fetchInspectionStatus === 'function') fetchInspectionStatus();
+            } catch (err) {
+                console.error(err);
+                alert(`Error deleting logs: ${err.message}`);
+            } finally {
+                confirmDeleteProdLogsBtn.disabled = false;
+                confirmDeleteProdLogsBtn.innerHTML = origBtnText;
             }
         });
     }

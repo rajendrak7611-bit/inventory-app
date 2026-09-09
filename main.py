@@ -3780,6 +3780,120 @@ def clear_all_prod_logs(db: Session = Depends(get_db)):
         db.rollback()
     return {"message": "All production logs cleared successfully"}
 
+class DeleteProdLogRangeRequest(BaseModel):
+    dept: str
+    from_date: str
+    to_date: str
+    username: Optional[str] = None
+    role: Optional[str] = None
+
+@app.post("/api/prodlog/preview-delete-range")
+def preview_delete_prodlog_range(data: DeleteProdLogRangeRequest, db: Session = Depends(get_db)):
+    dept = (data.dept or "").strip()
+    from_date = (data.from_date or "").strip()
+    to_date = (data.to_date or "").strip()
+
+    if not dept:
+        raise HTTPException(status_code=400, detail="Department is required.")
+    if not from_date or not to_date:
+        raise HTTPException(status_code=400, detail="From Date and To Date are required.")
+
+    norm_from = normalize_date_str(from_date)
+    norm_to = normalize_date_str(to_date)
+    if norm_from > norm_to:
+        norm_from, norm_to = norm_to, norm_from
+
+    logs = db.execute(text("SELECT * FROM production_logs;")).mappings().all()
+
+    matching_count = 0
+    sample_parts = set()
+    total_qty = 0.0
+    for l in logs:
+        l_dept = (l.get("dept") or l.get("department") or "").strip().upper()
+        if dept.upper() != "ALL" and l_dept and l_dept != dept.upper():
+            continue
+
+        raw_d = str(l.get("date") or l.get("log_date") or "").strip()
+        norm_d = normalize_date_str(raw_d)
+        if norm_d and norm_from <= norm_d <= norm_to:
+            matching_count += 1
+            pno = (l.get("partno") or l.get("part_no") or "").strip()
+            if pno:
+                sample_parts.add(pno)
+            total_qty += float(l.get("prod_qty") or l.get("qty_produced") or 0)
+
+    return {
+        "count": matching_count,
+        "dept": dept,
+        "from_date": norm_from,
+        "to_date": norm_to,
+        "sample_parts": list(sample_parts)[:5],
+        "total_qty": total_qty
+    }
+
+@app.post("/api/prodlog/delete-range")
+@app.delete("/api/prodlog/delete-range")
+def delete_prodlog_range(data: DeleteProdLogRangeRequest, db: Session = Depends(get_db)):
+    username = (data.username or "").strip()
+    role = (data.role or "").strip()
+
+    # Verify admin privileges
+    is_admin = False
+    if role.lower() == "admin" or username.lower() == "admin":
+        is_admin = True
+    elif username:
+        user_row = db.execute(text("SELECT role FROM users WHERE LOWER(username) = LOWER(:u)"), {"u": username}).mappings().first()
+        if user_row and (user_row["role"] or "").strip().lower() == "admin":
+            is_admin = True
+
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Unauthorized: Admin rights are required to delete production logs.")
+
+    dept = (data.dept or "").strip()
+    from_date = (data.from_date or "").strip()
+    to_date = (data.to_date or "").strip()
+
+    if not dept:
+        raise HTTPException(status_code=400, detail="Department is required.")
+    if not from_date or not to_date:
+        raise HTTPException(status_code=400, detail="From Date and To Date are required.")
+
+    norm_from = normalize_date_str(from_date)
+    norm_to = normalize_date_str(to_date)
+    if norm_from > norm_to:
+        norm_from, norm_to = norm_to, norm_from
+
+    logs = db.execute(text("SELECT * FROM production_logs;")).mappings().all()
+
+    ids_to_delete = []
+    for l in logs:
+        l_dept = (l.get("dept") or l.get("department") or "").strip().upper()
+        if dept.upper() != "ALL" and l_dept and l_dept != dept.upper():
+            continue
+
+        raw_d = str(l.get("date") or l.get("log_date") or "").strip()
+        norm_d = normalize_date_str(raw_d)
+        if norm_d and norm_from <= norm_d <= norm_to:
+            ids_to_delete.append(l["id"])
+
+    if not ids_to_delete:
+        return {"message": "No production logs found matching the selected criteria.", "deleted_count": 0}
+
+    batch_size = 500
+    for i in range(0, len(ids_to_delete), batch_size):
+        batch = ids_to_delete[i:i + batch_size]
+        id_placeholders = ", ".join([str(id_val) for id_val in batch])
+        db.execute(text(f"DELETE FROM production_logs WHERE id IN ({id_placeholders});"))
+        db.commit()
+
+    return {
+        "message": f"Successfully deleted {len(ids_to_delete)} production logs for department '{dept}' from {norm_from} to {norm_to}.",
+        "deleted_count": len(ids_to_delete),
+        "dept": dept,
+        "from_date": norm_from,
+        "to_date": norm_to
+    }
+
 # --- RAW MATERIALS & RAW MATERIAL LOGS ---
 @app.get("/api/rawmaterials")
 def get_raw_materials(db: Session = Depends(get_db)):

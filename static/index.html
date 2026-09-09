@@ -2438,6 +2438,10 @@
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                                     Export Excel
                                 </button>
+                                <button id="deleteProdLogsRangeBtn" class="btn btn-outline" style="display: none; padding: 0.4rem 0.8rem; font-size: 0.85rem; color: #ef4444; border-color: #ef4444; align-items: center; gap: 6px;" title="Delete production logs for a department by date range (Admin Only)">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                    Delete Logs (Admin)
+                                </button>
                             </div>
                         </div>
                         <div style="max-height: 800px; overflow-y: auto;">
@@ -3768,6 +3772,54 @@
         </div>
     </div>
 
+    <!-- Delete Production Logs Modal (Admin Only) -->
+    <div id="deleteProdLogsModal" class="modal">
+        <div class="modal-content" style="max-width: 480px; border-radius: 12px; padding: 1.5rem;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border-color, #e2e8f0); padding-bottom: 0.75rem;">
+                <div>
+                    <h3 style="margin: 0; color: #ef4444; display: flex; align-items: center; gap: 8px; font-size: 1.2rem;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                        Delete Production Logs
+                    </h3>
+                    <span style="font-size: 0.78rem; color: var(--text-muted, #64748b);">Admin access only &bull; Delete records for a department by date range</span>
+                </div>
+                <button class="close-btn" id="closeDeleteProdLogsModalBtn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #94a3b8; line-height: 1;">&times;</button>
+            </div>
+            <form id="deleteProdLogsRangeForm" style="margin-top: 1rem;">
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label for="deleteProdLogModalDept" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">Select Department</label>
+                    <select id="deleteProdLogModalDept" required style="width: 100%; padding: 0.5rem 0.75rem; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; font-size: 0.95rem; font-family: inherit;">
+                        <option value="">-- Select Department --</option>
+                        <option value="SPIDER">SPIDER</option>
+                        <option value="BC">BC</option>
+                        <option value="WIPRO">WIPRO</option>
+                        <option value="GEAR">GEAR</option>
+                        <option value="ALL">ALL DEPARTMENTS</option>
+                    </select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                    <div class="form-group">
+                        <label for="deleteProdLogModalFromDate" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">From Date</label>
+                        <input type="date" id="deleteProdLogModalFromDate" required style="width: 100%; padding: 0.5rem 0.75rem; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; font-size: 0.95rem; font-family: inherit;">
+                    </div>
+                    <div class="form-group">
+                        <label for="deleteProdLogModalToDate" style="font-weight: 600; display: block; margin-bottom: 0.4rem;">To Date</label>
+                        <input type="date" id="deleteProdLogModalToDate" required style="width: 100%; padding: 0.5rem 0.75rem; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; font-size: 0.95rem; font-family: inherit;">
+                    </div>
+                </div>
+
+                <div id="deleteProdLogPreviewBox" style="display: none; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.85rem; line-height: 1.4; border: 1px solid #e2e8f0; background: #f8fafc; margin-bottom: 1.25rem;">
+                </div>
+
+                <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 0.5rem; border-top: 1px solid var(--border-color, #e2e8f0); padding-top: 1rem;">
+                    <button type="button" class="btn btn-outline" id="cancelDeleteProdLogsModalBtn">Cancel</button>
+                    <button type="submit" id="confirmDeleteProdLogsBtn" class="btn btn-primary" style="background-color: #ef4444; border-color: #dc2626; color: #ffffff;" disabled>Delete Records</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Insert Master Modal -->
     <div id="insertMasterModal" class="modal">
         <div class="modal-content" style="max-width: 500px; border-radius: 12px; padding: 1.5rem;">
@@ -4716,6 +4768,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10075"></script>
+    <script src="/static/app.js?v=10076"></script>
 </body>
 </html>
