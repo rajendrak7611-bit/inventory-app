@@ -6391,12 +6391,34 @@ document.addEventListener('DOMContentLoaded', () => {
     let lineTemplateParams = [];
     let lineCurrentPartId = null;
     let lineRecentRecords = [];
+    let linePartTomSelect = null;
+
+    function initLinePartTomSelect() {
+        const select = document.getElementById('linePartSelect');
+        if (!select || !window.TomSelect) return;
+        if (!linePartTomSelect) {
+            linePartTomSelect = new TomSelect(select, {
+                create: false,
+                sortField: { field: "text", direction: "asc" },
+                placeholder: "Type to search Part No...",
+                allowEmptyOption: true,
+                maxOptions: 1000,
+                openOnFocus: true,
+                closeAfterSelect: true,
+                onChange: async (val) => {
+                    await handleLinePartChange(val);
+                }
+            });
+        }
+    }
 
     async function initLineInspection() {
         const dateInput = document.getElementById('lineInspDate');
         if (dateInput && !dateInput.value) {
             dateInput.value = new Date().toISOString().slice(0, 10);
         }
+
+        initLinePartTomSelect();
 
         await Promise.all([
             fetchLineParts(),
@@ -6410,10 +6432,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const select = document.getElementById('linePartSelect');
         if (!select) return;
 
-        const currentVal = select.value;
+        const currentVal = linePartTomSelect ? linePartTomSelect.getValue() : select.value;
         const selectedDept = (document.getElementById('lineDeptSelect')?.value || '').trim().toLowerCase();
-
-        select.innerHTML = '<option value="">-- Select Part No --</option>';
 
         let filtered = lineAllParts;
         if (selectedDept) {
@@ -6423,27 +6443,54 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        filtered.forEach(p => {
-            const pno = p.partno || p.part_no || '';
-            if (pno) {
-                const desc = p.family || p.forge_pn || p.description || '';
-                const deptName = p.department || p.dept || '';
-                const opt = document.createElement('option');
-                opt.value = pno;
-                opt.textContent = `${pno}${desc ? ' - ' + desc : ''}`;
-                opt.dataset.partId = p.id;
-                opt.dataset.desc = desc;
-                opt.dataset.dept = deptName;
-                select.appendChild(opt);
-            }
-        });
+        if (!linePartTomSelect && window.TomSelect) {
+            initLinePartTomSelect();
+        }
 
-        if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
-            select.value = currentVal;
+        if (linePartTomSelect) {
+            linePartTomSelect.clear(true);
+            linePartTomSelect.clearOptions();
+            linePartTomSelect.addOption({ value: '', text: '-- Select Part No --' });
+            filtered.forEach(p => {
+                const pno = p.partno || p.part_no || '';
+                if (pno) {
+                    const desc = p.family || p.forge_pn || p.description || '';
+                    linePartTomSelect.addOption({
+                        value: pno,
+                        text: `${pno}${desc ? ' - ' + desc : ''}`
+                    });
+                }
+            });
+            linePartTomSelect.refreshOptions(false);
+            if (currentVal && filtered.some(p => (p.partno || p.part_no) === currentVal)) {
+                linePartTomSelect.setValue(currentVal, true);
+            } else {
+                linePartTomSelect.setValue('', true);
+                handleLinePartChange('');
+            }
         } else {
-            select.value = '';
-            // trigger change to clear dependents
-            select.dispatchEvent(new Event('change'));
+            select.innerHTML = '<option value="">-- Select Part No --</option>';
+            filtered.forEach(p => {
+                const pno = p.partno || p.part_no || '';
+                if (pno) {
+                    const desc = p.family || p.forge_pn || p.description || '';
+                    const deptName = p.department || p.dept || '';
+                    const opt = document.createElement('option');
+                    opt.value = pno;
+                    opt.textContent = `${pno}${desc ? ' - ' + desc : ''}`;
+                    opt.dataset.partId = p.id;
+                    opt.dataset.desc = desc;
+                    opt.dataset.dept = deptName;
+                    select.appendChild(opt);
+                }
+            });
+
+            if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
+                select.value = currentVal;
+            } else {
+                select.value = '';
+                handleLinePartChange('');
+            }
         }
     }
 
@@ -6505,10 +6552,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Part Selection Listener
-    document.getElementById('linePartSelect')?.addEventListener('change', async (e) => {
-        const pno = e.target.value;
-        const selectedOpt = e.target.selectedOptions[0];
+    async function handleLinePartChange(pno) {
         const partDescInput = document.getElementById('linePartDesc');
         const tblHdrDept = document.getElementById('tblHdrDept');
         const tblHdrPartNo = document.getElementById('tblHdrPartNo');
@@ -6516,7 +6560,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const opnSelect = document.getElementById('lineOpnSelect');
         const opnDescInput = document.getElementById('lineOpnDesc');
 
-        if (!pno || !selectedOpt) {
+        if (!pno) {
             if (partDescInput) partDescInput.value = '';
             if (tblHdrPartNo) tblHdrPartNo.textContent = '--';
             if (tblHdrPartDesc) tblHdrPartDesc.textContent = '--';
@@ -6529,10 +6573,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const partId = selectedOpt.dataset.partId;
+        const partObj = (lineAllParts || []).find(p => (p.partno || p.part_no) === pno);
+        const partId = partObj ? partObj.id : null;
         lineCurrentPartId = partId;
-        const desc = selectedOpt.dataset.desc || '';
-        const dept = selectedOpt.dataset.dept || document.getElementById('lineDeptSelect')?.value || '';
+        const desc = partObj ? (partObj.family || partObj.forge_pn || partObj.description || '') : '';
+        const dept = (partObj ? (partObj.department || partObj.dept) : '') || document.getElementById('lineDeptSelect')?.value || '';
 
         if (partDescInput) partDescInput.value = desc;
         if (tblHdrPartNo) tblHdrPartNo.textContent = pno;
@@ -6549,30 +6594,43 @@ document.addEventListener('DOMContentLoaded', () => {
         // Fetch Operations for this part
         if (opnSelect) {
             opnSelect.innerHTML = '<option value="">-- Loading operations... --</option>';
-            try {
-                const res = await fetch(`/api/partmaster/${partId}/operations`);
-                const ops = await res.json();
-                opnSelect.innerHTML = '<option value="">-- Select Opn No --</option>';
-                if (Array.isArray(ops) && ops.length > 0) {
-                    ops.forEach(op => {
-                        const opt = document.createElement('option');
-                        opt.value = op.opn_no;
-                        opt.textContent = `${op.opn_no} - ${op.description || ''}`;
-                        opt.dataset.desc = op.description || '';
-                        opt.dataset.machine = op.machine || '';
-                        opnSelect.appendChild(opt);
-                    });
-                } else {
-                    opnSelect.innerHTML = '<option value="">No operations defined in Part Master</option>';
+            if (partId) {
+                try {
+                    const res = await fetch(`/api/partmaster/${partId}/operations`);
+                    const ops = await res.json();
+                    opnSelect.innerHTML = '<option value="">-- Select Opn No --</option>';
+                    if (Array.isArray(ops) && ops.length > 0) {
+                        ops.forEach(op => {
+                            const opt = document.createElement('option');
+                            opt.value = op.opn_no;
+                            opt.textContent = `${op.opn_no} - ${op.description || ''}`;
+                            opt.dataset.desc = op.description || '';
+                            opt.dataset.machine = op.machine || '';
+                            opnSelect.appendChild(opt);
+                        });
+                        if (ops.length === 1) {
+                            opnSelect.value = ops[0].opn_no;
+                            opnSelect.dispatchEvent(new Event('change'));
+                        }
+                    } else {
+                        opnSelect.innerHTML = '<option value="">No operations defined in Part Master</option>';
+                    }
+                } catch (err) {
+                    console.error('Error fetching part operations:', err);
+                    opnSelect.innerHTML = '<option value="">-- Select Opn No --</option>';
                 }
-            } catch (err) {
-                console.error('Error fetching part operations:', err);
+            } else {
                 opnSelect.innerHTML = '<option value="">-- Select Opn No --</option>';
             }
         }
 
         if (opnDescInput) opnDescInput.value = '';
         resetLineParamTable();
+    }
+
+    // Part Selection Listener (Native fallback)
+    document.getElementById('linePartSelect')?.addEventListener('change', async (e) => {
+        await handleLinePartChange(e.target.value);
     });
 
     // Opn Selection Listener
@@ -6661,7 +6719,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tbody.innerHTML = '';
 
         if (lineTemplateParams.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" style="padding: 1.5rem; text-align: center; color: var(--text-muted);">No parameter rows. Click "+ Add Parameter Row" to add one.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" style="padding: 1.5rem; text-align: center; color: var(--text-muted);">No parameter rows. Click "+ Add Row" to add one.</td></tr>`;
             return;
         }
 
@@ -6675,26 +6733,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const hiVal = param.hi_tol !== null && param.hi_tol !== undefined ? param.hi_tol : '';
 
             tr.innerHTML = `
-                <td style="padding: 6px; text-align: left;">
-                    <input type="text" class="line-param-desc" value="${escapeHtml(param.description || '')}" placeholder="Param Description (e.g. Bore, OD)" style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-family: 'Inter', sans-serif;">
+                <td style="padding: 4px 3px; text-align: left;">
+                    <input type="text" class="line-param-desc" value="${escapeHtml(param.description || '')}" placeholder="Desc" style="width: 100%; min-width: 0; box-sizing: border-box; padding: 5px 4px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem; font-family: 'Inter', sans-serif;">
                 </td>
-                <td style="padding: 6px;">
-                    <input type="number" step="0.001" class="line-param-dim" value="${dimVal}" placeholder="100.0" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center; font-family: 'Inter', sans-serif;">
+                <td style="padding: 4px 2px;">
+                    <input type="number" step="0.001" inputmode="decimal" class="line-param-dim" value="${dimVal}" placeholder="Dim" style="width: 100%; min-width: 0; box-sizing: border-box; padding: 5px 2px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center; font-size: 0.85rem; font-family: 'Inter', sans-serif;">
                 </td>
-                <td style="padding: 6px;">
-                    <input type="number" step="0.001" class="line-param-low" value="${lowVal}" placeholder="0.05" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center; font-family: 'Inter', sans-serif;">
+                <td style="padding: 4px 2px;">
+                    <input type="number" step="0.001" inputmode="decimal" class="line-param-low" value="${lowVal}" placeholder="Low" style="width: 100%; min-width: 0; box-sizing: border-box; padding: 5px 2px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center; font-size: 0.85rem; font-family: 'Inter', sans-serif;">
                 </td>
-                <td style="padding: 6px;">
-                    <input type="number" step="0.001" class="line-param-hi" value="${hiVal}" placeholder="0.05" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center; font-family: 'Inter', sans-serif;">
+                <td style="padding: 4px 2px;">
+                    <input type="number" step="0.001" inputmode="decimal" class="line-param-hi" value="${hiVal}" placeholder="Hi" style="width: 100%; min-width: 0; box-sizing: border-box; padding: 5px 2px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center; font-size: 0.85rem; font-family: 'Inter', sans-serif;">
                 </td>
-                <td style="padding: 6px; background: #f0fdf4;">
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
-                        <input type="number" step="0.001" class="line-param-reading" placeholder="Observed Reading" style="width: 100%; padding: 6px; border: 1px solid #86efac; border-radius: 4px; text-align: center; font-weight: 700; font-family: 'Inter', sans-serif;">
-                        <span class="line-reading-badge" style="display: none; font-size: 0.75rem; font-weight: 700;"></span>
+                <td style="padding: 4px 3px; background: #f0fdf4;">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%;">
+                        <input type="number" step="0.001" inputmode="decimal" class="line-param-reading" placeholder="Actual" style="width: 100%; min-width: 0; box-sizing: border-box; padding: 6px 4px; border: 1px solid #86efac; border-radius: 4px; text-align: center; font-weight: 700; font-size: 0.95rem; font-family: 'Inter', sans-serif;">
+                        <span class="line-reading-badge" style="display: none; font-size: 0.72rem; font-weight: 700; white-space: nowrap;"></span>
                     </div>
                 </td>
-                <td style="padding: 6px; text-align: center;">
-                    <button type="button" class="line-del-row-btn btn btn-outline" title="Delete Row" style="padding: 2px 8px; font-size: 0.8rem; color: #ef4444; border-color: #ef4444;">✕</button>
+                <td style="padding: 4px 1px; text-align: center;">
+                    <button type="button" class="line-del-row-btn btn btn-outline" title="Delete Row" style="padding: 3px 6px; font-size: 0.75rem; color: #ef4444; border-color: #ef4444; line-height: 1;">✕</button>
                 </td>
             `;
 
@@ -6773,7 +6831,7 @@ document.addEventListener('DOMContentLoaded', () => {
             readingInput.style.color = '#b91c1c';
             badge.style.color = '#dc2626';
             const diff = actual < minVal ? (actual - minVal).toFixed(3) : `+${(actual - maxVal).toFixed(3)}`;
-            badge.textContent = `✖ NOT OK (${diff})`;
+            badge.textContent = `✖ (${diff})`;
             return false;
         }
     }

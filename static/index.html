@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GRS ENGINEERING PVT LTD</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=10051">
+    <link rel="stylesheet" href="/static/style.css?v=10052">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
@@ -2051,16 +2051,16 @@
                 </div>
 
                 <!-- Part & Operation Selection Bar -->
-                <div style="background: rgba(0, 0, 0, 0.02); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 20px;">
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; align-items: end;">
+                <div class="line-insp-card" style="background: rgba(0, 0, 0, 0.02); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 20px;">
+                    <div class="line-meta-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; align-items: end;">
                         <div class="form-group" style="margin: 0;">
                             <label for="lineDeptSelect" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: block;">Department</label>
                             <select id="lineDeptSelect" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
                                 <option value="">-- All Departments --</option>
                             </select>
                         </div>
-                        <div class="form-group" style="margin: 0;">
-                            <label for="linePartSelect" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: block;">Part No</label>
+                        <div class="form-group full-width-mobile" style="margin: 0;">
+                            <label for="linePartSelect" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: block;">Part No <span style="font-weight: 400; color: var(--text-muted); font-size: 0.78rem;">(type to search)</span></label>
                             <select id="linePartSelect" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
                                 <option value="">-- Select Part No --</option>
                             </select>
@@ -2086,55 +2086,45 @@
                 </div>
 
                 <!-- Template Table & Sl No Instance Logging Container -->
-                <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 25px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <div class="line-insp-card" style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 25px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
                         <div>
-                            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">Line Inspection Format</h3>
-                            <span style="font-size: 0.8rem; color: var(--text-muted);">Save dimensional parameters as template, or record observed values for part serial numbers</span>
+                            <h3 style="margin: 0; font-size: 1.05rem; color: var(--text-main);">Line Inspection Format</h3>
+                            <span style="font-size: 0.78rem; color: var(--text-muted);">Save dimensional parameters as template, or record observed values</span>
                         </div>
                         <div style="display: flex; gap: 8px;">
-                            <button type="button" id="lineAddRowBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; color: #2563eb; border-color: #2563eb; display: flex; align-items: center; gap: 6px;">
-                                <i class="fas fa-plus"></i> Add Parameter Row
+                            <button type="button" id="lineAddRowBtn" class="btn btn-outline" style="padding: 0.35rem 0.7rem; font-size: 0.82rem; color: #2563eb; border-color: #2563eb; display: flex; align-items: center; gap: 5px;">
+                                <i class="fas fa-plus"></i> Add Row
                             </button>
-                            <button type="button" id="lineSaveTemplateBtn" class="btn btn-secondary" style="padding: 0.4rem 0.9rem; font-size: 0.85rem; background: #334155; color: white; display: flex; align-items: center; gap: 6px;">
+                            <button type="button" id="lineSaveTemplateBtn" class="btn btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.82rem; background: #334155; color: white; display: flex; align-items: center; gap: 5px;">
                                 <i class="fas fa-save"></i> Save Template
                             </button>
                         </div>
                     </div>
 
-                    <!-- Layout matching user sketch -->
-                    <div style="overflow-x: auto;">
-                        <table class="table" style="width: 100%; border-collapse: collapse; border: 1px solid var(--border-color); text-align: center;">
+                    <!-- Part Info Header Summary Strip (Clean mobile-friendly banner) -->
+                    <div id="tblHdrInfoBar" style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 0.86rem; align-items: center;">
+                        <div><span style="color: var(--text-muted); font-size: 0.78rem;">Dept:</span> <b id="tblHdrDept" style="color: #059669;">--</b></div>
+                        <div><span style="color: var(--text-muted); font-size: 0.78rem;">Part No:</span> <b id="tblHdrPartNo" style="color: #2563eb;">--</b></div>
+                        <div><span style="color: var(--text-muted); font-size: 0.78rem;">Desc:</span> <b id="tblHdrPartDesc" style="color: #475569;">--</b></div>
+                        <div><span style="color: var(--text-muted); font-size: 0.78rem;">Opn No:</span> <b id="tblHdrOpnNo" style="color: #2563eb;">--</b></div>
+                        <div><span style="color: var(--text-muted); font-size: 0.78rem;">Opn Desc:</span> <b id="tblHdrOpnDesc" style="color: #475569;">--</b></div>
+                    </div>
+
+                    <!-- Compact Parameters & Reading Table -->
+                    <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+                        <table id="lineParamTable" class="table line-compact-table" style="width: 100%; table-layout: fixed; border-collapse: collapse; border: 1px solid var(--border-color); text-align: center;">
                             <thead>
-                                <!-- Header Row 1: Part Info Header Summary -->
-                                <tr style="background: #f1f5f9; font-weight: 700; color: #1e293b; border-bottom: 2px solid #cbd5e1;">
-                                    <th style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 18%;">
-                                        Dept: <span id="tblHdrDept" style="color: #059669;">--</span>
-                                    </th>
-                                    <th style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 22%;">
-                                        Part No: <span id="tblHdrPartNo" style="color: #2563eb;">--</span>
-                                    </th>
-                                    <th style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 18%;">
-                                        Desc: <span id="tblHdrPartDesc" style="color: #475569;">--</span>
-                                    </th>
-                                    <th style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 18%;">
-                                        Opn No: <span id="tblHdrOpnNo" style="color: #2563eb;">--</span>
-                                    </th>
-                                    <th colspan="2" style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 24%;">
-                                        Opn Desc: <span id="tblHdrOpnDesc" style="color: #475569;">--</span>
-                                    </th>
+                                <tr style="background: #f8fafc; font-weight: 600; color: #334155; font-size: 0.84rem;">
+                                    <th rowspan="2" style="width: 25%; padding: 6px 3px; border: 1px solid #cbd5e1; vertical-align: middle; text-align: left;">Desc</th>
+                                    <th rowspan="2" style="width: 16%; padding: 6px 2px; border: 1px solid #cbd5e1; vertical-align: middle;">Dim</th>
+                                    <th colspan="2" style="width: 24%; padding: 4px 2px; border: 1px solid #cbd5e1; background: #e2e8f0;">Tol</th>
+                                    <th rowspan="2" style="width: 27%; padding: 6px 3px; border: 1px solid #cbd5e1; vertical-align: middle; background: #ecfdf5; color: #065f46;">Observed</th>
+                                    <th rowspan="2" style="width: 8%; min-width: 26px; padding: 6px 1px; border: 1px solid #cbd5e1; vertical-align: middle;"></th>
                                 </tr>
-                                <!-- Header Row 2 & 3: Multi-level headers matching sketch -->
-                                <tr style="background: #f8fafc; font-weight: 600; color: #334155;">
-                                    <th rowspan="2" style="padding: 10px; border: 1px solid #cbd5e1; vertical-align: middle; text-align: left;">Desc</th>
-                                    <th rowspan="2" style="padding: 10px; border: 1px solid #cbd5e1; vertical-align: middle;">Dim</th>
-                                    <th colspan="2" style="padding: 6px; border: 1px solid #cbd5e1; background: #e2e8f0;">Tol</th>
-                                    <th rowspan="2" style="padding: 10px; border: 1px solid #cbd5e1; vertical-align: middle; background: #ecfdf5; color: #065f46;">sl No (Observed Reading)</th>
-                                    <th rowspan="2" style="padding: 10px; border: 1px solid #cbd5e1; vertical-align: middle; width: 60px;">Action</th>
-                                </tr>
-                                <tr style="background: #f8fafc; font-weight: 600; color: #475569;">
-                                    <th style="padding: 6px; border: 1px solid #cbd5e1; width: 11%;">Low</th>
-                                    <th style="padding: 6px; border: 1px solid #cbd5e1; width: 11%;">Hi</th>
+                                <tr style="background: #f8fafc; font-weight: 600; color: #475569; font-size: 0.78rem;">
+                                    <th style="width: 12%; padding: 4px 2px; border: 1px solid #cbd5e1;">- Low</th>
+                                    <th style="width: 12%; padding: 4px 2px; border: 1px solid #cbd5e1;">+ Hi</th>
                                 </tr>
                             </thead>
                             <tbody id="lineParamTableBody">
@@ -2148,11 +2138,11 @@
                     </div>
 
                     <!-- Instance Logging Metadata Panel -->
-                    <div style="margin-top: 25px; padding-top: 20px; border-top: 1px dashed var(--border-color);">
-                        <h4 style="margin: 0 0 15px 0; font-size: 0.95rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                    <div style="margin-top: 22px; padding-top: 18px; border-top: 1px dashed var(--border-color);">
+                        <h4 style="margin: 0 0 12px 0; font-size: 0.95rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
                             <i class="fas fa-barcode" style="color: #10b981;"></i> Log Inspection Instance for this Part
                         </h4>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; align-items: end;">
+                        <div class="line-meta-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.8rem; align-items: end;">
                             <div class="form-group" style="margin: 0;">
                                 <label for="linePartSlNo" style="font-weight: 700; font-size: 0.85rem; color: #0f172a; margin-bottom: 4px; display: block;">Part Sl No *</label>
                                 <input type="text" id="linePartSlNo" placeholder="e.g. 001, SN-24" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 2px solid #2563eb; background: var(--card-bg); color: var(--text-main); font-weight: 600; font-family: 'Inter', sans-serif;">
@@ -2190,13 +2180,13 @@
                                     <option value="Rework" style="color: #d97706;">Rework</option>
                                 </select>
                             </div>
-                            <div class="form-group" style="margin: 0; grid-column: span 2;">
+                            <div class="form-group full-width-mobile" style="margin: 0; grid-column: span 2;">
                                 <label for="lineInspRemarks" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: block;">Remarks</label>
                                 <input type="text" id="lineInspRemarks" placeholder="Optional notes / visual defects" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
                             </div>
                         </div>
 
-                        <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
+                        <div class="line-action-btns" style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
                             <button type="button" id="lineClearInputsBtn" class="btn btn-outline" style="padding: 0.5rem 1.2rem;">
                                 Clear Values
                             </button>
@@ -4778,6 +4768,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10077"></script>
+    <script src="/static/app.js?v=10078"></script>
 </body>
 </html>
