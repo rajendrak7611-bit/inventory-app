@@ -4324,7 +4324,7 @@ def clear_all_attendance(db: Session = Depends(get_db)):
 
 # --- ATTENDANCE VS LOGIN HOURS REPORT ENDPOINT ---
 @app.get("/api/reports/att_vs_login")
-def get_att_vs_login_report(month_year: Optional[str] = None, dept: Optional[str] = None, db: Session = Depends(get_db)):
+def get_att_vs_login_report(month_year: Optional[str] = None, dept: Optional[str] = None, designation: Optional[str] = None, db: Session = Depends(get_db)):
     if not month_year:
         month_year = datetime.datetime.now().strftime("%Y-%m")
     
@@ -4339,8 +4339,12 @@ def get_att_vs_login_report(month_year: Optional[str] = None, dept: Optional[str
     if filter_dept.startswith("--") or filter_dept == "ALL":
         filter_dept = ""
 
+    filter_desig = (designation or "").strip().upper()
+    if filter_desig.startswith("--") or filter_desig == "ALL":
+        filter_desig = ""
+
     try:
-        # 1. Operators map: op_norm -> { "name": ..., "dept": ... }
+        # 1. Operators map: op_norm -> { "name": ..., "dept": ..., "designation": ... }
         op_rows = db.execute(text("SELECT * FROM operators")).mappings().all()
         operators_info = {}
         for r in op_rows:
@@ -4348,11 +4352,12 @@ def get_att_vs_login_report(month_year: Optional[str] = None, dept: Optional[str
             if not nm:
                 continue
             dp = (r.get("department") or r.get("dept") or "").strip()
-            operators_info[nm.upper()] = {"name": nm, "dept": dp}
+            desig = (r.get("designation") or "").strip() or "Operator"
+            operators_info[nm.upper()] = {"name": nm, "dept": dp, "designation": desig}
 
         # 2. Attendance records for month_year
         att_rows = db.execute(
-            text("SELECT employee_name, dept, day, hours FROM attendances WHERE month_year = :my"),
+            text("SELECT employee_name, dept, designation, day, hours FROM attendances WHERE month_year = :my"),
             {"my": month_year.strip()}
         ).mappings().all()
 
@@ -4368,22 +4373,27 @@ def get_att_vs_login_report(month_year: Optional[str] = None, dept: Optional[str
     # Aggregate by operator
     op_data = {}
 
-    def get_or_create_op(op_name, default_dept=""):
+    def get_or_create_op(op_name, default_dept="", default_desig=""):
         norm = op_name.strip().upper()
         if norm not in op_data:
             known = operators_info.get(norm, {})
             disp_name = known.get("name") or op_name.strip()
             disp_dept = known.get("dept") or default_dept or ""
+            disp_desig = known.get("designation") or default_desig or "Operator"
             op_data[norm] = {
                 "dept": disp_dept,
                 "operators": disp_name,
+                "designation": disp_desig,
                 "days": {str(d): {"att_hours": 0.0, "login_hours": 0.0} for d in range(1, days_in_month + 1)},
                 "total_att": 0.0,
                 "total_login": 0.0,
                 "diff": 0.0
             }
-        elif default_dept and not op_data[norm]["dept"]:
-            op_data[norm]["dept"] = default_dept
+        else:
+            if default_dept and not op_data[norm]["dept"]:
+                op_data[norm]["dept"] = default_dept
+            if default_desig and (not op_data[norm].get("designation") or op_data[norm]["designation"].lower() == "operator"):
+                op_data[norm]["designation"] = default_desig
         return op_data[norm]
 
     # Process Attendance
@@ -4398,7 +4408,8 @@ def get_att_vs_login_report(month_year: Optional[str] = None, dept: Optional[str
         except ValueError:
             hrs = 0.0
 
-        item = get_or_create_op(ename, (r.get("dept") or "").strip())
+        desig_val = (r.get("designation") or "").strip()
+        item = get_or_create_op(ename, (r.get("dept") or "").strip(), desig_val)
         if 1 <= day <= days_in_month:
             day_key = str(day)
             item["days"][day_key]["att_hours"] += hrs
@@ -4434,12 +4445,17 @@ def get_att_vs_login_report(month_year: Optional[str] = None, dept: Optional[str
     # Seed operators from operator master
     for norm, info in operators_info.items():
         if not filter_dept or info["dept"].upper() == filter_dept:
-            get_or_create_op(info["name"], info["dept"])
+            get_or_create_op(info["name"], info["dept"], info.get("designation", "Operator"))
+
+    # Collect all available designations
+    available_desigs = sorted(list({(item.get("designation") or "Operator").strip() for item in op_data.values() if (item.get("designation") or "").strip()} | {"Operator"}))
 
     # Finalize list and compute diffs
     result_list = []
     for norm, item in op_data.items():
         if filter_dept and item["dept"].upper() != filter_dept:
+            continue
+        if filter_desig and (item.get("designation") or "OPERATOR").strip().upper() != filter_desig:
             continue
         
         # Round values
@@ -4459,6 +4475,7 @@ def get_att_vs_login_report(month_year: Optional[str] = None, dept: Optional[str
     return {
         "month_year": month_year,
         "days_in_month": days_in_month,
+        "available_designations": available_desigs,
         "data": result_list
     }
 

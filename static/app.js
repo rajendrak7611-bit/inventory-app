@@ -16717,6 +16717,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchAttVsLoginReport() {
         const mInput = document.getElementById('attVsLoginMonth');
         const dSelect = document.getElementById('attVsLoginDeptSelect');
+        const desigSelect = document.getElementById('attVsLoginDesigSelect');
         const body = document.getElementById('attVsLoginBody');
         const hRow1 = document.getElementById('attVsLoginHeaderRow1');
         const hRow2 = document.getElementById('attVsLoginHeaderRow2');
@@ -16735,13 +16736,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     fetch('/api/operators').catch(() => null)
                 ]);
                 const deptSet = new Set();
+                const desigSet = new Set();
+                desigSet.add('Operator');
                 if (deptRes && deptRes.ok) {
                     const depts = await deptRes.json();
                     depts.forEach(d => { if (d.name) deptSet.add(d.name.trim()); });
                 }
                 if (opRes && opRes.ok) {
                     const ops = await opRes.json();
-                    ops.forEach(o => { if (o.department) deptSet.add(o.department.trim()); });
+                    ops.forEach(o => {
+                        if (o.department) deptSet.add(o.department.trim());
+                        if (o.designation) desigSet.add(o.designation.trim());
+                    });
                 }
                 Array.from(deptSet).sort().forEach(dName => {
                     const opt = document.createElement('option');
@@ -16749,17 +16755,52 @@ document.addEventListener('DOMContentLoaded', () => {
                     opt.textContent = dName;
                     dSelect.appendChild(opt);
                 });
+                if (desigSelect && desigSelect.options.length <= 2) {
+                    const sortedOtherDesigs = Array.from(desigSet).filter(d => d.toLowerCase() !== 'operator').sort();
+                    sortedOtherDesigs.forEach(dName => {
+                        const opt = document.createElement('option');
+                        opt.value = dName;
+                        opt.textContent = dName;
+                        desigSelect.appendChild(opt);
+                    });
+                }
             } catch(e) {}
         }
         const deptVal = dSelect ? dSelect.value : '';
+        const desigVal = desigSelect ? desigSelect.value : '';
 
         body.innerHTML = `<tr><td colspan="100" style="text-align: center; padding: 2rem; color: var(--text-muted);"><i class="fas fa-spinner fa-spin"></i> Fetching Attendance vs Login data...</td></tr>`;
 
         try {
-            const res = await fetch(`/api/reports/att_vs_login?month_year=${encodeURIComponent(monthVal)}&dept=${encodeURIComponent(deptVal)}`);
+            const res = await fetch(`/api/reports/att_vs_login?month_year=${encodeURIComponent(monthVal)}&dept=${encodeURIComponent(deptVal)}&designation=${encodeURIComponent(desigVal)}`);
             if (!res.ok) throw new Error('Failed to load Attendance vs Login report');
             const data = await res.json();
             currentAttVsLoginData = data;
+
+            // Dynamically update available designations in dropdown if provided
+            if (desigSelect && data.available_designations) {
+                const curDesig = desigSelect.value;
+                const desigSet = new Set();
+                desigSet.add('Operator');
+                data.available_designations.forEach(d => { if (d) desigSet.add(d.trim()); });
+                (data.data || []).forEach(r => { if (r.designation) desigSet.add(r.designation.trim()); });
+                const sortedOtherDesigs = Array.from(desigSet).filter(d => d.toLowerCase() !== 'operator').sort();
+                const targetOptions = ['', 'Operator', ...sortedOtherDesigs];
+                const existingOptions = Array.from(desigSelect.options).map(o => o.value);
+                if (targetOptions.join(',') !== existingOptions.join(',')) {
+                    let html = '<option value="">-- All Designations --</option><option value="Operator">Operator</option>';
+                    sortedOtherDesigs.forEach(d => {
+                        html += `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`;
+                    });
+                    desigSelect.innerHTML = html;
+                    if (targetOptions.includes(curDesig)) {
+                        desigSelect.value = curDesig;
+                    } else {
+                        desigSelect.value = '';
+                    }
+                }
+            }
+
             renderAttVsLoginTable();
         } catch (err) {
             console.error('Error fetching Att vs Login report:', err);
@@ -16777,14 +16818,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const hRow1 = document.getElementById('attVsLoginHeaderRow1');
         const hRow2 = document.getElementById('attVsLoginHeaderRow2');
         const searchInput = document.getElementById('attVsLoginSearch');
+        const desigSelect = document.getElementById('attVsLoginDesigSelect');
 
         const searchVal = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        const desigVal = desigSelect ? desigSelect.value.toLowerCase().trim() : '';
         const daysInMonth = currentAttVsLoginData.days_in_month || 31;
         const allData = currentAttVsLoginData.data || [];
 
         const filtered = allData.filter(row => {
+            if (desigVal && (row.designation || 'operator').toLowerCase().trim() !== desigVal) {
+                return false;
+            }
             if (!searchVal) return true;
-            return (row.operators || '').toLowerCase().includes(searchVal) || (row.dept || '').toLowerCase().includes(searchVal);
+            return (row.operators || '').toLowerCase().includes(searchVal) || 
+                   (row.dept || '').toLowerCase().includes(searchVal) ||
+                   (row.designation || '').toLowerCase().includes(searchVal);
         });
 
         // Build Header Row 1 (Top Level Days)
@@ -16811,9 +16859,13 @@ document.addEventListener('DOMContentLoaded', () => {
         let bodyHtml = '';
         filtered.forEach((row, idx) => {
             const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+            const desigBadge = row.designation && row.designation.toLowerCase() !== 'operator' 
+                ? ` <span style="font-size: 0.72rem; color: #64748b; font-weight: normal; background: #e2e8f0; padding: 1px 5px; border-radius: 3px; margin-left: 4px;">${escapeHtml(row.designation)}</span>` 
+                : '';
+
             bodyHtml += `<tr style="background-color: ${bg}; border-bottom: 1px solid #e2e8f0;">`;
             bodyHtml += `<td style="padding: 6px 10px; border: 1px solid #e2e8f0; font-weight: 500; position: sticky; left: 0; background: ${bg}; z-index: 5;">${escapeHtml(row.dept)}</td>`;
-            bodyHtml += `<td style="padding: 6px 10px; border: 1px solid #e2e8f0; font-weight: 600; position: sticky; left: 100px; background: ${bg}; z-index: 5;">${escapeHtml(row.operators)}</td>`;
+            bodyHtml += `<td style="padding: 6px 10px; border: 1px solid #e2e8f0; font-weight: 600; position: sticky; left: 100px; background: ${bg}; z-index: 5;">${escapeHtml(row.operators)}${desigBadge}</td>`;
 
             for (let d = 1; d <= daysInMonth; d++) {
                 const dayObj = (row.days && row.days[String(d)]) || { att_hours: 0, login_hours: 0 };
@@ -16842,6 +16894,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('generateAttVsLoginBtn')?.addEventListener('click', fetchAttVsLoginReport);
     document.getElementById('attVsLoginMonth')?.addEventListener('change', fetchAttVsLoginReport);
     document.getElementById('attVsLoginDeptSelect')?.addEventListener('change', fetchAttVsLoginReport);
+    document.getElementById('attVsLoginDesigSelect')?.addEventListener('change', () => {
+        renderAttVsLoginTable();
+    });
     document.getElementById('attVsLoginSearch')?.addEventListener('input', renderAttVsLoginTable);
 
     // Export to Excel
@@ -16857,14 +16912,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const daysInMonth = currentAttVsLoginData.days_in_month || 31;
         const monthVal = currentAttVsLoginData.month_year || 'report';
+        const searchInput = document.getElementById('attVsLoginSearch');
+        const desigSelect = document.getElementById('attVsLoginDesigSelect');
+        const searchVal = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        const desigVal = desigSelect ? desigSelect.value.toLowerCase().trim() : '';
 
-        const row1 = ['', ''];
+        const filtered = (currentAttVsLoginData.data || []).filter(row => {
+            if (desigVal && (row.designation || 'operator').toLowerCase().trim() !== desigVal) {
+                return false;
+            }
+            if (!searchVal) return true;
+            return (row.operators || '').toLowerCase().includes(searchVal) || 
+                   (row.dept || '').toLowerCase().includes(searchVal) ||
+                   (row.designation || '').toLowerCase().includes(searchVal);
+        });
+
+        const row1 = ['', '', ''];
         for (let d = 1; d <= daysInMonth; d++) {
             row1.push(d, '');
         }
         row1.push('TOTAL SUMMARY', '', '');
 
-        const row2 = ['dept', 'operators'];
+        const row2 = ['dept', 'operators', 'designation'];
         for (let d = 1; d <= daysInMonth; d++) {
             row2.push('att hours', 'login hours');
         }
@@ -16872,8 +16941,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const exportRows = [row1, row2];
 
-        currentAttVsLoginData.data.forEach(row => {
-            const r = [row.dept, row.operators];
+        filtered.forEach(row => {
+            const r = [row.dept, row.operators, row.designation || 'Operator'];
             for (let d = 1; d <= daysInMonth; d++) {
                 const dayObj = (row.days && row.days[String(d)]) || { att_hours: 0, login_hours: 0 };
                 r.push(dayObj.att_hours || 0, dayObj.login_hours || 0);
