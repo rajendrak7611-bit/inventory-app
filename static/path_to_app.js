@@ -6406,36 +6406,68 @@ document.addEventListener('DOMContentLoaded', () => {
         ]);
     }
 
+    function populateLinePartDropdown() {
+        const select = document.getElementById('linePartSelect');
+        if (!select) return;
+
+        const currentVal = select.value;
+        const selectedDept = (document.getElementById('lineDeptSelect')?.value || '').trim().toLowerCase();
+
+        select.innerHTML = '<option value="">-- Select Part No --</option>';
+
+        let filtered = lineAllParts;
+        if (selectedDept) {
+            filtered = lineAllParts.filter(p => {
+                const d = (p.department || p.dept || '').trim().toLowerCase();
+                return d === selectedDept;
+            });
+        }
+
+        filtered.forEach(p => {
+            const pno = p.partno || p.part_no || '';
+            if (pno) {
+                const desc = p.family || p.forge_pn || p.description || '';
+                const deptName = p.department || p.dept || '';
+                const opt = document.createElement('option');
+                opt.value = pno;
+                opt.textContent = `${pno}${desc ? ' - ' + desc : ''}`;
+                opt.dataset.partId = p.id;
+                opt.dataset.desc = desc;
+                opt.dataset.dept = deptName;
+                select.appendChild(opt);
+            }
+        });
+
+        if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
+            select.value = currentVal;
+        } else {
+            select.value = '';
+            // trigger change to clear dependents
+            select.dispatchEvent(new Event('change'));
+        }
+    }
+
     async function fetchLineParts() {
         try {
             const res = await fetch('/api/partmaster');
             lineAllParts = await res.json();
-            const select = document.getElementById('linePartSelect');
-            if (!select) return;
-
-            const currentVal = select.value;
-            select.innerHTML = '<option value="">-- Select Part No --</option>';
-
             lineAllParts.sort((a, b) => (a.partno || a.part_no || '').localeCompare(b.partno || b.part_no || ''));
-
-            lineAllParts.forEach(p => {
-                const pno = p.partno || p.part_no || '';
-                if (pno) {
-                    const desc = p.family || p.forge_pn || p.description || '';
-                    const opt = document.createElement('option');
-                    opt.value = pno;
-                    opt.textContent = `${pno}${desc ? ' - ' + desc : ''}`;
-                    opt.dataset.partId = p.id;
-                    opt.dataset.desc = desc;
-                    select.appendChild(opt);
-                }
-            });
-
-            if (currentVal) select.value = currentVal;
+            populateLinePartDropdown();
         } catch (err) {
             console.error('Error fetching parts for line inspection:', err);
         }
     }
+
+    // Line Department Selection Listener
+    document.getElementById('lineDeptSelect')?.addEventListener('change', (e) => {
+        const selectedDept = e.target.value;
+        const tblHdrDept = document.getElementById('tblHdrDept');
+        if (tblHdrDept) {
+            tblHdrDept.textContent = selectedDept || '--';
+        }
+        populateLinePartDropdown();
+        fetchLineInspectionRecords();
+    });
 
     async function fetchLineMachines() {
         try {
@@ -6478,6 +6510,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const pno = e.target.value;
         const selectedOpt = e.target.selectedOptions[0];
         const partDescInput = document.getElementById('linePartDesc');
+        const tblHdrDept = document.getElementById('tblHdrDept');
         const tblHdrPartNo = document.getElementById('tblHdrPartNo');
         const tblHdrPartDesc = document.getElementById('tblHdrPartDesc');
         const opnSelect = document.getElementById('lineOpnSelect');
@@ -6487,6 +6520,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (partDescInput) partDescInput.value = '';
             if (tblHdrPartNo) tblHdrPartNo.textContent = '--';
             if (tblHdrPartDesc) tblHdrPartDesc.textContent = '--';
+            const curDept = document.getElementById('lineDeptSelect')?.value || '--';
+            if (tblHdrDept) tblHdrDept.textContent = curDept;
             if (opnSelect) opnSelect.innerHTML = '<option value="">-- Select Opn No --</option>';
             if (opnDescInput) opnDescInput.value = '';
             lineCurrentPartId = null;
@@ -6497,10 +6532,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const partId = selectedOpt.dataset.partId;
         lineCurrentPartId = partId;
         const desc = selectedOpt.dataset.desc || '';
+        const dept = selectedOpt.dataset.dept || document.getElementById('lineDeptSelect')?.value || '';
 
         if (partDescInput) partDescInput.value = desc;
         if (tblHdrPartNo) tblHdrPartNo.textContent = pno;
         if (tblHdrPartDesc) tblHdrPartDesc.textContent = desc || 'N/A';
+        if (tblHdrDept) tblHdrDept.textContent = dept || '--';
+
+        // Auto sync dept dropdown if not selected
+        const deptSelect = document.getElementById('lineDeptSelect');
+        if (dept && deptSelect && !deptSelect.value) {
+            const foundOpt = Array.from(deptSelect.options).find(o => o.value.toLowerCase() === dept.toLowerCase());
+            if (foundOpt) deptSelect.value = foundOpt.value;
+        }
 
         // Fetch Operations for this part
         if (opnSelect) {
@@ -6791,6 +6835,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const opnNo = document.getElementById('lineOpnSelect')?.value;
         const partDesc = document.getElementById('linePartDesc')?.value || '';
         const opnDesc = document.getElementById('lineOpnDesc')?.value || '';
+        const deptVal = document.getElementById('lineDeptSelect')?.value;
+        const tblDept = document.getElementById('tblHdrDept')?.textContent;
+        const dept = deptVal || (tblDept && tblDept !== '--' ? tblDept : '');
 
         if (!partNo || !opnNo) {
             alert('Please select both Part No and Opn No to save a template.');
@@ -6803,6 +6850,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const dim = parseFloat(p.nominal_dimension);
             if (desc || !isNaN(dim)) {
                 validParams.push({
+                    dept: dept,
                     part_no: partNo,
                     part_desc: partDesc,
                     opn_no: opnNo,
@@ -6903,7 +6951,12 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
+        const deptVal = document.getElementById('lineDeptSelect')?.value;
+        const tblDept = document.getElementById('tblHdrDept')?.textContent;
+        const dept = deptVal || (tblDept && tblDept !== '--' ? tblDept : '');
+
         const payload = {
+            dept: dept,
             part_no: partNo,
             part_desc: partDesc,
             opn_no: opnNo,
@@ -6952,7 +7005,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchLineInspectionRecords() {
         try {
-            const res = await fetch('/api/line-inspections');
+            const deptVal = document.getElementById('lineDeptSelect')?.value;
+            const url = deptVal ? `/api/line-inspections?dept=${encodeURIComponent(deptVal)}` : '/api/line-inspections';
+            const res = await fetch(url);
             lineRecentRecords = await res.json();
             renderLineInspectionRecords();
         } catch (err) {
@@ -6968,6 +7023,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let records = lineRecentRecords || [];
         if (filterVal) {
             records = records.filter(r => 
+                (r.dept || '').toLowerCase().includes(filterVal) ||
                 (r.part_no || '').toLowerCase().includes(filterVal) ||
                 (r.part_sl_no || r.comp_sl_nos || '').toLowerCase().includes(filterVal) ||
                 (r.opn_no || '').toLowerCase().includes(filterVal) ||
@@ -6978,7 +7034,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.innerHTML = '';
         if (records.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:2rem; color:var(--text-muted);">No line inspection records found.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="13" style="text-align:center; padding:2rem; color:var(--text-muted);">No line inspection records found.</td></tr>`;
             return;
         }
 
@@ -6995,6 +7051,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td style="padding:8px; text-align:center; color:var(--text-muted);">${idx + 1}</td>
                 <td style="padding:8px;">${escapeHtml(r.inspection_date || '')}</td>
                 <td style="padding:8px;">${escapeHtml(r.shift || '')}</td>
+                <td style="padding:8px; font-weight:600; color:#059669;">${escapeHtml(r.dept || '')}</td>
                 <td style="padding:8px; font-weight:700; color:var(--primary-color);">${escapeHtml(r.part_no || '')}</td>
                 <td style="padding:8px;">${escapeHtml(r.part_desc || '')}</td>
                 <td style="padding:8px;">${escapeHtml(r.opn_no || '')}</td>
@@ -7080,6 +7137,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
 
             <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; background:rgba(0,0,0,0.02); padding:12px; border-radius:8px; border:1px solid var(--border-color); margin-bottom:20px; font-size:0.9rem;">
+                <div><b>Dept:</b> <span style="color:#059669; font-weight:700;">${escapeHtml(record.dept || 'N/A')}</span></div>
                 <div><b>Part No:</b> <span style="color:#2563eb; font-weight:700;">${escapeHtml(record.part_no || '')}</span></div>
                 <div><b>Part Desc:</b> ${escapeHtml(record.part_desc || 'N/A')}</div>
                 <div><b>Part Sl No:</b> <span style="font-weight:700; color:#0f172a;">${escapeHtml(record.part_sl_no || record.comp_sl_nos || '')}</span></div>
@@ -7138,7 +7196,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Export to Excel
     document.getElementById('lineExportExcelBtn')?.addEventListener('click', () => {
-        window.location.href = '/api/export/line-inspections/excel';
+        const deptVal = document.getElementById('lineDeptSelect')?.value;
+        const url = deptVal ? `/api/export/line-inspections/excel?dept=${encodeURIComponent(deptVal)}` : '/api/export/line-inspections/excel';
+        window.location.href = url;
     });
 
     // --- PROD LOG LOGIC ---
@@ -9088,7 +9148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Report dept dropdowns have "-- All Departments --" as default
-        ['mcUtilDept', 'operEffDept', 'rmReqDept'].forEach(id => {
+        ['mcUtilDept', 'operEffDept', 'rmReqDept', 'lineDeptSelect'].forEach(id => {
             const el = document.getElementById(id);
             if (el) {
                 const currentVal = el.value;

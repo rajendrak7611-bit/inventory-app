@@ -2052,7 +2052,13 @@
 
                 <!-- Part & Operation Selection Bar -->
                 <div style="background: rgba(0, 0, 0, 0.02); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.25rem; margin-bottom: 20px;">
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; align-items: end;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; align-items: end;">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="lineDeptSelect" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: block;">Department</label>
+                            <select id="lineDeptSelect" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
+                                <option value="">-- All Departments --</option>
+                            </select>
+                        </div>
                         <div class="form-group" style="margin: 0;">
                             <label for="linePartSelect" style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: block;">Part No</label>
                             <select id="linePartSelect" style="width: 100%; padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-main); font-family: 'Inter', sans-serif;">
@@ -2102,16 +2108,19 @@
                             <thead>
                                 <!-- Header Row 1: Part Info Header Summary -->
                                 <tr style="background: #f1f5f9; font-weight: 700; color: #1e293b; border-bottom: 2px solid #cbd5e1;">
-                                    <th style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 30%;">
+                                    <th style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 18%;">
+                                        Dept: <span id="tblHdrDept" style="color: #059669;">--</span>
+                                    </th>
+                                    <th style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 22%;">
                                         Part No: <span id="tblHdrPartNo" style="color: #2563eb;">--</span>
                                     </th>
                                     <th style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 18%;">
                                         Desc: <span id="tblHdrPartDesc" style="color: #475569;">--</span>
                                     </th>
-                                    <th colspan="2" style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 22%;">
+                                    <th style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 18%;">
                                         Opn No: <span id="tblHdrOpnNo" style="color: #2563eb;">--</span>
                                     </th>
-                                    <th colspan="2" style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 30%;">
+                                    <th colspan="2" style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; width: 24%;">
                                         Opn Desc: <span id="tblHdrOpnDesc" style="color: #475569;">--</span>
                                     </th>
                                 </tr>
@@ -2217,6 +2226,7 @@
                                     <th style="padding: 10px 8px; text-align: center; width: 50px;">#</th>
                                     <th style="padding: 10px 8px; text-align: left;">Date</th>
                                     <th style="padding: 10px 8px; text-align: left;">Shift</th>
+                                    <th style="padding: 10px 8px; text-align: left;">Dept</th>
                                     <th style="padding: 10px 8px; text-align: left;">Part No</th>
                                     <th style="padding: 10px 8px; text-align: left;">Part Desc</th>
                                     <th style="padding: 10px 8px; text-align: left;">Opn No</th>
@@ -2230,7 +2240,7 @@
                             </thead>
                             <tbody id="lineRecordsBody">
                                 <tr>
-                                    <td colspan="12" style="text-align: center; padding: 2rem; color: var(--text-muted);">Loading inspection records...</td>
+                                    <td colspan="13" style="text-align: center; padding: 2rem; color: var(--text-muted);">Loading inspection records...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -4768,6 +4778,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10076"></script>
+    <script src="/static/app.js?v=10077"></script>
 </body>
 </html>

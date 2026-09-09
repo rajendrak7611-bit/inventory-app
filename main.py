@@ -75,6 +75,8 @@ def run_db_migrations():
         "ALTER TABLE inspection_reports ADD COLUMN status VARCHAR DEFAULT 'Accepted';",
         "ALTER TABLE inspection_reports ADD COLUMN remarks TEXT;",
         "ALTER TABLE inspection_reports ADD COLUMN inspection_date VARCHAR;",
+        "ALTER TABLE inspection_parameters ADD COLUMN dept VARCHAR;",
+        "ALTER TABLE inspection_reports ADD COLUMN dept VARCHAR;",
     ]
     for sql in migration_statements:
         try:
@@ -1017,6 +1019,7 @@ class ToolingResponse(ToolingBase):
         from_attributes = True
 
 class InspectionParamBase(BaseModel):
+    dept: Optional[str] = ""
     part_no: str
     part_desc: Optional[str] = ""
     opn_no: str
@@ -1038,6 +1041,7 @@ class InspectionParamResponse(InspectionParamBase):
 class InspectionReportSave(BaseModel):
     report_code: Optional[str] = None
     prod_log_id: Optional[int] = None
+    dept: Optional[str] = ""
     part_no: str
     part_desc: Optional[str] = ""
     opn_no: str
@@ -6411,6 +6415,7 @@ def save_inspection_parameters(param_list: List[InspectionParamCreate], db: Sess
     op_no = param_list[0].opn_no.strip()
     p_desc = param_list[0].part_desc or ""
     op_desc = param_list[0].opn_desc or ""
+    dept = param_list[0].dept or ""
 
     db.query(models.InspectionParameter).filter(
         func.lower(models.InspectionParameter.part_no) == p_no.lower(),
@@ -6419,6 +6424,7 @@ def save_inspection_parameters(param_list: List[InspectionParamCreate], db: Sess
 
     for idx, item in enumerate(param_list, start=1):
         db_param = models.InspectionParameter(
+            dept=item.dept or dept,
             part_no=p_no,
             part_desc=item.part_desc or p_desc,
             opn_no=op_no,
@@ -6509,6 +6515,7 @@ def save_inspection_report(req: InspectionReportSave, db: Session = Depends(get_
     report = models.InspectionReport(
         report_code=report_code,
         prod_log_id=req.prod_log_id,
+        dept=req.dept or "",
         part_no=req.part_no.strip(),
         part_desc=req.part_desc or "",
         opn_no=req.opn_no.strip(),
@@ -6531,8 +6538,10 @@ def save_inspection_report(req: InspectionReportSave, db: Session = Depends(get_
     return {"message": "Line Inspection saved successfully!", "report_code": report.report_code, "id": report.id}
 
 @app.get("/api/line-inspections")
-def get_line_inspections(part_no: Optional[str] = None, opn_no: Optional[str] = None, date: Optional[str] = None, limit: int = 100, db: Session = Depends(get_db)):
+def get_line_inspections(part_no: Optional[str] = None, opn_no: Optional[str] = None, dept: Optional[str] = None, date: Optional[str] = None, limit: int = 100, db: Session = Depends(get_db)):
     query = db.query(models.InspectionReport)
+    if dept:
+        query = query.filter(func.lower(models.InspectionReport.dept) == dept.strip().lower())
     if part_no:
         query = query.filter(func.lower(models.InspectionReport.part_no) == part_no.strip().lower())
     if opn_no:
@@ -6561,12 +6570,14 @@ def delete_inspection_report(report_id: int, db: Session = Depends(get_db)):
     return {"message": "Inspection record deleted successfully"}
 
 @app.get("/api/export/line-inspections/excel")
-def export_line_inspections_excel(part_no: Optional[str] = None, opn_no: Optional[str] = None, db: Session = Depends(get_db)):
+def export_line_inspections_excel(part_no: Optional[str] = None, opn_no: Optional[str] = None, dept: Optional[str] = None, db: Session = Depends(get_db)):
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
 
     query = db.query(models.InspectionReport)
+    if dept:
+        query = query.filter(func.lower(models.InspectionReport.dept) == dept.strip().lower())
     if part_no:
         query = query.filter(func.lower(models.InspectionReport.part_no) == part_no.strip().lower())
     if opn_no:
@@ -6589,7 +6600,7 @@ def export_line_inspections_excel(part_no: Optional[str] = None, opn_no: Optiona
     )
 
     headers = [
-        "Sl No", "Date", "Shift", "Part No", "Part Desc", "Opn No", "Opn Desc",
+        "Sl No", "Date", "Shift", "Dept", "Part No", "Part Desc", "Opn No", "Opn Desc",
         "Part Sl No", "Machine", "Inspector", "Status", "Remarks"
     ]
     ws.append(headers)
@@ -6604,6 +6615,7 @@ def export_line_inspections_excel(part_no: Optional[str] = None, opn_no: Optiona
             idx,
             r.inspection_date or "",
             r.shift or "",
+            r.dept or "",
             r.part_no or "",
             r.part_desc or "",
             r.opn_no or "",
@@ -6619,7 +6631,7 @@ def export_line_inspections_excel(part_no: Optional[str] = None, opn_no: Optiona
         for col_idx in range(1, len(row_data) + 1):
             cell = ws.cell(row=row_num, column=col_idx)
             cell.border = thin_border
-            if col_idx in [1, 2, 3, 4, 6, 8, 11]:
+            if col_idx in [1, 2, 3, 4, 5, 7, 9, 12]:
                 cell.alignment = align_center
             else:
                 cell.alignment = align_left

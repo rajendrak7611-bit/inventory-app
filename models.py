@@ -217,6 +217,7 @@ class InspectionParameter(Base):
     __tablename__ = "inspection_parameters"
 
     id = Column(Integer, primary_key=True, index=True)
+    dept = Column(String, index=True, nullable=True)
     part_no = Column(String, index=True, nullable=False)
     part_desc = Column(String, nullable=True)
     opn_no = Column(String, index=True, nullable=False)
@@ -233,6 +234,7 @@ class InspectionReport(Base):
     id = Column(Integer, primary_key=True, index=True)
     report_code = Column(String, index=True, nullable=True)  # Unique Traceability ID e.g. W04-20-0828-001
     prod_log_id = Column(Integer, nullable=True)
+    dept = Column(String, index=True, nullable=True)
     part_no = Column(String, index=True, nullable=False)
     part_desc = Column(String, nullable=True)
     opn_no = Column(String, index=True, nullable=False)
