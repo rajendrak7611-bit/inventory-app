@@ -16281,12 +16281,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const btn = document.getElementById('downloadJsonDbBackupBtn');
         const origText = btn.innerHTML;
-        btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing JSON Backup...';
-
         try {
             const res = await fetch('/api/admin/export_db_backup');
-            if (!res.ok) throw new Error('Failed to fetch DB backup data');
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.detail || `Server returned ${res.status}: ${res.statusText}`);
+            }
             const data = await res.json();
 
             const dateStr = new Date().toISOString().slice(0, 10);
@@ -16325,7 +16326,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const res = await fetch('/api/admin/export_db_backup');
-            if (!res.ok) throw new Error('Failed to fetch DB backup data');
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.detail || `Server returned ${res.status}: ${res.statusText}`);
+            }
             const data = await res.json();
             const tables = data.tables || {};
 

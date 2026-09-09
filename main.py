@@ -7950,6 +7950,96 @@ def delete_tap_issue(id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Deleted successfully"}
 
+# --- Database Backup & Contingency Endpoints ---
+@app.get("/api/admin/export_db_backup")
+def export_db_backup(db: Session = Depends(get_db)):
+    try:
+        from sqlalchemy import inspect
+        inspector = inspect(engine)
+        existing_tables = set(inspector.get_table_names())
+    except Exception:
+        existing_tables = set()
+
+    known_tables = [
+        "part_masters", "part_operations", "parts", "operations", "machines", 
+        "operators", "departments", "shifts", "vendors", "setters", "setter_logs", 
+        "suppliers", "customer_masters", "rfq_headers", "rfq_items", "quote_records", 
+        "schedules", "production_schedules", "production_logs", "raw_materials", 
+        "raw_material_logs", "ht_logs", "ht_receipt_logs", "pc_logs", "pc_receipt_logs", 
+        "insert_masters", "drill_masters", "tap_masters", "insert_receipts", 
+        "tap_receipts", "insert_issues", "tap_issues", "breakdown_slips", 
+        "service_details", "attendances", "inspection_parameters", "inspection_reports", 
+        "users", "tooling"
+    ]
+
+    all_tables_to_check = list(dict.fromkeys(list(existing_tables) + known_tables))
+    backup_data = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "database_type": "postgresql" if "postgresql" in str(engine.url) else "sqlite",
+        "tables": {}
+    }
+
+    for tbl in all_tables_to_check:
+        try:
+            rows = db.execute(text(f'SELECT * FROM "{tbl}"')).mappings().all()
+            serializable_rows = []
+            for r in rows:
+                row_dict = {}
+                for k, v in dict(r).items():
+                    if isinstance(v, (datetime.date, datetime.datetime, datetime.time)):
+                        row_dict[k] = v.isoformat()
+                    elif isinstance(v, (bytes, bytearray)):
+                        row_dict[k] = v.decode("utf-8", errors="ignore")
+                    elif hasattr(v, "__float__") and not isinstance(v, (int, float)):
+                        row_dict[k] = float(v)
+                    else:
+                        row_dict[k] = v
+                serializable_rows.append(row_dict)
+            backup_data["tables"][tbl] = serializable_rows
+        except Exception:
+            continue
+
+    return backup_data
+
+@app.post("/api/admin/restore_db_backup")
+async def restore_db_backup(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    try:
+        content = await file.read()
+        data = json.loads(content.decode("utf-8"))
+        tables_data = data.get("tables", {})
+        if not tables_data:
+            raise HTTPException(status_code=400, detail="Invalid backup file: no tables found")
+
+        restored_counts = {}
+        for table_name, rows in tables_data.items():
+            if not rows:
+                continue
+            try:
+                db.execute(text(f'DELETE FROM "{table_name}";'))
+                db.commit()
+            except Exception:
+                pass
+
+            inserted = 0
+            first_row = rows[0]
+            cols = list(first_row.keys())
+            col_str = ", ".join([f'"{c}"' for c in cols])
+            param_str = ", ".join([f":{c}" for c in cols])
+            insert_sql = text(f'INSERT INTO "{table_name}" ({col_str}) VALUES ({param_str});')
+
+            for row in rows:
+                try:
+                    db.execute(insert_sql, row)
+                    inserted += 1
+                except Exception:
+                    pass
+            db.commit()
+            restored_counts[table_name] = inserted
+
+        return {"message": "Backup restored successfully", "restored": restored_counts}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # --- Serve Static Files ---
 @app.middleware("http")
 async def add_no_cache_headers(request, call_next):
