@@ -3538,7 +3538,18 @@ def normalize_date_str(d_str: str) -> str:
         return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
     m = re.match(r"^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$", d_str)
     if m:
-        return f"{int(m.group(3)):04d}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
+        p1 = int(m.group(1))
+        p2 = int(m.group(2))
+        y = int(m.group(3))
+        if p1 > 12:
+            # Definitely DD-MM-YYYY (p1=day, p2=month)
+            return f"{y:04d}-{p2:02d}-{p1:02d}"
+        elif p2 > 12:
+            # Definitely MM-DD-YYYY (p1=month, p2=day)
+            return f"{y:04d}-{p1:02d}-{p2:02d}"
+        else:
+            # In India / GRS standard is DD-MM-YYYY (p1=day, p2=month)
+            return f"{y:04d}-{p2:02d}-{p1:02d}"
     return d_str
 
 @app.get("/api/prodlog")
@@ -6048,6 +6059,11 @@ def adjust_part_wip(data: dict, db: Session = Depends(get_db)):
         if part_row:
             op_rows = db.execute(text("SELECT opn_no, description FROM operations WHERE part_id = :pid ORDER BY id ASC;"), {"pid": part_row["id"]}).mappings().all()
             operations = [str(r["opn_no"]).strip() for r in op_rows]
+        else:
+            pm_row = db.execute(text("SELECT id FROM part_masters WHERE LOWER(partno) = LOWER(:p);"), {"p": partno}).mappings().first()
+            if pm_row:
+                op_rows = db.execute(text("SELECT opn_no, description FROM part_operations WHERE CAST(part_id AS TEXT) = :pid ORDER BY id ASC;"), {"pid": str(pm_row["id"])}).mappings().all()
+                operations = [str(r["opn_no"]).strip() for r in op_rows]
 
         target_map = {}
         for adj in adjustments:
@@ -6167,6 +6183,12 @@ def autofix_wip(data: dict, db: Session = Depends(get_db)):
         q += " ORDER BY id ASC;"
 
         parts = db.execute(text(q), params).mappings().all()
+        if not parts:
+            q_pm = "SELECT id, partno, department FROM part_masters"
+            if dept:
+                q_pm += " WHERE LOWER(department) = LOWER(:dept)"
+            q_pm += " ORDER BY id ASC;"
+            parts = db.execute(text(q_pm), params).mappings().all()
 
         for p in parts:
             pno = (p.get("partno") or "").strip()
@@ -6174,6 +6196,8 @@ def autofix_wip(data: dict, db: Session = Depends(get_db)):
             if not pno:
                 continue
             op_rows = db.execute(text("SELECT opn_no FROM operations WHERE part_id = :pid ORDER BY id ASC;"), {"pid": p["id"]}).mappings().all()
+            if not op_rows:
+                op_rows = db.execute(text("SELECT opn_no FROM part_operations WHERE CAST(part_id AS TEXT) = :pid ORDER BY id ASC;"), {"pid": str(p["id"])}).mappings().all()
             operations = [str(r["opn_no"]).strip().lower() for r in op_rows]
             if not operations:
                 continue

@@ -11,8 +11,50 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentUser) userObj = JSON.parse(currentUser);
     } catch(e) {}
 
+    function isUserAdmin() {
+        let u = userObj;
+        if (!u) {
+            try {
+                const raw = localStorage.getItem('grs_user');
+                if (raw) u = JSON.parse(raw);
+            } catch(e){}
+        }
+        return !!(u && ((u.role || '').toLowerCase() === 'admin' || (u.username || '').toLowerCase() === 'admin'));
+    }
+    window.isUserAdmin = isUserAdmin;
+
+    // Validate active session with backend to ensure user has not been deleted
+    if (userObj && userObj.username) {
+        fetch('/api/auth/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: userObj.username, token: userObj.token })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.valid === false) {
+                console.warn('Session verification failed: user account deleted or no longer exists.');
+                localStorage.removeItem('grs_user');
+                alert('Your user account has been deleted or is no longer active. Please log in again.');
+                window.location.reload();
+            } else if (data && data.valid && data.user) {
+                const updated = {
+                    ...userObj,
+                    role: data.user.role,
+                    accessible_screens: data.user.accessible_screens
+                };
+                if (JSON.stringify(updated) !== JSON.stringify(userObj)) {
+                    localStorage.setItem('grs_user', JSON.stringify(updated));
+                }
+            }
+        })
+        .catch(err => {
+            console.error('Session verify error:', err);
+        });
+    }
+
     function checkAdminAccess() {
-        if (!userObj || userObj.role !== 'admin') {
+        if (!isUserAdmin()) {
             alert('Access Denied: Only Admin users are authorized to delete records.');
             return false;
         }
@@ -102,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Access Control Logic
-        const isAdminUser = userObj && ((userObj.role || '').toLowerCase() === 'admin' || (userObj.username || '').toLowerCase() === 'admin');
+        const isAdminUser = isUserAdmin();
         const allTabs = document.querySelectorAll('[data-screen]');
         let firstAvailableTab = null;
         let accessibleScreens = [];
@@ -167,6 +209,80 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Special case for Add Part tab and Clear All Parts tab (visible in Part Master sub menu)
+        const addPartTab = document.getElementById('addPartTab');
+        if (addPartTab) {
+            addPartTab.onclick = () => {
+                closePartModal();
+                openPartModal(false);
+            };
+            addPartTab.style.display = 'none';
+        }
+
+        const clearAllPartsTab = document.getElementById('clearAllPartsTab');
+        if (clearAllPartsTab) {
+            clearAllPartsTab.onclick = async () => {
+                if (!confirm("⚠️ Are you sure you want to CLEAR ALL PARTS and Part Master records?\n\nThis action cannot be undone.")) {
+                    return;
+                }
+                try {
+                    const res = await fetch('/api/partmaster/clear-all', { method: 'DELETE' });
+                    const data = await res.json();
+                    alert(data.message || "All parts cleared successfully!");
+                    fetchPartMasters();
+                } catch(err) {
+                    alert("Error clearing parts: " + err);
+                }
+            };
+            clearAllPartsTab.style.display = 'none';
+        }
+
+        // Inventory Submenu Action Tabs
+        const addReceiptTab = document.getElementById('addReceiptTab');
+        if (addReceiptTab) {
+            addReceiptTab.onclick = () => {
+                currentTab = 'rm_receipt';
+                if (addBtn) addBtn.click();
+            };
+            addReceiptTab.style.display = 'none';
+        }
+
+        const addDespatchTab = document.getElementById('addDespatchTab');
+        if (addDespatchTab) {
+            addDespatchTab.onclick = () => {
+                currentTab = 'rm_despatch';
+                if (addBtn) addBtn.click();
+            };
+            addDespatchTab.style.display = 'none';
+        }
+
+        const addRmTab = document.getElementById('addRmTab');
+        if (addRmTab) {
+            addRmTab.onclick = () => {
+                currentTab = 'rawmaterial';
+                if (addBtn) addBtn.click();
+            };
+            addRmTab.style.display = 'none';
+        }
+
+        const sendToHtTab = document.getElementById('sendToHtTab');
+        if (sendToHtTab) {
+            sendToHtTab.onclick = () => {
+                currentTab = 'ht';
+                if (addBtn) addBtn.click();
+            };
+            sendToHtTab.style.display = 'none';
+        }
+
+        const sendToPcTab = document.getElementById('sendToPcTab');
+        if (sendToPcTab) {
+            sendToPcTab.onclick = () => {
+                currentTab = 'pc';
+                if (addBtn) addBtn.click();
+            };
+            sendToPcTab.style.display = 'none';
+        }
+
         // Add logout button to header actions div
         const actionDiv = document.getElementById('headerActions');
         if (actionDiv && !document.getElementById('logoutBtn')) {
@@ -190,10 +306,17 @@ document.addEventListener('DOMContentLoaded', () => {
             targetInitialTab = firstAvailableTab;
         }
 
-        if (targetInitialTab && (userObj.role !== 'admin' || accessibleScreens.includes('insertissue'))) {
+        if (targetInitialTab) {
             setTimeout(() => {
                 targetInitialTab.click();
             }, 100);
+        } else {
+            const masterTab = document.getElementById('sidebarMaster');
+            if (masterTab) {
+                setTimeout(() => {
+                    masterTab.click();
+                }, 100);
+            }
         }
     }
 
@@ -260,6 +383,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebarProdLog = document.getElementById('sidebarProdLog');
     const sidebarDebur = document.getElementById('sidebarDebur');
     const sidebarInspection = document.getElementById('sidebarInspection');
+    const sidebarFinalInsp = document.getElementById('sidebarFinalInsp');
+    const sidebarLineInsp = document.getElementById('sidebarLineInsp');
     
     const rawMaterialsSection = document.getElementById('rawMaterialsSection');
     const rmReceiptSection = document.getElementById('rmReceiptSection');
@@ -279,6 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const prodLogSection = document.getElementById('prodLogSection');
     const deburSection = document.getElementById('deburSection');
     const inspectionSection = document.getElementById('inspectionSection');
+    const lineInspectionSection = document.getElementById('lineInspectionSection');
 
     // Products Elements
     const productsBody = document.getElementById('productsBody');
@@ -340,10 +466,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const sections = [
             'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection', 'bcProdSection', 'attVsLoginSection',
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
-            'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'insertStockSection', 'partMasterSection', 'machinesSection',
+            'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'insertConsumptionSection', 'insertStockSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'dbBackupSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'resourceReqdSection', 'scheduleRunSection',
-            'scheduleStatusSection', 'prodLogSection', 'deburSection',
-            'inspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'hrSection', 'attendanceSection', 'rfqSection', 'quoteSection'
+            'scheduleStatusSection', 'prodLogSection', 'deburSection', 'bcStatusSection', 'wiproStatusSection',
+            'inspectionSection', 'lineInspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'serviceSettersSection', 'hrSection', 'attendanceSection', 'rfqSection', 'quoteSection'
         ];
         sections.forEach(id => {
             const el = document.getElementById(id);
@@ -352,8 +478,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.querySelectorAll('.main-tab').forEach(btn => btn.classList.remove('active'));
         document.querySelectorAll('.sub-tab').forEach(btn => btn.classList.remove('active'));
-        importBtn.style.display = 'none';
-        addBtn.style.display = 'inline-flex';
+        ['addPartTab', 'clearAllPartsTab', 'addReceiptTab', 'addDespatchTab', 'addRmTab', 'sendToHtTab', 'sendToPcTab'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
     }
 
     function hideAllSubmenus() {
@@ -381,8 +509,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (submenu) {
                     submenu.style.display = 'flex';
-                    // Auto-click first visible tab in submenu
-                    const visibleTabs = Array.from(submenu.querySelectorAll('.sub-tab')).filter(t => t.style.display !== 'none');
+                    // Auto-click first visible tab in submenu (ignore action tabs)
+                    const visibleTabs = Array.from(submenu.querySelectorAll('.sub-tab:not(.action-tab)')).filter(t => t.style.display !== 'none');
                     if (visibleTabs.length > 0) {
                         visibleTabs[0].click();
                     }
@@ -426,6 +554,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Sub-tab Click Handlers
     const subTabs = {
+        'sidebarServiceSetters': { tab: 'service_setters', action: () => {
+            const sec = document.getElementById('serviceSettersSection');
+            if (sec) sec.style.display = 'block';
+            importBtn.style.display = 'none';
+            addBtn.style.display = 'none';
+            initServiceSettersSection();
+        }},
         'sidebarRfq': { tab: 'rfq', action: () => {
             const sec = document.getElementById('rfqSection');
             if (sec) sec.style.display = 'block';
@@ -445,7 +580,12 @@ document.addEventListener('DOMContentLoaded', () => {
         'sidebarPartMaster': { tab: 'partmaster', action: () => { 
             partMasterSection.style.display = 'block'; 
             importBtn.style.display = 'inline-block';
+            addBtn.style.display = 'inline-flex';
             addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Add Part';
+            const addPartBtnTab = document.getElementById('addPartTab');
+            if (addPartBtnTab) addPartBtnTab.style.display = 'inline-block';
+            const clearBtn = document.getElementById('clearAllPartsTab');
+            if (clearBtn) clearBtn.style.display = isUserAdmin() ? 'inline-block' : 'none';
             fetchPartMasters(); 
         }},
         'sidebarMachines': { tab: 'machines', action: () => { 
@@ -507,33 +647,36 @@ document.addEventListener('DOMContentLoaded', () => {
         'sidebarHt': { tab: 'ht', action: () => {
             if (htSection) htSection.style.display = 'block';
             importBtn.style.display = 'none';
-            addBtn.style.display = 'inline-flex';
-            addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Send to HT';
+            const sendToHtBtnTab = document.getElementById('sendToHtTab');
+            if (sendToHtBtnTab) sendToHtBtnTab.style.display = 'inline-block';
             fetchHtData();
         }},
         'sidebarPc': { tab: 'pc', action: () => {
             const pcSection = document.getElementById('pcSection');
             if (pcSection) pcSection.style.display = 'block';
             importBtn.style.display = 'none';
-            addBtn.style.display = 'inline-flex';
-            addBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Send to PC';
+            const sendToPcBtnTab = document.getElementById('sendToPcTab');
+            if (sendToPcBtnTab) sendToPcBtnTab.style.display = 'inline-block';
             fetchPcData();
         }},
         'sidebarRmReceipt': { tab: 'rm_receipt', action: () => { 
             if (rmReceiptSection) rmReceiptSection.style.display = 'block';
-            addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Receipt';
+            const addReceiptBtnTab = document.getElementById('addReceiptTab');
+            if (addReceiptBtnTab) addReceiptBtnTab.style.display = 'inline-block';
             importBtn.style.display = 'inline-flex';
             fetchRmLogs('receipt');
         }},
         'sidebarRmDespatch': { tab: 'rm_despatch', action: () => { 
             if (rmDespatchSection) rmDespatchSection.style.display = 'block';
-            addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Despatch';
+            const addDespatchBtnTab = document.getElementById('addDespatchTab');
+            if (addDespatchBtnTab) addDespatchBtnTab.style.display = 'inline-block';
             importBtn.style.display = 'inline-flex';
             fetchRmLogs('despatch');
         }},
         'sidebarRmMaster': { tab: 'rawmaterial', action: () => { 
             if (rawMaterialsSection) rawMaterialsSection.style.display = 'block';
-            addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Raw Material';
+            const addRmBtnTab = document.getElementById('addRmTab');
+            if (addRmBtnTab) addRmBtnTab.style.display = 'inline-block';
             importBtn.style.display = 'inline-flex';
             fetchRawMaterials();
         }},
@@ -648,6 +791,13 @@ document.addEventListener('DOMContentLoaded', () => {
             addBtn.style.display = 'none';
             fetchInsertCpcReport();
         }},
+        'sidebarInsertConsumption': { tab: 'insertconsumption', action: () => {
+            const sec = document.getElementById('insertConsumptionSection');
+            if (sec) sec.style.display = 'block';
+            importBtn.style.display = 'none';
+            addBtn.style.display = 'none';
+            initInsertConsumptionReport();
+        }},
         'sidebarInsertStock': { tab: 'insertstock', action: () => {
             const sec = document.getElementById('insertStockSection');
             if (sec) sec.style.display = 'block';
@@ -694,6 +844,18 @@ document.addEventListener('DOMContentLoaded', () => {
             addBtn.style.display = 'none'; 
             initDebur(); 
         }},
+        'sidebarBcStatus': { tab: 'bc_status', action: () => { 
+            const sec = document.getElementById('bcStatusSection');
+            if (sec) sec.style.display = 'block'; 
+            addBtn.style.display = 'none'; 
+            initBcStatus(); 
+        }},
+        'sidebarWiproStatus': { tab: 'wipro_status', action: () => { 
+            const sec = document.getElementById('wiproStatusSection');
+            if (sec) sec.style.display = 'block'; 
+            addBtn.style.display = 'none'; 
+            initWiproStatus(); 
+        }},
         'sidebarAttendance': { tab: 'attendance', action: () => {
             const attSec = document.getElementById('attendanceSection');
             if (attSec) attSec.style.display = 'block';
@@ -711,15 +873,39 @@ document.addEventListener('DOMContentLoaded', () => {
             if (sdSec) sdSec.style.display = 'block';
             addBtn.style.display = 'none';
             initServiceDetails();
+        }},
+        'sidebarFinalInsp': { tab: 'inspection', action: () => {
+            if (inspectionSection) inspectionSection.style.display = 'block';
+            addBtn.style.display = 'none';
+            if (importBtn) importBtn.style.display = 'none';
+            initInspection();
+        }},
+        'sidebarLineInsp': { tab: 'line_insp', action: () => {
+            if (lineInspectionSection) lineInspectionSection.style.display = 'block';
+            addBtn.style.display = 'none';
+            if (importBtn) importBtn.style.display = 'none';
+            initLineInspection();
         }}
     };
 
-    document.querySelectorAll('.sub-tab').forEach(tab => {
+    document.querySelectorAll('.sub-tab:not(.action-tab)').forEach(tab => {
         tab.addEventListener('click', (e) => {
             e.preventDefault();
             hideAllSections();
-            document.querySelectorAll('.sub-tab').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.sub-tab:not(.action-tab)').forEach(btn => btn.classList.remove('active'));
             tab.classList.add('active');
+
+            const parentGroup = tab.closest('.sub-group');
+            if (parentGroup && (parentGroup.style.display === 'none' || !parentGroup.style.display)) {
+                hideAllSubmenus();
+                parentGroup.style.display = 'flex';
+                const groupId = parentGroup.id.replace('submenu', '').toLowerCase();
+                const mainTab = Array.from(document.querySelectorAll('.main-tab')).find(mt => (mt.getAttribute('data-group') || '').toLowerCase() === groupId);
+                if (mainTab) {
+                    document.querySelectorAll('.main-tab').forEach(b => b.classList.remove('active'));
+                    mainTab.classList.add('active');
+                }
+            }
             
             const config = subTabs[tab.id];
             if (config) {
@@ -1025,7 +1211,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 if (response.ok) {
-                    alert('Import successful!');
+                    const resJson = await response.json().catch(() => ({}));
+                    alert(resJson.message || 'Import successful!');
                     if (currentTab === 'partmaster') fetchPartMasters();
                     else if (currentTab === 'machines') fetchMachines();
                     else if (currentTab === 'operators') fetchOperators();
@@ -1033,7 +1220,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     else if (currentTab === 'rm_receipt') fetchRmLogs('receipt');
                     else if (currentTab === 'rm_despatch') fetchRmLogs('despatch');
                 } else {
-                    alert('Import failed. Please check the console.');
+                    const errText = await response.text().catch(() => '');
+                    alert('Import failed: ' + (errText || 'Please check the file format and column headers.'));
                 }
             } catch (err) {
                 console.error('Error importing file:', err);
@@ -1122,11 +1310,11 @@ document.addEventListener('DOMContentLoaded', () => {
             parts.forEach(p => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${p.id}</td><td>${p.customer || ''}</td><td>${p.department || ''}</td><td>${p.family}</td><td>${p.forge_pn}</td><td>${p.part_prefix || ''}</td><td>${p.partno}</td><td>${p.va || ''}</td>
-                    <td class="actions">
-                        <button class="btn btn-outline" style="margin-right: 5px;" onclick="openOperations(${p.id})">Operations</button>
-                        <button class="btn btn-edit" onclick="editPartMaster(${p.id})">Edit</button>
-                        <button class="btn btn-danger" onclick="deletePartMaster(${p.id})">Delete</button>
+                    <td>${p.id}</td><td>${escapeHtml(p.customer || '')}</td><td>${escapeHtml(p.department || '')}</td><td>${escapeHtml(p.family || '')}</td><td>${escapeHtml(p.forge_pn || '')}</td><td>${escapeHtml(p.part_prefix || '')}</td><td>${escapeHtml(p.partno || '')}</td><td>${p.va !== undefined && p.va !== null ? p.va : ''}</td>
+                    <td class="actions" style="white-space: nowrap;">
+                        <button class="btn btn-outline" style="margin-right: 4px; padding: 4px 8px; font-size: 0.8rem;" onclick="openOperations(${p.id})">Operations</button>
+                        <button class="btn btn-edit" style="margin-right: 4px; padding: 4px 8px; font-size: 0.8rem; background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; cursor: pointer;" onclick="editPartMaster(${p.id})">Edit</button>
+                        <button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; cursor: pointer;" onclick="deletePartMaster(${p.id})">Delete</button>
                     </td>`;
                 partMasterBody.appendChild(tr);
             });
@@ -1173,7 +1361,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const cell = tr.children[f.colIdx];
                 if (cell) {
                     const text = (cell.textContent || '').trim().toLowerCase();
-                    if (!text.includes(f.val)) {
+                    let matches = text.includes(f.val);
+                    
+                    if (!matches && /^\d{4}-\d{2}-\d{2}/.test(text)) {
+                        const mIndex = parseInt(text.substring(5, 7), 10) - 1;
+                        const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+                        const shortMonths = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+                        if (monthNames[mIndex] && (monthNames[mIndex].includes(f.val) || shortMonths[mIndex].includes(f.val))) {
+                            matches = true;
+                        }
+                    }
+                    if (!matches) {
                         show = false;
                         break;
                     }
@@ -1208,14 +1406,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    function openPartModal(isEdit) {
-        partModal.classList.add('show');
-        partModalTitle.textContent = isEdit ? 'Edit Part' : 'Add Part';
+    async function openPartModal(isEdit, deptToSelect) {
+        if (partModal) {
+            partModal.classList.add('active');
+            partModal.classList.add('show');
+        }
+        if (partModalTitle) partModalTitle.textContent = isEdit ? 'Edit Part' : 'Add Part';
+        
+        const deptSelect = document.getElementById('partDept');
+        if (deptSelect && deptSelect.options.length <= 1) {
+            try {
+                const res = await fetch('/api/departments');
+                if (res.ok) {
+                    const depts = await res.json();
+                    if (Array.isArray(depts) && depts.length > 0) {
+                        let html = '<option value="">-- Select Dept --</option>';
+                        depts.forEach(d => {
+                            html += `<option value="${d.name}">${d.name}</option>`;
+                        });
+                        deptSelect.innerHTML = html;
+                    }
+                }
+            } catch(e) {
+                console.error('Error loading departments for part modal:', e);
+            }
+        }
+        if (deptToSelect && deptSelect) {
+            deptSelect.value = deptToSelect;
+        }
     }
     function closePartModal() {
-        partModal.classList.remove('show');
-        partForm.reset();
-        document.getElementById('partId').value = '';
+        if (partModal) {
+            partModal.classList.remove('active');
+            partModal.classList.remove('show');
+        }
+        if (partForm) partForm.reset();
+        const partIdInput = document.getElementById('partId');
+        if (partIdInput) partIdInput.value = '';
         const prefixEl = document.getElementById('partPrefix');
         if (prefixEl) prefixEl.value = '';
     }
@@ -1223,19 +1450,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     partForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const submitBtn = partForm.querySelector('button[type="submit"]');
+        const origBtnText = submitBtn ? submitBtn.textContent : 'Save Details';
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+        }
+
         const id = document.getElementById('partId').value;
         const data = {
-            family: document.getElementById('partFamily').value,
-            forge_pn: document.getElementById('forgePn').value,
+            family: (document.getElementById('partFamily').value || '').trim(),
+            forge_pn: (document.getElementById('forgePn').value || '').trim(),
             part_prefix: document.getElementById('partPrefix') ? document.getElementById('partPrefix').value.trim() : '',
-            partno: document.getElementById('partno').value,
-            department: document.getElementById('partDept').value,
-            customer: document.getElementById('partCustomer').value,
-            va: document.getElementById('partVa').value
+            partno: (document.getElementById('partno').value || '').trim(),
+            department: document.getElementById('partDept').value || '',
+            customer: (document.getElementById('partCustomer').value || '').trim(),
+            va: document.getElementById('partVa').value || '0'
         };
         const url = id ? `/api/partmaster/${id}` : '/api/partmaster';
         try {
-            const res = await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+            const res = await fetch(url, { 
+                method: id ? 'PUT' : 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(data) 
+            });
             if (!res.ok) {
                 const errText = await res.text();
                 let errDetail = errText;
@@ -1244,36 +1482,61 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (parsed.detail) errDetail = typeof parsed.detail === 'string' ? parsed.detail : JSON.stringify(parsed.detail);
                 } catch(e){}
                 alert('Failed to save part details: ' + errDetail);
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = origBtnText;
+                }
                 return;
             }
             closePartModal();
-            fetchPartMasters();
+            // Clear any active column filter on partMasterTable so user sees the newly saved part
+            const table = document.getElementById('partMasterTable');
+            if (table) {
+                table.querySelectorAll('thead input, thead select').forEach(inp => inp.value = '');
+            }
+            await fetchPartMasters();
+            alert(`Part "${data.partno}" saved successfully!`);
         } catch(err) {
             console.error('Error saving part master:', err);
             alert('Failed to save part details: ' + err.message);
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = origBtnText;
+            }
         }
     });
 
     window.deletePartMaster = async (id) => {
-        if (!checkAdminAccess()) return;
-        if (confirm('Delete this part master?')) {
-            await fetch(`/api/partmaster/${id}`, { method: 'DELETE' });
-            fetchPartMasters();
+        if (!confirm('Are you sure you want to delete this part master row?')) return;
+        try {
+            const res = await fetch(`/api/partmaster/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                fetchPartMasters();
+            } else {
+                alert('Failed to delete part.');
+            }
+        } catch(e) {
+            alert('Error deleting part: ' + e);
         }
     };
     window.editPartMaster = async (id) => {
-        const res = await fetch('/api/partmaster'); const data = await res.json();
-        const p = data.find(x => x.id === id);
-        if (p) {
-            document.getElementById('partId').value = p.id;
-            document.getElementById('partFamily').value = p.family;
-            document.getElementById('forgePn').value = p.forge_pn;
-            if (document.getElementById('partPrefix')) document.getElementById('partPrefix').value = p.part_prefix || '';
-            document.getElementById('partno').value = p.partno;
-            document.getElementById('partCustomer').value = p.customer || '';
-            document.getElementById('partDept').value = p.department || '';
-            document.getElementById('partVa').value = p.va || '';
-            openPartModal(true);
+        try {
+            const res = await fetch('/api/partmaster'); 
+            const data = await res.json();
+            const p = data.find(x => x.id === id);
+            if (p) {
+                document.getElementById('partId').value = p.id;
+                document.getElementById('partFamily').value = p.family || '';
+                document.getElementById('forgePn').value = p.forge_pn || '';
+                if (document.getElementById('partPrefix')) document.getElementById('partPrefix').value = p.part_prefix || '';
+                document.getElementById('partno').value = p.partno || '';
+                document.getElementById('partCustomer').value = p.customer || '';
+                document.getElementById('partVa').value = p.va || '';
+                await openPartModal(true, p.department || '');
+            }
+        } catch(e) {
+            alert('Error loading part for editing: ' + e);
         }
     };
 
@@ -1362,6 +1625,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const opTableContainer = document.getElementById('operationsTable')?.closest('.table-container, .modal-table-container');
             if (opTableContainer) opTableContainer.style.display = 'block';
 
+            operationsModal.classList.add('active');
             operationsModal.classList.add('show');
         } catch(e) {
             console.error('Error opening operations modal:', e);
@@ -1369,7 +1633,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     function closeOperationsModal() {
-        if (operationsModal) operationsModal.classList.remove('show');
+        if (operationsModal) {
+            operationsModal.classList.remove('active');
+            operationsModal.classList.remove('show');
+        }
     }
     closeOperationsModalBtn?.addEventListener('click', closeOperationsModal);
     cancelOperationsBtn?.addEventListener('click', closeOperationsModal);
@@ -1415,9 +1682,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error saving operations:', e);
             alert('Error saving operations.');
         }
-    });
-
-    // --- MACHINES LOGIC ---
+    });    // --- MACHINES LOGIC ---
     async function fetchMachines() {
         try {
             const response = await fetch('/api/machines');
@@ -1425,52 +1690,135 @@ document.addEventListener('DOMContentLoaded', () => {
             availableMachines = machines; // update global list
             machinesBody.innerHTML = '';
             if (machines.length === 0) {
-                machinesBody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted)">No machines found.</td></tr>';
+                machinesBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No machines found.</td></tr>';
                 return;
             }
             machines.forEach(m => {
                 const tr = document.createElement('tr');
+                const deptVal = m.department || m.dept || '';
                 tr.innerHTML = `
-                    <td>${m.id}</td><td>${m.department || ''}</td><td>${m.name}</td>
+                    <td>${m.id}</td>
+                    <td>${escapeHtml(deptVal)}</td>
+                    <td>${escapeHtml(m.name || '')}</td>
                     <td class="actions">
                         <button class="btn btn-edit" onclick="editMachine(${m.id})">Edit</button>
                         <button class="btn btn-danger" onclick="deleteMachine(${m.id})">Delete</button>
                     </td>`;
                 machinesBody.appendChild(tr);
             });
+            if (typeof applyTableColFilters === 'function') {
+                applyTableColFilters('machinesTable');
+            }
         } catch (e) { console.error(e); }
     }
 
-    function openMachineModal(isEdit) {
-        machineModal.classList.add('show');
-        machineModalTitle.textContent = isEdit ? 'Edit Machine' : 'Add Machine';
+    async function openMachineModal(isEdit) {
+        if (machineModal) {
+            machineModal.classList.add('active');
+            machineModal.classList.add('show');
+        }
+        if (machineModalTitle) machineModalTitle.textContent = isEdit ? 'Edit Machine' : 'Add Machine';
+
+        const mDept = document.getElementById('machineDept');
+        if (mDept && mDept.options.length <= 1) {
+            try {
+                const res = await fetch('/api/departments');
+                if (res.ok) {
+                    const depts = await res.json();
+                    let html = '<option value="">-- Select Dept --</option>';
+                    depts.forEach(d => {
+                        html += `<option value="${d.name}">${d.name}</option>`;
+                    });
+                    mDept.innerHTML = html;
+                }
+            } catch(e) {}
+        }
     }
-    function closeMachineModal() { machineModal.classList.remove('show'); machineForm.reset(); document.getElementById('machineId').value = ''; }
+    function closeMachineModal() { 
+        if (machineModal) {
+            machineModal.classList.remove('active');
+            machineModal.classList.remove('show');
+        }
+        if (machineForm) machineForm.reset(); 
+        const mId = document.getElementById('machineId');
+        if (mId) mId.value = ''; 
+    }
     closeMachineBtn.addEventListener('click', closeMachineModal); cancelMachineBtn.addEventListener('click', closeMachineModal);
 
     machineForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('machineId').value;
-        const data = { name: document.getElementById('machineName').value, department: document.getElementById('machineDept').value };
+        const nameVal = (document.getElementById('machineName').value || '').trim();
+        const deptVal = document.getElementById('machineDept') ? document.getElementById('machineDept').value.trim() : '';
+
+        if (!nameVal) {
+            alert('Please enter a Machine Name');
+            return;
+        }
+
+        const data = { 
+            name: nameVal, 
+            dept: deptVal,
+            department: deptVal,
+            status: 'Active'
+        };
         const url = id ? `/api/machines/${id}` : '/api/machines';
-        await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-        closeMachineModal(); fetchMachines();
+        try {
+            const res = await fetch(url, { 
+                method: id ? 'PUT' : 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(data) 
+            });
+            if (res.ok) {
+                closeMachineModal();
+                const filterInputs = document.querySelectorAll('#machinesTable thead input');
+                filterInputs.forEach(inp => inp.value = '');
+                await fetchMachines();
+                alert(id ? 'Machine updated successfully!' : 'Machine added successfully!');
+            } else {
+                let errMsg = 'Failed to save machine';
+                try {
+                    const errData = await res.json();
+                    errMsg = errData.detail || errData.message || errMsg;
+                } catch (_) {
+                    errMsg = await res.text() || errMsg;
+                }
+                alert('Error saving machine: ' + errMsg);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Error saving machine: ' + (err.message || err));
+        }
     });
 
     window.deleteMachine = async (id) => {
         if (!checkAdminAccess()) return;
         if (confirm('Delete this machine?')) {
-            await fetch(`/api/machines/${id}`, { method: 'DELETE' });
-            fetchMachines();
+            try {
+                const res = await fetch(`/api/machines/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    await fetchMachines();
+                    alert('Machine deleted successfully!');
+                } else {
+                    const errMsg = await res.text();
+                    alert('Error deleting machine: ' + errMsg);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error deleting machine: ' + (err.message || err));
+            }
         }
     };
     window.editMachine = async (id) => {
         const res = await fetch('/api/machines'); const data = await res.json();
         const m = data.find(x => x.id === id);
         if (m) {
-            document.getElementById('machineId').value = m.id; document.getElementById('machineName').value = m.name;
-            document.getElementById('machineDept').value = m.department || '';
-            openMachineModal(true);
+            document.getElementById('machineId').value = m.id;
+            document.getElementById('machineName').value = m.name || '';
+            const mDept = document.getElementById('machineDept');
+            if (mDept) mDept.value = m.department || m.dept || '';
+            await openMachineModal(true);
+            if (mDept) mDept.value = m.department || m.dept || '';
         }
     };
 
@@ -1486,30 +1834,50 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             operators.forEach((o, idx) => {
                 const tr = document.createElement('tr');
+                const deptVal = o.department || o.dept || '';
                 tr.innerHTML = `
-                    <td>${idx + 1}</td><td>${o.department}</td><td>${o.name}</td><td>${o.designation || 'Operator'}</td>
+                    <td>${idx + 1}</td>
+                    <td>${escapeHtml(deptVal)}</td>
+                    <td>${escapeHtml(o.name || '')}</td>
+                    <td>${escapeHtml(o.designation || 'Operator')}</td>
                     <td class="actions">
                         <button class="btn btn-edit" onclick="editOperator(${o.id})">Edit</button>
                         <button class="btn btn-danger" onclick="deleteOperator(${o.id})">Delete</button>
                     </td>`;
                 operatorsBody.appendChild(tr);
             });
+            if (typeof applyTableColFilters === 'function') {
+                applyTableColFilters('operatorsTable');
+            }
         } catch (e) { console.error(e); }
     }
 
     function openOperatorModal(isEdit) {
-        operatorModal.classList.add('show');
-        operatorModalTitle.textContent = isEdit ? 'Edit Operator' : 'Add Operator';
+        if (operatorModal) {
+            operatorModal.classList.add('active');
+            operatorModal.classList.add('show');
+        }
+        if (operatorModalTitle) operatorModalTitle.textContent = isEdit ? 'Edit Operator' : 'Add Operator';
     }
-    function closeOperatorModal() { operatorModal.classList.remove('show'); operatorForm.reset(); document.getElementById('operatorId').value = ''; }
+    function closeOperatorModal() { 
+        if (operatorModal) {
+            operatorModal.classList.remove('active');
+            operatorModal.classList.remove('show');
+        }
+        if (operatorForm) operatorForm.reset(); 
+        const opId = document.getElementById('operatorId');
+        if (opId) opId.value = ''; 
+    }
     closeOperatorBtn.addEventListener('click', closeOperatorModal); cancelOperatorBtn.addEventListener('click', closeOperatorModal);
 
     operatorForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('operatorId').value;
+        const deptVal = document.getElementById('operatorDepartment') ? document.getElementById('operatorDepartment').value : '';
         const data = {
             name: document.getElementById('operatorName').value,
-            department: document.getElementById('operatorDepartment').value,
+            dept: deptVal,
+            department: deptVal,
             designation: document.getElementById('operatorDesignation').value || 'Operator'
         };
         const url = id ? `/api/operators/${id}` : '/api/operators';
@@ -1529,9 +1897,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const o = data.find(x => x.id === id);
         if (o) {
             document.getElementById('operatorId').value = o.id; 
-            document.getElementById('operatorName').value = o.name;
-            document.getElementById('operatorDepartment').value = o.department;
-            document.getElementById('operatorDesignation').value = o.designation || 'Operator';
+            document.getElementById('operatorName').value = o.name || '';
+            const deptEl = document.getElementById('operatorDepartment');
+            if (deptEl) deptEl.value = o.department || o.dept || '';
+            const desigEl = document.getElementById('operatorDesignation');
+            if (desigEl) desigEl.value = o.designation || 'Operator';
             openOperatorModal(true);
         }
     };
@@ -1539,7 +1909,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('deleteAllOperatorsBtn')?.addEventListener('click', async () => {
         if (confirm('Are you sure you want to delete ALL operator records? This cannot be undone.')) {
             try {
-                const res = await fetch('/api/operators/all', { method: 'DELETE' });
+                const res = await fetch('/api/operators/clear-all', { method: 'DELETE' });
                 if (res.ok) {
                     alert('All operators deleted successfully.');
                     fetchOperators();
@@ -1758,10 +2128,29 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    async function renderAttendanceGrid() {
+    let cachedOperatorsForAtt = [];
+    async function loadOperatorsForDatalist() {
+        if (cachedOperatorsForAtt.length === 0) {
+            try {
+                const res = await fetch('/api/operators');
+                if (res.ok) cachedOperatorsForAtt = await res.json();
+            } catch (e) { console.error(e); }
+        }
+        const datalist = document.getElementById('attendanceOperatorDatalist');
+        if (datalist && Array.isArray(cachedOperatorsForAtt)) {
+            datalist.innerHTML = cachedOperatorsForAtt
+                .filter(op => op && op.name)
+                .map(op => `<option value="${op.name}">${op.dept ? op.dept + ' - ' : ''}${op.designation || 'Operator'}</option>`)
+                .join('');
+        }
+    }
+
+    async function renderAttendanceGrid(forceSource = null) {
         if (!attendanceMonthPicker || !attendanceHead || !attendanceBody) return;
         const monthVal = attendanceMonthPicker.value;
         if (!monthVal) return;
+
+        loadOperatorsForDatalist();
 
         const parts = monthVal.split('-');
         const year = parseInt(parts[0]);
@@ -1772,7 +2161,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Build Table Header with Sticky Positioning & Light Green Holiday Headers
         let trHead = '<tr style="background-color: #f1f5f9; font-weight: bold;">';
-        trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 140px; text-align: left; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;">Name</th>';
+        trHead += '<th style="border: 1px solid #cbd5e1; padding: 4px; width: 34px; text-align: center; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;"></th>';
+        trHead += '<th id="attSortSlnoTh" style="border: 1px solid #cbd5e1; padding: 6px; width: 60px; min-width: 50px; text-align: center; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10; cursor: pointer;" title="Click to sort by Sl No">Sl No ⇅</th>';
+        trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 150px; text-align: left; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;">Name</th>';
         trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 80px; text-align: left; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;">Dept</th>';
         trHead += '<th style="border: 1px solid #cbd5e1; padding: 6px; min-width: 110px; text-align: left; position: sticky; top: 0; background-color: #f1f5f9; z-index: 10;">Designation</th>';
 
@@ -1792,44 +2183,177 @@ document.addEventListener('DOMContentLoaded', () => {
         trHead += '</tr>';
         attendanceHead.innerHTML = trHead;
 
-        // Fetch existing attendance for this month
-        let existingRecords = [];
-        try {
-            const res = await fetch(`/api/attendance?month_year=${monthVal}`);
-            existingRecords = await res.json();
-        } catch (e) { console.error(e); }
-
-        // Fetch operators to auto-populate employees if attendance is new
-        let allOperators = [];
-        try {
-            const opRes = await fetch('/api/operators');
-            allOperators = await opRes.json();
-        } catch (e) { console.error(e); }
-
-        // Group operators in exact sequence from Operator Master and map past hours
         const empMap = {};
-        allOperators.forEach(op => {
-            empMap[op.name] = {
-                name: op.name,
-                dept: op.department || '',
-                designation: op.designation || 'Operator',
-                days: {}
-            };
-        });
+        const empOrder = [];
 
-        existingRecords.forEach(r => {
-            if (empMap[r.employee_name]) {
-                empMap[r.employee_name].days[r.day] = r.hours;
+        if (forceSource === 'operator_master') {
+            // Explicitly load/reset from Operator Master
+            try {
+                const opRes = await fetch('/api/operators');
+                if (opRes.ok) {
+                    const ops = await opRes.json();
+                    if (Array.isArray(ops)) {
+                        ops.forEach((op, idx) => {
+                            if (op && op.name) {
+                                empMap[op.name] = {
+                                    slno: idx + 1,
+                                    name: op.name,
+                                    dept: op.dept || op.department || '',
+                                    designation: op.designation || op.role || 'Operator',
+                                    order: idx,
+                                    days: {}
+                                };
+                                empOrder.push(op.name);
+                            }
+                        });
+                    }
+                }
+            } catch (e) { console.error(e); }
+        } else if (forceSource === 'prev_month') {
+            // Explicitly copy from previous month
+            const prevDate = new Date(year, month - 2, 1);
+            const prevMonthVal = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+            try {
+                const prevRes = await fetch(`/api/attendance?month_year=${prevMonthVal}`);
+                if (prevRes.ok) {
+                    const prevRecords = await prevRes.json();
+                    if (Array.isArray(prevRecords) && prevRecords.length > 0) {
+                        prevRecords.forEach(r => {
+                            const ename = (r.employee_name || '').trim();
+                            if (!ename) return;
+                            const recSlno = (r.slno !== undefined && r.slno !== null && Number(r.slno) > 0) ? Number(r.slno) : null;
+                            if (!empMap[ename]) {
+                                empMap[ename] = {
+                                    slno: recSlno,
+                                    name: ename,
+                                    dept: r.dept || '',
+                                    designation: r.designation || 'Operator',
+                                    order: empOrder.length,
+                                    days: {}
+                                };
+                                empOrder.push(ename);
+                            }
+                        });
+                    }
+                }
+            } catch (e) { console.error(e); }
+        } else {
+            // Normal load: Check this month's attendance first
+            let existingRecords = [];
+            try {
+                const res = await fetch(`/api/attendance?month_year=${monthVal}`);
+                if (res.ok) existingRecords = await res.json();
+            } catch (e) { console.error(e); }
+
+            if (Array.isArray(existingRecords) && existingRecords.length > 0) {
+                // ATTENDANCE EXISTS FOR THIS MONTH - COMPLETELY INDEPENDENT OF OPERATOR MASTER
+                existingRecords.forEach(r => {
+                    const ename = (r.employee_name || '').trim();
+                    if (!ename) return;
+                    const recSlno = (r.slno !== undefined && r.slno !== null && Number(r.slno) > 0) ? Number(r.slno) : null;
+                    if (!empMap[ename]) {
+                        empMap[ename] = {
+                            slno: recSlno,
+                            name: ename,
+                            dept: r.dept || '',
+                            designation: r.designation || 'Operator',
+                            order: empOrder.length,
+                            days: {}
+                        };
+                        empOrder.push(ename);
+                    } else {
+                        if (recSlno !== null && (!empMap[ename].slno || empMap[ename].slno <= 0)) {
+                            empMap[ename].slno = recSlno;
+                        }
+                        if (r.dept && !empMap[ename].dept) empMap[ename].dept = r.dept;
+                        if (r.designation && !empMap[ename].designation) empMap[ename].designation = r.designation;
+                    }
+                    if (r.day > 0 && r.hours && r.hours.trim() !== '') {
+                        empMap[ename].days[r.day] = r.hours.trim();
+                    }
+                });
+            } else {
+                // NO RECORDS FOR THIS MONTH YET: Try inheriting from previous month
+                const prevDate = new Date(year, month - 2, 1);
+                const prevMonthVal = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+                let prevRecords = [];
+                try {
+                    const prevRes = await fetch(`/api/attendance?month_year=${prevMonthVal}`);
+                    if (prevRes.ok) prevRecords = await prevRes.json();
+                } catch (e) { console.error(e); }
+
+                if (Array.isArray(prevRecords) && prevRecords.length > 0) {
+                    prevRecords.forEach(r => {
+                        const ename = (r.employee_name || '').trim();
+                        if (!ename) return;
+                        const recSlno = (r.slno !== undefined && r.slno !== null && Number(r.slno) > 0) ? Number(r.slno) : null;
+                        if (!empMap[ename]) {
+                            empMap[ename] = {
+                                slno: recSlno,
+                                name: ename,
+                                dept: r.dept || '',
+                                designation: r.designation || 'Operator',
+                                order: empOrder.length,
+                                days: {}
+                            };
+                            empOrder.push(ename);
+                        }
+                    });
+                } else {
+                    // Fallback to Operator Master as initial seed
+                    try {
+                        const opRes = await fetch('/api/operators');
+                        if (opRes.ok) {
+                            const ops = await opRes.json();
+                            if (Array.isArray(ops)) {
+                                ops.forEach((op, idx) => {
+                                    if (op && op.name) {
+                                        empMap[op.name] = {
+                                            slno: idx + 1,
+                                            name: op.name,
+                                            dept: op.dept || op.department || '',
+                                            designation: op.designation || op.role || 'Operator',
+                                            order: idx,
+                                            days: {}
+                                        };
+                                        empOrder.push(op.name);
+                                    }
+                                });
+                            }
+                        }
+                    } catch (e) { console.error(e); }
+                }
             }
-        });
+        }
 
         let empList = Object.values(empMap);
+
+        // Sort empList by slno:
+        empList.sort((a, b) => {
+            const aHasSl = a.slno !== null && a.slno !== undefined && a.slno > 0;
+            const bHasSl = b.slno !== null && b.slno !== undefined && b.slno > 0;
+            if (aHasSl && bHasSl) return a.slno - b.slno;
+            if (aHasSl) return -1;
+            if (bHasSl) return 1;
+            return (a.order || 0) - (b.order || 0);
+        });
+
+        // Ensure every employee has an assigned slno (defaulting sequentially 1, 2, 3...)
+        let curSl = 1;
+        empList.forEach((emp) => {
+            if (!emp.slno || emp.slno <= 0) {
+                emp.slno = curSl;
+            } else {
+                curSl = emp.slno;
+            }
+            curSl++;
+        });
 
         attendanceBody.innerHTML = '';
 
         if (empList.length === 0) {
             for (let i = 0; i < 5; i++) {
-                empList.push({ name: '', dept: '', designation: '', days: {} });
+                empList.push({ slno: i + 1, name: '', dept: '', designation: '', days: {} });
             }
         }
 
@@ -1838,7 +2362,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function addAttendanceRow(emp = { name: '', dept: '', designation: '', days: {} }, daysInMonth = 31, year = 2026, month = 8) {
+    function addAttendanceRow(emp = { slno: '', name: '', dept: '', designation: '', days: {} }, daysInMonth = 31, year = 2026, month = 8) {
         if (!attendanceMonthPicker) return;
         const monthVal = attendanceMonthPicker.value;
         if (monthVal) {
@@ -1850,13 +2374,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const holidaysSet = new Set(getHolidaysForMonth(monthVal));
 
+        // If slno is not passed, determine sequential slno based on previous row
+        let rowSlno = emp.slno;
+        if (rowSlno === undefined || rowSlno === null || rowSlno === '' || rowSlno === 0) {
+            const lastRow = attendanceBody ? attendanceBody.querySelector('tr:last-child') : null;
+            if (lastRow) {
+                const prevVal = parseInt(lastRow.querySelector('.att-slno')?.value, 10);
+                rowSlno = !isNaN(prevVal) ? (prevVal + 1) : (attendanceBody.querySelectorAll('tr').length + 1);
+            } else {
+                rowSlno = 1;
+            }
+        }
+
         const tr = document.createElement('tr');
         tr.style.height = '32px';
 
         let rowHtml = `
-            <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-name" value="${emp.name || ''}" placeholder="Name" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;"></td>
-            <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-dept" value="${emp.dept || ''}" placeholder="Dept" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;"></td>
-            <td style="border: 1px solid #cbd5e1; padding: 2px;"><input type="text" class="att-desig" value="${emp.designation || 'Operator'}" placeholder="Designation" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;"></td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px; width: 34px; text-align: center;">
+                <button type="button" class="btn-att-del-row" title="Remove employee from sheet" style="border: 1px solid #fecaca; background: #fef2f2; color: #ef4444; border-radius: 4px; cursor: pointer; font-size: 0.8rem; padding: 1px 5px; font-weight: bold; line-height: 1.2;">✕</button>
+            </td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px; width: 60px; text-align: center;">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" class="att-slno" value="${rowSlno || ''}" placeholder="" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px 2px; text-align: center; background: transparent; font-weight: 600;">
+            </td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px;">
+                <input type="text" class="att-name" list="attendanceOperatorDatalist" value="${emp.name || ''}" placeholder="Name" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;">
+            </td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px;">
+                <input type="text" class="att-dept" value="${emp.dept || ''}" placeholder="Dept" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;">
+            </td>
+            <td style="border: 1px solid #cbd5e1; padding: 2px;">
+                <input type="text" class="att-desig" value="${emp.designation || 'Operator'}" placeholder="Designation" style="width: 100%; border: none; font-size: 0.85rem; padding: 4px; background: transparent;">
+            </td>
         `;
 
         for (let d = 1; d <= daysInMonth; d++) {
@@ -1882,6 +2430,98 @@ document.addEventListener('DOMContentLoaded', () => {
         tr.innerHTML = rowHtml;
         attendanceBody.appendChild(tr);
     }
+
+    // Auto-fill logic: when sl no filled in a row, subsequent rows to add 1 to previous row value
+    function handleAttendanceSlnoCascade(targetInput) {
+        if (!targetInput || !targetInput.classList.contains('att-slno')) return;
+        const raw = targetInput.value.trim();
+        if (raw === '') return;
+        let val = parseInt(raw, 10);
+        if (isNaN(val)) return;
+
+        let nextTr = targetInput.closest('tr')?.nextElementSibling;
+        while (nextTr) {
+            val++;
+            const nextInput = nextTr.querySelector('.att-slno');
+            if (nextInput) {
+                nextInput.value = val;
+            }
+            nextTr = nextTr.nextElementSibling;
+        }
+    }
+
+    attendanceBody?.addEventListener('input', (e) => {
+        if (e.target.classList.contains('att-slno')) {
+            handleAttendanceSlnoCascade(e.target);
+        }
+    });
+
+    attendanceBody?.addEventListener('change', (e) => {
+        if (e.target.classList.contains('att-slno')) {
+            handleAttendanceSlnoCascade(e.target);
+        }
+    });
+
+    // Auto-complete Dept and Designation when Name is picked or typed
+    attendanceBody?.addEventListener('change', async (e) => {
+        if (e.target.classList.contains('att-name')) {
+            const enteredName = e.target.value.trim().toUpperCase();
+            if (!enteredName) return;
+            const tr = e.target.closest('tr');
+            if (!tr) return;
+
+            const deptInput = tr.querySelector('.att-dept');
+            const desigInput = tr.querySelector('.att-desig');
+
+            if (cachedOperatorsForAtt.length === 0) {
+                await loadOperatorsForDatalist();
+            }
+            const match = cachedOperatorsForAtt.find(o => (o.name || '').trim().toUpperCase() === enteredName);
+            if (match) {
+                if (deptInput && !deptInput.value.trim()) {
+                    deptInput.value = match.dept || match.department || '';
+                }
+                if (desigInput && (!desigInput.value.trim() || desigInput.value.trim() === 'Operator')) {
+                    desigInput.value = match.designation || match.role || 'Operator';
+                }
+            }
+        }
+    });
+
+    // Delete row button
+    attendanceBody?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.btn-att-del-row');
+        if (btn) {
+            const tr = btn.closest('tr');
+            if (tr) {
+                const ename = tr.querySelector('.att-name')?.value.trim();
+                if (!ename || confirm(`Remove "${ename}" from this month's attendance sheet?`)) {
+                    tr.remove();
+                }
+            }
+        }
+    });
+
+    // Helper to sort DOM rows by Sl No
+    function sortAttendanceRowsBySlno() {
+        if (!attendanceBody) return;
+        const rows = Array.from(attendanceBody.querySelectorAll('tr'));
+        rows.sort((a, b) => {
+            const vA = parseInt(a.querySelector('.att-slno')?.value, 10);
+            const vB = parseInt(b.querySelector('.att-slno')?.value, 10);
+            const numA = isNaN(vA) ? 999999 : vA;
+            const numB = isNaN(vB) ? 999999 : vB;
+            return numA - numB;
+        });
+        rows.forEach(r => attendanceBody.appendChild(r));
+    }
+
+    // Allow sorting rows by clicking on Sl No header
+    attendanceHead?.addEventListener('click', (e) => {
+        if (e.target && (e.target.id === 'attSortSlnoTh' || e.target.closest('#attSortSlnoTh'))) {
+            sortAttendanceRowsBySlno();
+        }
+    });
 
     // Arrow Key Navigation for Attendance Grid
     attendanceBody?.addEventListener('keydown', (e) => {
@@ -1912,21 +2552,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (targetInput) { targetInput.focus(); targetInput.select(); }
             }
         } else if (key === 'ArrowLeft') {
-            if (input.selectionStart === 0 && input.selectionEnd === 0) {
+            let atStart = false;
+            try {
+                atStart = (input.selectionStart === 0 && input.selectionEnd === 0);
+            } catch (err) {
+                atStart = true;
+            }
+            if (atStart) {
                 e.preventDefault();
                 const prevTd = currentTd.previousElementSibling;
                 if (prevTd) {
                     const targetInput = prevTd.querySelector('input');
-                    if (targetInput) { targetInput.focus(); targetInput.select(); }
+                    if (targetInput) { 
+                        targetInput.focus(); 
+                        try { targetInput.select(); } catch(e) {}
+                    }
                 }
             }
         } else if (key === 'ArrowRight') {
-            if (input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
+            let atEnd = false;
+            try {
+                atEnd = (input.selectionStart === input.value.length && input.selectionEnd === input.value.length);
+            } catch (err) {
+                atEnd = true;
+            }
+            if (atEnd) {
                 e.preventDefault();
                 const nextTd = currentTd.nextElementSibling;
                 if (nextTd) {
                     const targetInput = nextTd.querySelector('input');
-                    if (targetInput) { targetInput.focus(); targetInput.select(); }
+                    if (targetInput) { 
+                        targetInput.focus(); 
+                        try { targetInput.select(); } catch(e) {}
+                    }
                 }
             }
         }
@@ -1934,6 +2592,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('addAttendanceEmpBtn')?.addEventListener('click', () => {
         addAttendanceRow();
+        const newRow = attendanceBody.querySelector('tr:last-child');
+        newRow?.querySelector('.att-name')?.focus();
+    });
+
+    document.getElementById('copyPrevMonthAttBtn')?.addEventListener('click', () => {
+        if (confirm('Load employee list and order from previous month? (Any unsaved edits in current view will be replaced)')) {
+            renderAttendanceGrid('prev_month');
+        }
+    });
+
+    document.getElementById('loadFromOpMasterAttBtn')?.addEventListener('click', () => {
+        if (confirm('Reset and load all employees from Operator Master? (Any unsaved edits in current view will be replaced)')) {
+            renderAttendanceGrid('operator_master');
+        }
     });
 
     document.getElementById('saveAttendanceBtn')?.addEventListener('click', async () => {
@@ -1948,6 +2620,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const entries = [];
 
         rows.forEach(tr => {
+            const slno = parseInt(tr.querySelector('.att-slno')?.value, 10) || 0;
             const name = tr.querySelector('.att-name')?.value.trim();
             const dept = tr.querySelector('.att-dept')?.value.trim();
             const desig = tr.querySelector('.att-desig')?.value.trim();
@@ -1960,6 +2633,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (hrs !== '') {
                         hasHours = true;
                         entries.push({
+                            slno: slno,
                             employee_name: name,
                             dept: dept || '',
                             designation: desig || 'Operator',
@@ -1969,14 +2643,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
 
-                // Save employee details and designation even if no hours are entered yet
+                // Save employee details even if no hours entered yet (day: 0, hours: "")
                 if (!hasHours) {
                     entries.push({
+                        slno: slno,
                         employee_name: name,
                         dept: dept || '',
                         designation: desig || 'Operator',
-                        day: 1,
-                        hours: "0"
+                        day: 0,
+                        hours: ""
                     });
                 }
             }
@@ -1992,9 +2667,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
             });
             if (res.ok) {
-                alert(`Attendance for ${monthVal} saved successfully!`);
+                const data = await res.json().catch(() => ({}));
+                alert(data.message || `Attendance for ${monthVal} saved successfully!`);
             } else {
-                alert('Failed to save attendance.');
+                const errData = await res.json().catch(() => ({}));
+                alert(`Failed to save attendance: ${errData.detail || 'Server error'}`);
             }
         } catch (e) {
             console.error(e);
@@ -2012,8 +2689,8 @@ document.addEventListener('DOMContentLoaded', () => {
             daysInMonth = new Date(year, month, 0).getDate();
         }
 
-        // Build headers row
-        const headers = ['NAME', 'DEPT', 'DESIGNATION'];
+        // Build headers row with SL NO first
+        const headers = ['SL NO', 'NAME', 'DEPT', 'DESIGNATION'];
         for (let d = 1; d <= daysInMonth; d++) {
             headers.push(d.toString());
         }
@@ -2023,12 +2700,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Build data rows from table inputs
         const rows = document.querySelectorAll('#attendanceBody tr');
         rows.forEach(tr => {
+            const slnoVal = tr.querySelector('.att-slno')?.value.trim() || '';
             const name = tr.querySelector('.att-name')?.value.trim() || '';
             const dept = tr.querySelector('.att-dept')?.value.trim() || '';
             const desig = tr.querySelector('.att-desig')?.value.trim() || '';
 
             if (name || dept) {
-                const rowData = [name, dept, desig];
+                const rowData = [slnoVal ? (isNaN(Number(slnoVal)) ? slnoVal : Number(slnoVal)) : '', name, dept, desig];
                 const dayInputs = tr.querySelectorAll('.att-day-val');
                 dayInputs.forEach(input => {
                     const val = input.value.trim();
@@ -2834,30 +3512,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             populateStatusCustomerDropdown();
 
-            const [schedRes, logRes, rmLogRes, htLogRes, htReceiptLogRes, pcLogRes, pcReceiptLogRes, rmRes] = await Promise.all([
-                fetch('/api/schedule'),
-                fetch('/api/prodlog'),
-                fetch('/api/rawmateriallogs'),
-                fetch('/api/ht_logs'),
-                fetch('/api/ht_receipt_logs'),
-                fetch('/api/pc_logs'),
-                fetch('/api/pc_receipt_logs'),
-                fetch('/api/rawmaterials')
+            const [allSchedules, allLogs, allRmLogs, allHtLogs, allHtReceiptLogs, allPcLogs, allPcReceiptLogs, allRawMaterials] = await Promise.all([
+                fetch('/api/schedule').then(r => r.ok ? r.json() : []).catch(() => []),
+                fetch('/api/prodlog').then(r => r.ok ? r.json() : []).catch(() => []),
+                fetch('/api/rawmateriallogs').then(r => r.ok ? r.json() : []).catch(() => []),
+                fetch('/api/ht_logs').then(r => r.ok ? r.json() : []).catch(() => []),
+                fetch('/api/ht_receipt_logs').then(r => r.ok ? r.json() : []).catch(() => []),
+                fetch('/api/pc_logs').then(r => r.ok ? r.json() : []).catch(() => []),
+                fetch('/api/pc_receipt_logs').then(r => r.ok ? r.json() : []).catch(() => []),
+                fetch('/api/rawmaterials').then(r => r.ok ? r.json() : []).catch(() => [])
             ]);
             
-            if (requestId !== currentScheduleStatusRequestId) {
-                return;
-            }
-
-            const allSchedules = await schedRes.json();
-            const allLogs = await logRes.json();
-            const allRmLogs = await rmLogRes.json();
-            const allHtLogs = await htLogRes.json();
-            const allHtReceiptLogs = await htReceiptLogRes.json();
-            const allPcLogs = await pcLogRes.json();
-            const allPcReceiptLogs = await pcReceiptLogRes.json();
-            const allRawMaterials = await rmRes.json();
-
             if (requestId !== currentScheduleStatusRequestId) {
                 return;
             }
@@ -2918,7 +3583,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     (s.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()
                 );
                 const pendingSchedules = allPartSchedules.filter(s => s.status === 'Pending' || !s.status);
-                const schedQty = pendingSchedules.reduce((sum, s) => sum + (s.qty || 0), 0);
+                const schedQty = pendingSchedules.reduce((sum, s) => sum + (parseInt(s.qty, 10) || 0), 0);
                 const isCompleted = allPartSchedules.length > 0 && (pendingSchedules.length === 0 || allPartSchedules.every(s => (s.status || '').trim().toLowerCase() === 'completed'));
                 
                 let rowHtml = `<td>${cust || '-'}</td><td>${partno}</td><td>${schedQty}</td>`;
@@ -3019,6 +3684,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ncProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const rejectionProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rejection').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 const rfdProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const totalDespAllTime = allRmLogs.filter(l => {
+                    const isMatchPart = (l.finish_part_no || '').trim().toUpperCase() === (partno || '').trim().toUpperCase();
+                    return isMatchPart && l.type === 'despatch';
+                }).reduce((sum, l) => sum + (l.qty || 0), 0);
                 const despProd = allRmLogs.filter(l => {
                     const isMatchPart = (l.finish_part_no || '').trim().toUpperCase() === (partno || '').trim().toUpperCase();
                     const isDespatch = l.type === 'despatch';
@@ -3060,7 +3729,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
                 const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
                 const forInsBal = Math.max(0, effectiveForIns - totalInspected);
-                const rfdBal = rfdProd - despProd;
+                const rfdBal = rfdProd - totalDespAllTime;
                 const rfdPhyVal = (partObj && partObj.rfd_phy !== undefined && partObj.rfd_phy !== null) ? partObj.rfd_phy : 0;
 
                 rowHtml += `<td>${deburBal}</td>`;
@@ -4253,6 +4922,43 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    function isDateInMonth(dStr, monthStr) {
+        if (!dStr || !monthStr) return false;
+        if (typeof parseLocalDateStr === 'function') {
+            const iso = parseLocalDateStr(dStr);
+            if (iso && iso.startsWith(monthStr)) return true;
+        }
+        const raw = String(dStr).trim();
+        if (raw.startsWith(monthStr)) return true;
+        const mParts = monthStr.split('-');
+        if (mParts.length === 2) {
+            const ty = parseInt(mParts[0], 10);
+            const tm = parseInt(mParts[1], 10);
+            const dp = raw.split(/[\/\-\s]/);
+            if (dp.length >= 3) {
+                let y, m;
+                if (dp[0].length === 4) {
+                    y = parseInt(dp[0], 10);
+                    m = parseInt(dp[1], 10);
+                } else if (dp[2].length === 4) {
+                    y = parseInt(dp[2], 10);
+                    const p1 = parseInt(dp[0], 10);
+                    const p2 = parseInt(dp[1], 10);
+                    if (y === ty) {
+                        if (p2 === tm) return true; // DD/MM/YYYY
+                        if (p1 === tm && p2 <= 31) return true; // MM/DD/YYYY
+                    }
+                }
+                if (y === ty && m === tm) return true;
+            } else if (dp.length === 2) {
+                const p1 = parseInt(dp[0], 10);
+                const p2 = parseInt(dp[1], 10);
+                if (p2 === tm || (p1 === tm && p2 <= 31)) return true;
+            }
+        }
+        return false;
+    }
+
     // --- DEBUR LOGIC ---
     let deburAllParts = [];
     let deburOperatorsLoaded = false;
@@ -4261,36 +4967,90 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function initDebur() {
         try {
+            if (!document.getElementById('deburMonth').value) {
+                document.getElementById('deburMonth').value = new Date().toISOString().slice(0, 7);
+            }
             if (!document.getElementById('deburDate').value) {
                 document.getElementById('deburDate').valueAsDate = new Date();
             }
+
+            const deburMonthEl = document.getElementById('deburMonth');
+            if (deburMonthEl && !deburMonthEl._hasChangeListener) {
+                deburMonthEl._hasChangeListener = true;
+                deburMonthEl.addEventListener('change', () => {
+                    const mVal = deburMonthEl.value;
+                    if (mVal) {
+                        const curDateVal = document.getElementById('deburDate').value;
+                        if (!curDateVal || !curDateVal.startsWith(mVal)) {
+                            const now = new Date();
+                            const currentMonthStr = now.toISOString().slice(0, 7);
+                            if (mVal === currentMonthStr) {
+                                document.getElementById('deburDate').value = now.toISOString().split('T')[0];
+                            } else {
+                                document.getElementById('deburDate').value = `${mVal}-01`;
+                            }
+                        }
+                    }
+                    fetchDeburStatus();
+                    fetchDeburLogs();
+                });
+            }
+
+            const deburDateEl = document.getElementById('deburDate');
+            if (deburDateEl && !deburDateEl._hasChangeListener) {
+                deburDateEl._hasChangeListener = true;
+                deburDateEl.addEventListener('change', () => {
+                    const dVal = deburDateEl.value;
+                    if (dVal && dVal.length >= 7) {
+                        const mVal = dVal.slice(0, 7);
+                        const monthInput = document.getElementById('deburMonth');
+                        if (monthInput && monthInput.value !== mVal) {
+                            monthInput.value = mVal;
+                            fetchDeburStatus();
+                            fetchDeburLogs();
+                        }
+                    }
+                });
+            }
             
             if (deburAllParts.length === 0) {
-                const partsRes = await fetch('/api/partmaster');
-                deburAllParts = await partsRes.json();
+                try {
+                    const partsRes = await fetch('/api/partmaster');
+                    deburAllParts = await partsRes.json();
+                } catch(e) { deburAllParts = []; }
             }
             if (!deburOperatorsLoaded) {
-                const opRes = await fetch('/api/operators');
-                const operators = await opRes.json();
-                operators.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                const sel = document.getElementById('deburOperator');
-                if (sel) {
-                    sel.innerHTML = '<option value="">-- Select Operator --</option>';
-                    operators.forEach(o => {
-                        const opt = document.createElement('option');
-                        opt.value = o.name;
-                        opt.textContent = o.name;
-                        sel.appendChild(opt);
-                    });
-                }
-                deburOperatorsLoaded = true;
+                try {
+                    const opRes = await fetch('/api/operators');
+                    const operators = await opRes.json();
+                    operators.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                    const sel = document.getElementById('deburOperator');
+                    if (sel) {
+                        sel.innerHTML = '<option value="">-- Select Operator --</option>';
+                        operators.forEach(o => {
+                            const opt = document.createElement('option');
+                            opt.value = o.name;
+                            opt.textContent = o.name;
+                            sel.appendChild(opt);
+                        });
+                    }
+                    deburOperatorsLoaded = true;
+                } catch(e) { console.error('Error loading debur operators', e); }
             }
             
             fetchDeburLogs();
             
             const deptSelect = document.getElementById('deburDeptSelect');
-            if (deptSelect.value) {
-                fetchDeburStatus();
+            if (deptSelect) {
+                if (!deptSelect.value) {
+                    const firstOption = Array.from(deptSelect.options).find(o => o.value && o.value.trim() !== '');
+                    if (firstOption) {
+                        deptSelect.value = firstOption.value;
+                    }
+                }
+                if (deptSelect.value) {
+                    fetchDeburStatus();
+                }
             }
         } catch (e) {
             console.error('Error init debur', e);
@@ -4300,89 +5060,172 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchDeburStatus() {
         const dept = document.getElementById('deburDeptSelect').value;
         const tbody = document.getElementById('deburPartsBody');
-        tbody.innerHTML = '';
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;"><i class="fas fa-spinner fa-spin"></i> Loading pending parts...</td></tr>';
         if (!dept) {
             tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">Select a department</td></tr>';
             return;
         }
 
+        const month = document.getElementById('deburMonth')?.value || (document.getElementById('deburDate')?.value || '').slice(0, 7) || new Date().toISOString().slice(0, 7);
+
         try {
+            if (!deburAllParts || deburAllParts.length === 0) {
+                try {
+                    const partsRes = await fetch('/api/partmaster');
+                    deburAllParts = await partsRes.json();
+                } catch(e) { deburAllParts = []; }
+            }
+
             const [schedRes, logRes, pcReceiptRes, htReceiptRes] = await Promise.all([
-                fetch('/api/schedule'),
-                fetch('/api/prodlog'),
-                fetch('/api/pc_receipt_logs').catch(() => null),
-                fetch('/api/ht_receipt_logs').catch(() => null)
+                fetch('/api/schedule').then(r => r.ok ? r.json() : []).catch(() => []),
+                fetch('/api/prodlog').then(r => r.ok ? r.json() : []).catch(() => []),
+                fetch('/api/pc_receipt_logs').then(r => r.ok ? r.json() : []).catch(() => []),
+                fetch('/api/ht_receipt_logs').then(r => r.ok ? r.json() : []).catch(() => [])
             ]);
             
-            const allSchedules = await schedRes.json();
-            const allLogs = await logRes.json();
-            const allPcReceiptLogs = (pcReceiptRes && pcReceiptRes.ok) ? await pcReceiptRes.json() : [];
-            const allHtReceiptLogs = (htReceiptRes && htReceiptRes.ok) ? await htReceiptRes.json() : [];
-            
-            const deptSchedules = allSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase() && (s.status === 'Pending' || !s.status));
-            const uniqueParts = [...new Set(deptSchedules.map(s => s.partno))];
+            const allSchedules = schedRes || [];
+            const allLogs = logRes || [];
+            const allPcReceiptLogs = pcReceiptRes || [];
+            const allHtReceiptLogs = htReceiptRes || [];
+
+            // Filter logs for the selected month
+            const monthLogs = allLogs.filter(l => isDateInMonth(l.date, month));
+            const monthPcReceiptLogs = allPcReceiptLogs.filter(l => isDateInMonth(l.date, month));
+            const monthHtReceiptLogs = allHtReceiptLogs.filter(l => isDateInMonth(l.date, month));
+
+            const masterDeptParts = (deburAllParts || [])
+                .filter(p => (p.department || '').trim().toUpperCase() === dept.trim().toUpperCase() || (p.dept || '').trim().toUpperCase() === dept.trim().toUpperCase())
+                .map(p => (p.partno || p.part_no || '').trim());
+
+            const schedDeptParts = allSchedules
+                .filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase())
+                .map(s => (s.partno || '').trim());
+
+            const prodLogDeptParts = allLogs
+                .filter(l => (l.department || '').trim().toUpperCase() === dept.trim().toUpperCase() || (l.dept || '').trim().toUpperCase() === dept.trim().toUpperCase())
+                .map(l => (l.partno || '').trim());
+
+            const uniqueParts = [...new Set([...masterDeptParts, ...schedDeptParts, ...prodLogDeptParts])].filter(Boolean);
+            uniqueParts.sort((a, b) => a.localeCompare(b));
             
             if (uniqueParts.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">No pending parts for this department</td></tr>';
                 return;
             }
+
+            // Fetch operations for all parts in parallel
+            const operationsMap = {};
+            await Promise.all(uniqueParts.map(async (partno) => {
+                const partObj = deburAllParts.find(p => (p.partno || p.part_no || '').trim().toUpperCase() === (partno || '').trim().toUpperCase());
+                if (partObj && partObj.id) {
+                    try {
+                        const opsRes = await fetch(`/api/partmaster/${partObj.id}/operations`);
+                        operationsMap[partno] = await opsRes.json();
+                    } catch(e) { operationsMap[partno] = []; }
+                } else {
+                    operationsMap[partno] = [];
+                }
+            }));
             
+            tbody.innerHTML = '';
             for (const partno of uniqueParts) {
-                const partObj = deburAllParts.find(p => (p.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase());
-                if (!partObj) continue;
-                
-                const opsRes = await fetch(`/api/partmaster/${partObj.id}/operations`);
-                const operations = await opsRes.json();
-                
-                if (operations.length === 0) continue;
-                
-                operations.sort((a, b) => (parseInt(a.opn_no) || 0) - (parseInt(b.opn_no) || 0));
-                const lastOp = operations[operations.length - 1];
-                const lastOpnClean = (lastOp.opn_no || '').trim().toLowerCase();
-                const lastDescClean = (lastOp.description || '').trim().toLowerCase();
-                const lastMachClean = (lastOp.machine || '').trim().toLowerCase();
+                let operations = operationsMap[partno] || [];
+                // Filter out non-manufacturing operations if any (like debur, for ins, rfd, rework, rejection, nc)
+                const mfgOperations = operations.filter(o => {
+                    const opn = (o.opn_no || '').toString().trim().toLowerCase();
+                    const desc = (o.description || '').toString().trim().toLowerCase();
+                    return !['debur', 'for ins', 'rfd', 'rework', 'rejection', 'nc', 'idle'].includes(opn) &&
+                           !['debur', 'deburring', 'for ins', 'inspection', 'final inspection', 'rfd'].includes(desc);
+                });
+                mfgOperations.sort((a, b) => (parseInt(a.opn_no) || 0) - (parseInt(b.opn_no) || 0));
 
-                const isLastPc = lastOpnClean === 'pc' || lastDescClean === 'pc' || lastDescClean.includes('powder coat') || lastDescClean.includes('pc') || lastMachClean === 'pc';
-                const isLastHt = lastOpnClean === 'ht' || lastOpnClean === '50' || lastDescClean === 'ht' || lastDescClean.includes('heat treat') || lastMachClean === 'ht';
+                let lastOpProd = 0;
+                let lastOpMonthProd = 0;
+                if (mfgOperations.length > 0) {
+                    const lastOp = mfgOperations[mfgOperations.length - 1];
+                    const lastOpnClean = (lastOp.opn_no || '').trim().toLowerCase();
+                    const lastDescClean = (lastOp.description || '').trim().toLowerCase();
+                    const lastMachClean = (lastOp.machine || lastOp.machine_name || '').trim().toLowerCase();
 
-                let lastOpProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').trim().toLowerCase() === lastOpnClean).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                    const isLastPc = lastOpnClean === 'pc' || lastDescClean === 'pc' || lastDescClean.includes('powder coat') || lastDescClean.includes('pc') || lastMachClean === 'pc';
+                    const isLastHt = lastOpnClean === 'ht' || lastOpnClean === '50' || lastDescClean === 'ht' || lastDescClean.includes('heat treat') || lastMachClean === 'ht';
 
-                if (isLastPc || lastOpnClean.includes('pc')) {
-                    const pcRec = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
-                    lastOpProd = Math.max(lastOpProd, pcRec);
-                } else if (isLastHt) {
-                    const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
-                    lastOpProd = Math.max(lastOpProd, htRec);
+                    const isMatchOp = (l) => {
+                        if ((l.partno || '').trim().toUpperCase() !== (partno || '').trim().toUpperCase()) return false;
+                        const lOpn = (l.opn_no || '').toString().trim().toLowerCase();
+                        const lDesc = (l.description || '').toString().trim().toLowerCase();
+                        if (lOpn === lastOpnClean || lDesc === lastDescClean) return true;
+                        if (lastDescClean && lOpn.includes(lastDescClean)) return true;
+                        if (lastOpnClean && lDesc.includes(lastOpnClean)) return true;
+                        const numL = parseInt(lOpn, 10);
+                        const numLast = parseInt(lastOpnClean, 10);
+                        if (!isNaN(numL) && !isNaN(numLast) && numL === numLast) return true;
+                        return false;
+                    };
+
+                    lastOpProd = allLogs.filter(isMatchOp).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                    lastOpMonthProd = allLogs.filter(l => isMatchOp(l) && isDateInMonth(l.date, month)).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+
+                    if (isLastPc || lastOpnClean.includes('pc')) {
+                        const pcRec = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                        lastOpProd = Math.max(lastOpProd, pcRec);
+                    } else if (isLastHt) {
+                        const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                        lastOpProd = Math.max(lastOpProd, htRec);
+                    }
+                } else {
+                    const partAllLogs = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && !['debur', 'for ins', 'rfd', 'rework', 'rejection', 'nc', 'idle'].includes((l.opn_no || '').toLowerCase()));
+                    const numericOps = partAllLogs.map(l => parseInt(l.opn_no) || 0).filter(n => n > 0);
+                    if (numericOps.length > 0) {
+                        const maxOp = Math.max(...numericOps);
+                        lastOpProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (parseInt(l.opn_no) || 0) === maxOp).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                        lastOpMonthProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (parseInt(l.opn_no) || 0) === maxOp && isDateInMonth(l.date, month)).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                    }
+                    const pcRecTotal = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                    if (pcRecTotal > lastOpProd) {
+                        lastOpProd = pcRecTotal;
+                    }
                 }
 
-                const pcRecTotal = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
-                if (pcRecTotal > lastOpProd) {
-                    lastOpProd = pcRecTotal;
-                }
+                if (lastOpProd <= 0) continue;
 
-                const deburredProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const deburredTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 
-                const balance = Math.max(0, lastOpProd - deburredProd);
+                const balance = Math.max(0, lastOpProd - deburredTotal);
                 
-                if (balance <= 0) continue;
+                // Show if currently pending debur (balance > 0) OR if completed final operation during this month
+                if (balance <= 0 && lastOpMonthProd <= 0) continue;
                 
+                const displayQty = balance;
+                if (displayQty <= 0) continue;
+
                 const tr = document.createElement('tr');
                 tr.style.cursor = 'pointer';
+                tr.style.transition = 'background-color 0.2s';
                 tr.innerHTML = `
-                    <td>${partno}</td>
-                    <td style="font-weight: 600; color: ${balance > 0 ? 'var(--primary-color)' : 'inherit'};">${balance}</td>
+                    <td style="padding: 0.6rem 0.75rem; font-weight: 500;">${escapeHtml(partno)}</td>
+                    <td style="padding: 0.6rem 0.75rem; font-weight: 700; color: var(--primary-color);">${displayQty}</td>
                 `;
                 tr.addEventListener('click', () => {
                     document.getElementById('deburPartNo').value = partno;
+                    const qtyInput = document.getElementById('deburQty');
+                    if (qtyInput) {
+                        qtyInput.placeholder = `Max: ${displayQty}`;
+                        qtyInput.value = displayQty;
+                    }
+                    Array.from(tbody.children).forEach(r => r.style.background = '');
+                    tr.style.background = '#e0f2fe';
                 });
                 tbody.appendChild(tr);
             }
             
             if (tbody.children.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">No parts pending debur</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">No parts pending debur for this month</td></tr>';
             }
         } catch (e) {
             console.error('Error fetching debur status', e);
+            tbody.innerHTML = '<tr><td colspan="2" style="color:#ef4444; text-align:center;">Error fetching pending debur parts</td></tr>';
         }
     }
     
@@ -4416,6 +5259,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (res.ok) {
                 document.getElementById('deburHours').value = '';
                 document.getElementById('deburQty').value = '';
+                document.getElementById('deburQty').placeholder = '';
+                document.getElementById('deburPartNo').value = '';
                 fetchDeburStatus(); // Refresh left side
                 fetchDeburLogs();   // Refresh right side logs
             } else {
@@ -4431,7 +5276,11 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch('/api/prodlog');
             const allLogs = await res.json();
-            const deburLogs = allLogs.filter(l => (l.opn_no || '').toLowerCase() === 'debur');
+            const month = document.getElementById('deburMonth')?.value || '';
+            let deburLogs = allLogs.filter(l => (l.opn_no || '').toLowerCase() === 'debur');
+            if (month) {
+                deburLogs = deburLogs.filter(l => isDateInMonth(l.date, month));
+            }
             
             // Sort descending by ID or Date to show newest first
             deburLogs.sort((a, b) => b.id - a.id);
@@ -4440,7 +5289,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tbody.innerHTML = '';
             
             if (deburLogs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">No debur logs found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">No debur logs found for this month.</td></tr>';
                 return;
             }
             
@@ -4451,7 +5300,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${log.date}</td>
                     <td>${log.operator || ''}</td>
                     <td>${log.partno}</td>
-                    <td>${log.run_time || ''}</td>
+                    <td>${log.run_time || log.runtime || ''}</td>
                     <td><span style="font-weight: 500;">${log.prod_qty || ''}</span></td>
                 `;
                 tbody.appendChild(tr);
@@ -4496,6 +5345,528 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- BC STATUS MODULE ---
+    let currentBcStatusData = null;
+    let bcStatusListenersAttached = false;
+
+    function initBcStatus() {
+        const monthInput = document.getElementById('bcStatusMonth');
+        if (monthInput && !monthInput.value) {
+            const now = new Date();
+            monthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        }
+
+        if (!bcStatusListenersAttached) {
+            bcStatusListenersAttached = true;
+
+            const mInput = document.getElementById('bcStatusMonth');
+            if (mInput) {
+                mInput.addEventListener('change', () => fetchBcStatus());
+            }
+
+            const custSelect = document.getElementById('bcStatusCustomerSelect');
+            if (custSelect) {
+                custSelect.addEventListener('change', () => {
+                    if (currentBcStatusData) renderBcStatus(currentBcStatusData);
+                });
+            }
+
+            const searchInput = document.getElementById('bcStatusSearch');
+            if (searchInput) {
+                searchInput.addEventListener('input', () => {
+                    if (currentBcStatusData) renderBcStatus(currentBcStatusData);
+                });
+            }
+
+            const refreshBtn = document.getElementById('bcStatusRefreshBtn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', () => fetchBcStatus());
+            }
+
+            const exportBtn = document.getElementById('bcStatusExportBtn');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', () => exportBcStatusExcel());
+            }
+        }
+
+        fetchBcStatus();
+    }
+
+    async function fetchBcStatus() {
+        const tbody = document.getElementById('bcStatusBody');
+        const monthInput = document.getElementById('bcStatusMonth');
+        const monthVal = monthInput ? (monthInput.value || '').trim() : '';
+
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="25" style="text-align: center; padding: 2.5rem; color: #0284c7; font-weight: 600;"><i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i> Loading BC Status data for ' + (monthVal || 'current month') + '...</td></tr>';
+        }
+
+        const refreshBtn = document.getElementById('bcStatusRefreshBtn');
+        const origBtnHtml = refreshBtn ? refreshBtn.innerHTML : '';
+        if (refreshBtn) {
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+        }
+
+        try {
+            const url = monthVal ? `/api/production/bc_status?month=${encodeURIComponent(monthVal)}` : '/api/production/bc_status';
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`Server returned ${res.status}`);
+            const data = await res.json();
+            currentBcStatusData = data;
+
+            // Populate customer dropdown
+            populateBcStatusCustomers(data.parts);
+
+            renderBcStatus(data);
+        } catch (err) {
+            console.error('fetchBcStatus error:', err);
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="25" style="text-align: center; padding: 2rem; color: #ef4444; font-weight: 600;">Failed to load BC Status data: ${err.message}</td></tr>`;
+            }
+        } finally {
+            if (refreshBtn) {
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = origBtnHtml;
+            }
+        }
+    }
+
+    function populateBcStatusCustomers(parts) {
+        const custSelect = document.getElementById('bcStatusCustomerSelect');
+        if (!custSelect) return;
+        const currentVal = custSelect.value;
+        const customers = [...new Set((parts || []).map(p => (p.customer || '').trim()).filter(c => c && c !== '-'))].sort();
+        
+        let html = '<option value="">-- All Customers --</option>';
+        customers.forEach(c => {
+            html += `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`;
+        });
+        custSelect.innerHTML = html;
+        if (currentVal && customers.includes(currentVal)) {
+            custSelect.value = currentVal;
+        }
+    }
+
+    function renderBcStatus(data) {
+        const thead = document.getElementById('bcStatusThead');
+        const tbody = document.getElementById('bcStatusBody');
+        if (!thead || !tbody || !data) return;
+
+        const custFilter = (document.getElementById('bcStatusCustomerSelect')?.value || '').trim().toUpperCase();
+        const searchFilter = (document.getElementById('bcStatusSearch')?.value || '').trim().toUpperCase();
+
+        const opCols = data.operation_columns || [];
+        const allParts = data.parts || [];
+
+        // Filter parts
+        const filteredParts = allParts.filter(p => {
+            const pno = (p.partno || '').trim().toUpperCase();
+            const cust = (p.customer || '').trim().toUpperCase();
+            if (custFilter && cust !== custFilter) return false;
+            if (searchFilter && !pno.includes(searchFilter)) return false;
+            return true;
+        });
+
+        // Calculate KPIs
+        let totalPartsCount = filteredParts.length;
+        let totalScheduleQty = 0;
+        let totalMachinedQty = 0;
+        let totalToPc = 0;
+        let totalFromPc = 0;
+        let totalDespatch = 0;
+
+        filteredParts.forEach(p => {
+            totalScheduleQty += (p.schedule_qty || 0);
+            totalToPc += (p.to_pc || 0);
+            totalFromPc += (p.from_pc || 0);
+            totalDespatch += (p.despatch || 0);
+            if (p.operations) {
+                Object.values(p.operations).forEach(op => {
+                    totalMachinedQty += (op.qty || 0);
+                });
+            }
+        });
+
+        const kpiParts = document.getElementById('kpiBcTotalParts');
+        if (kpiParts) kpiParts.textContent = totalPartsCount.toLocaleString();
+
+        const kpiSched = document.getElementById('kpiBcTotalSchedule');
+        if (kpiSched) kpiSched.textContent = totalScheduleQty.toLocaleString();
+
+        const kpiMach = document.getElementById('kpiBcTotalMachined');
+        if (kpiMach) kpiMach.textContent = totalMachinedQty.toLocaleString();
+
+        const kpiPc = document.getElementById('kpiBcTotalPc');
+        if (kpiPc) kpiPc.textContent = `${totalToPc.toLocaleString()} / ${totalFromPc.toLocaleString()}`;
+
+        const kpiDesp = document.getElementById('kpiBcTotalDespatch');
+        if (kpiDesp) kpiDesp.textContent = totalDespatch.toLocaleString();
+
+        // Build 2-Tier Table Header
+        let thRow1 = `
+            <tr style="background: #1e293b; color: #ffffff; font-weight: 600;">
+                <th style="padding: 9px 12px; text-align: left; position: sticky; top: 0; z-index: 10;">Part No</th>
+                <th style="padding: 9px 12px; text-align: left; position: sticky; top: 0; z-index: 10;">Customer</th>
+                <th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10;">Schedule Qty</th>
+        `;
+
+        opCols.forEach(op => {
+            thRow1 += `<th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10; background: #334155; border-left: 1px solid #475569;">${escapeHtml(op)}</th>`;
+        });
+
+        thRow1 += `
+                <th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10; background: #475569; border-left: 1px solid #64748b;">To PC</th>
+                <th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10; background: #475569;">From PC</th>
+                <th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10; background: #1e293b; border-left: 1px solid #334155;">RFD</th>
+                <th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10; background: #1e293b;">Despatch</th>
+            </tr>
+        `;
+
+        const totalCols = 3 + opCols.length + 4;
+        let thRow2 = `<tr style="background: #f1f5f9;">`;
+        for (let c = 0; c < totalCols; c++) {
+            if (c === totalCols - 1) {
+                thRow2 += `<th style="padding: 4px 6px; text-align: right;"><button type="button" class="clear-table-filters-btn btn btn-text" style="font-size: 0.75rem; color: #ef4444; padding: 2px 6px; font-weight: 600; cursor: pointer; display: none;">Clear</button></th>`;
+            } else {
+                thRow2 += `<th style="padding: 4px 6px;"><input type="text" class="table-col-filter" data-col="${c}" placeholder="Filter..." style="width: 100%; padding: 3px 6px; font-size: 0.78rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff;"></th>`;
+            }
+        }
+        thRow2 += `</tr>`;
+
+        thead.innerHTML = thRow1 + thRow2;
+
+        // Build Rows
+        if (filteredParts.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${totalCols}" style="text-align: center; padding: 2.5rem; color: #64748b; font-weight: 500;">No BC parts found matching the selected filters.</td></tr>`;
+            return;
+        }
+
+        let bodyHtml = '';
+        filteredParts.forEach((p, idx) => {
+            const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+            bodyHtml += `<tr style="background: ${rowBg}; border-bottom: 1px solid #e2e8f0; transition: background 0.15s ease;">`;
+            
+            // Part No
+            bodyHtml += `<td style="padding: 8px 12px; font-weight: 700; color: #0f172a;"><span style="display: inline-block; padding: 2px 7px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px;">${escapeHtml(p.partno)}</span></td>`;
+            
+            // Customer
+            bodyHtml += `<td style="padding: 8px 12px; color: #475569; font-weight: 500;">${escapeHtml(p.customer || '-')}</td>`;
+            
+            // Schedule Qty
+            const schedClass = p.schedule_qty > 0 ? 'font-weight: 700; color: #0284c7;' : 'color: #94a3b8;';
+            bodyHtml += `<td style="padding: 8px 12px; text-align: right; ${schedClass}">${p.schedule_qty ? p.schedule_qty.toLocaleString() : '0'}</td>`;
+
+            // Operation Columns
+            opCols.forEach(op => {
+                const opInfo = p.operations ? p.operations[op] : null;
+                if (!opInfo || !opInfo.has_op) {
+                    bodyHtml += `<td style="padding: 8px 12px; text-align: center; color: #cbd5e1; font-weight: 500; border-left: 1px solid #f1f5f9;">-</td>`;
+                } else if (opInfo.qty > 0) {
+                    bodyHtml += `<td style="padding: 8px 12px; text-align: right; font-weight: 700; color: #0284c7; background: rgba(2, 132, 199, 0.04); border-left: 1px solid #f1f5f9;" title="${escapeHtml(op)} produced in month">${opInfo.qty.toLocaleString()}</td>`;
+                } else {
+                    bodyHtml += `<td style="padding: 8px 12px; text-align: right; color: #64748b; font-weight: 500; border-left: 1px solid #f1f5f9;">0</td>`;
+                }
+            });
+
+            // To PC
+            if (p.to_pc > 0) {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; font-weight: 700; color: #d97706; background: rgba(217, 119, 6, 0.05); border-left: 1px solid #f1f5f9;" title="Sent to PC in month">${p.to_pc.toLocaleString()}</td>`;
+            } else if (p.has_pc) {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; color: #64748b; border-left: 1px solid #f1f5f9;">0</td>`;
+            } else {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: center; color: #cbd5e1; border-left: 1px solid #f1f5f9;">-</td>`;
+            }
+
+            // From PC
+            if (p.from_pc > 0) {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; font-weight: 700; color: #16a34a; background: rgba(22, 163, 74, 0.05); border-left: 1px solid #f1f5f9;" title="Received from PC in month">${p.from_pc.toLocaleString()}</td>`;
+            } else if (p.has_pc) {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; color: #64748b; border-left: 1px solid #f1f5f9;">0</td>`;
+            } else {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: center; color: #cbd5e1; border-left: 1px solid #f1f5f9;">-</td>`;
+            }
+
+            // RFD
+            if (p.rfd > 0) {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; font-weight: 700; color: #7c3aed; border-left: 1px solid #f1f5f9;" title="Ready for Despatch">${p.rfd.toLocaleString()}</td>`;
+            } else {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; color: #64748b; border-left: 1px solid #f1f5f9;">0</td>`;
+            }
+
+            // Despatch
+            if (p.despatch > 0) {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; font-weight: 700; color: #b45309; background: rgba(245, 158, 11, 0.05); border-left: 1px solid #f1f5f9;" title="Despatched in month">${p.despatch.toLocaleString()}</td>`;
+            } else {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; color: #64748b; border-left: 1px solid #f1f5f9;">0</td>`;
+            }
+
+            bodyHtml += `</tr>`;
+        });
+
+        tbody.innerHTML = bodyHtml;
+
+        applyTableColFilters('bcStatusTable');
+    }
+
+    function exportBcStatusExcel() {
+        const table = document.getElementById('bcStatusTable');
+        if (!table) return;
+        const monthInput = document.getElementById('bcStatusMonth');
+        const monthVal = monthInput ? (monthInput.value || '').trim() : '';
+        const wb = XLSX.utils.table_to_book(table, { sheet: "BC_Status" });
+        XLSX.writeFile(wb, `BC_Production_Status_${monthVal || new Date().toISOString().slice(0,7)}.xlsx`);
+    }
+
+    // --- WIPRO Status Implementation ---
+    let currentWiproStatusData = null;
+    let wiproStatusListenersAttached = false;
+
+    function initWiproStatus() {
+        const monthInput = document.getElementById('wiproStatusMonth');
+        if (monthInput && !monthInput.value) {
+            const now = new Date();
+            monthInput.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        }
+
+        if (!wiproStatusListenersAttached) {
+            wiproStatusListenersAttached = true;
+
+            const mInput = document.getElementById('wiproStatusMonth');
+            if (mInput) {
+                mInput.addEventListener('change', () => fetchWiproStatus());
+            }
+
+            const custSelect = document.getElementById('wiproStatusCustomerSelect');
+            if (custSelect) {
+                custSelect.addEventListener('change', () => {
+                    if (currentWiproStatusData) renderWiproStatus(currentWiproStatusData);
+                });
+            }
+
+            const searchInput = document.getElementById('wiproStatusSearch');
+            if (searchInput) {
+                searchInput.addEventListener('input', () => {
+                    if (currentWiproStatusData) renderWiproStatus(currentWiproStatusData);
+                });
+            }
+
+            const refreshBtn = document.getElementById('wiproStatusRefreshBtn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', () => fetchWiproStatus());
+            }
+
+            const exportBtn = document.getElementById('wiproStatusExportBtn');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', () => exportWiproStatusExcel());
+            }
+        }
+
+        fetchWiproStatus();
+    }
+
+    async function fetchWiproStatus() {
+        const tbody = document.getElementById('wiproStatusBody');
+        const monthInput = document.getElementById('wiproStatusMonth');
+        const monthVal = monthInput ? (monthInput.value || '').trim() : '';
+
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="25" style="text-align: center; padding: 2.5rem; color: #059669; font-weight: 600;"><i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i> Loading Wipro Status data for ' + (monthVal || 'current month') + '...</td></tr>';
+        }
+
+        const refreshBtn = document.getElementById('wiproStatusRefreshBtn');
+        const origBtnHtml = refreshBtn ? refreshBtn.innerHTML : '';
+        if (refreshBtn) {
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+        }
+
+        try {
+            const url = monthVal ? `/api/production/wipro_status?month=${encodeURIComponent(monthVal)}` : '/api/production/wipro_status';
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`Server returned ${res.status}`);
+            const data = await res.json();
+            currentWiproStatusData = data;
+
+            // Populate customer dropdown
+            populateWiproStatusCustomers(data.parts);
+
+            renderWiproStatus(data);
+        } catch (err) {
+            console.error('fetchWiproStatus error:', err);
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="25" style="text-align: center; padding: 2rem; color: #ef4444; font-weight: 600;">Failed to load Wipro Status data: ${err.message}</td></tr>`;
+            }
+        } finally {
+            if (refreshBtn) {
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = origBtnHtml;
+            }
+        }
+    }
+
+    function populateWiproStatusCustomers(parts) {
+        const custSelect = document.getElementById('wiproStatusCustomerSelect');
+        if (!custSelect) return;
+        const currentVal = custSelect.value;
+        const customers = [...new Set((parts || []).map(p => (p.customer || '').trim()).filter(c => c && c !== '-'))].sort();
+        
+        let html = '<option value="">-- All Customers --</option>';
+        customers.forEach(c => {
+            html += `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`;
+        });
+        custSelect.innerHTML = html;
+        if (currentVal && customers.includes(currentVal)) {
+            custSelect.value = currentVal;
+        }
+    }
+
+    function renderWiproStatus(data) {
+        const thead = document.getElementById('wiproStatusThead');
+        const tbody = document.getElementById('wiproStatusBody');
+        if (!thead || !tbody || !data) return;
+
+        const custFilter = (document.getElementById('wiproStatusCustomerSelect')?.value || '').trim().toUpperCase();
+        const searchFilter = (document.getElementById('wiproStatusSearch')?.value || '').trim().toUpperCase();
+
+        const allParts = data.parts || [];
+
+        // Filter parts
+        const filteredParts = allParts.filter(p => {
+            const pno = (p.partno || '').trim().toUpperCase();
+            const cust = (p.customer || '').trim().toUpperCase();
+            if (custFilter && cust !== custFilter) return false;
+            if (searchFilter && !pno.includes(searchFilter)) return false;
+            return true;
+        });
+
+        // Calculate KPIs
+        let totalPartsCount = filteredParts.length;
+        let totalScheduleQty = 0;
+        let totalCumulativeQty = 0;
+        let totalRfd = 0;
+        let totalDespatch = 0;
+
+        filteredParts.forEach(p => {
+            totalScheduleQty += (p.schedule_qty || 0);
+            totalCumulativeQty += (p.cumulative_qty || 0);
+            totalRfd += (p.rfd || 0);
+            totalDespatch += (p.despatch || 0);
+        });
+
+        const kpiParts = document.getElementById('kpiWiproTotalParts');
+        if (kpiParts) kpiParts.textContent = totalPartsCount.toLocaleString();
+
+        const kpiSched = document.getElementById('kpiWiproTotalSchedule');
+        if (kpiSched) kpiSched.textContent = totalScheduleQty.toLocaleString();
+
+        const kpiCum = document.getElementById('kpiWiproTotalCumulative');
+        if (kpiCum) kpiCum.textContent = totalCumulativeQty.toLocaleString();
+
+        const kpiRfd = document.getElementById('kpiWiproTotalRfd');
+        if (kpiRfd) kpiRfd.textContent = totalRfd.toLocaleString();
+
+        const kpiDesp = document.getElementById('kpiWiproTotalDespatch');
+        if (kpiDesp) kpiDesp.textContent = totalDespatch.toLocaleString();
+
+        // Standard requested columns: Part No, Customer, Schedule Qty, opn 20, opn 30, ... opn 70, RFD, Despatch
+        const opCols = ["20", "30", "40", "50", "60", "70"];
+
+        // Build 2-Tier Table Header
+        let thRow1 = `
+            <tr style="background: #1e293b; color: #ffffff; font-weight: 600;">
+                <th style="padding: 9px 12px; text-align: left; position: sticky; top: 0; z-index: 10;">Part No</th>
+                <th style="padding: 9px 12px; text-align: left; position: sticky; top: 0; z-index: 10;">Customer</th>
+                <th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10;">Schedule Qty</th>
+        `;
+
+        opCols.forEach(op => {
+            thRow1 += `<th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10; background: #334155; border-left: 1px solid #475569;">Opn ${escapeHtml(op)}</th>`;
+        });
+
+        thRow1 += `
+                <th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10; background: #475569; border-left: 1px solid #64748b;">RFD</th>
+                <th style="padding: 9px 12px; text-align: right; position: sticky; top: 0; z-index: 10; background: #1e293b; border-left: 1px solid #334155;">Despatch</th>
+            </tr>
+        `;
+
+        const totalCols = 3 + opCols.length + 2;
+        let thRow2 = `<tr style="background: #f1f5f9;">`;
+        for (let c = 0; c < totalCols; c++) {
+            if (c === totalCols - 1) {
+                thRow2 += `<th style="padding: 4px 6px; text-align: right;"><button type="button" class="clear-table-filters-btn btn btn-text" style="font-size: 0.75rem; color: #ef4444; padding: 2px 6px; font-weight: 600; cursor: pointer; display: none;">Clear</button></th>`;
+            } else {
+                thRow2 += `<th style="padding: 4px 6px;"><input type="text" class="table-col-filter" data-col="${c}" placeholder="Filter..." style="width: 100%; padding: 3px 6px; font-size: 0.78rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff;"></th>`;
+            }
+        }
+        thRow2 += `</tr>`;
+
+        thead.innerHTML = thRow1 + thRow2;
+
+        // Build Rows
+        if (filteredParts.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${totalCols}" style="text-align: center; padding: 2.5rem; color: #64748b; font-weight: 500;">No WIPRO parts found matching the selected filters.</td></tr>`;
+            return;
+        }
+
+        let bodyHtml = '';
+        filteredParts.forEach((p, idx) => {
+            const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+            bodyHtml += `<tr style="background: ${rowBg}; border-bottom: 1px solid #e2e8f0; transition: background 0.15s ease;">`;
+            
+            // Part No
+            bodyHtml += `<td style="padding: 8px 12px; font-weight: 700; color: #0f172a;"><span style="display: inline-block; padding: 2px 7px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 4px; color: #065f46;">${escapeHtml(p.partno)}</span></td>`;
+            
+            // Customer
+            bodyHtml += `<td style="padding: 8px 12px; color: #475569; font-weight: 500;">${escapeHtml(p.customer || '-')}</td>`;
+            
+            // Schedule Qty
+            const schedClass = p.schedule_qty > 0 ? 'font-weight: 700; color: #0284c7;' : 'color: #94a3b8;';
+            bodyHtml += `<td style="padding: 8px 12px; text-align: right; ${schedClass}">${p.schedule_qty ? p.schedule_qty.toLocaleString() : '0'}</td>`;
+
+            // Operation Columns: opn 20 to opn 70
+            opCols.forEach(op => {
+                const opInfo = p.operations ? p.operations[op] : null;
+                if (!opInfo || !opInfo.has_op) {
+                    bodyHtml += `<td style="padding: 8px 12px; text-align: center; color: #cbd5e1; font-weight: 500; border-left: 1px solid #f1f5f9;">-</td>`;
+                } else if (opInfo.qty > 0) {
+                    bodyHtml += `<td style="padding: 8px 12px; text-align: right; font-weight: 700; color: #059669; background: rgba(5, 150, 105, 0.05); border-left: 1px solid #f1f5f9;" title="Opn ${escapeHtml(op)} produced in month">${opInfo.qty.toLocaleString()}</td>`;
+                } else {
+                    bodyHtml += `<td style="padding: 8px 12px; text-align: right; color: #64748b; font-weight: 500; border-left: 1px solid #f1f5f9;">0</td>`;
+                }
+            });
+
+            // RFD
+            if (p.rfd > 0) {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; font-weight: 700; color: #7c3aed; background: rgba(124, 58, 237, 0.05); border-left: 1px solid #f1f5f9;" title="Ready for Despatch">${p.rfd.toLocaleString()}</td>`;
+            } else {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; color: #64748b; border-left: 1px solid #f1f5f9;">0</td>`;
+            }
+
+            // Despatch
+            if (p.despatch > 0) {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; font-weight: 700; color: #b45309; background: rgba(245, 158, 11, 0.05); border-left: 1px solid #f1f5f9;" title="Despatched in month">${p.despatch.toLocaleString()}</td>`;
+            } else {
+                bodyHtml += `<td style="padding: 8px 12px; text-align: right; color: #64748b; border-left: 1px solid #f1f5f9;">0</td>`;
+            }
+
+            bodyHtml += `</tr>`;
+        });
+
+        tbody.innerHTML = bodyHtml;
+
+        applyTableColFilters('wiproStatusTable');
+    }
+
+    function exportWiproStatusExcel() {
+        const table = document.getElementById('wiproStatusTable');
+        if (!table) return;
+        const monthInput = document.getElementById('wiproStatusMonth');
+        const monthVal = monthInput ? (monthInput.value || '').trim() : '';
+        const wb = XLSX.utils.table_to_book(table, { sheet: "WIPRO_Status" });
+        XLSX.writeFile(wb, `WIPRO_Production_Status_${monthVal || new Date().toISOString().slice(0,7)}.xlsx`);
+    }
+
     function createInspectionRow(containerId) {
         const container = document.getElementById(containerId);
         if (!container) return;
@@ -4537,29 +5908,75 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function initInspection() {
         try {
+            if (!document.getElementById('inspMonth').value) {
+                document.getElementById('inspMonth').value = new Date().toISOString().slice(0, 7);
+            }
             if (!document.getElementById('inspDate').value) {
                 document.getElementById('inspDate').valueAsDate = new Date();
             }
+
+            const inspMonthEl = document.getElementById('inspMonth');
+            if (inspMonthEl && !inspMonthEl._hasChangeListener) {
+                inspMonthEl._hasChangeListener = true;
+                inspMonthEl.addEventListener('change', () => {
+                    const mVal = inspMonthEl.value;
+                    if (mVal) {
+                        const curDateVal = document.getElementById('inspDate').value;
+                        if (!curDateVal || !curDateVal.startsWith(mVal)) {
+                            const now = new Date();
+                            const currentMonthStr = now.toISOString().slice(0, 7);
+                            if (mVal === currentMonthStr) {
+                                document.getElementById('inspDate').value = now.toISOString().split('T')[0];
+                            } else {
+                                document.getElementById('inspDate').value = `${mVal}-01`;
+                            }
+                        }
+                    }
+                    fetchInspectionStatus();
+                    fetchInspectionLogs();
+                });
+            }
+
+            const inspDateEl = document.getElementById('inspDate');
+            if (inspDateEl && !inspDateEl._hasChangeListener) {
+                inspDateEl._hasChangeListener = true;
+                inspDateEl.addEventListener('change', () => {
+                    const dVal = inspDateEl.value;
+                    if (dVal && dVal.length >= 7) {
+                        const mVal = dVal.slice(0, 7);
+                        const monthInput = document.getElementById('inspMonth');
+                        if (monthInput && monthInput.value !== mVal) {
+                            monthInput.value = mVal;
+                            fetchInspectionStatus();
+                            fetchInspectionLogs();
+                        }
+                    }
+                });
+            }
             
             if (inspAllParts.length === 0) {
-                const partsRes = await fetch('/api/partmaster');
-                inspAllParts = await partsRes.json();
+                try {
+                    const partsRes = await fetch('/api/partmaster');
+                    inspAllParts = await partsRes.json();
+                } catch(e) { inspAllParts = []; }
             }
             if (!inspOperatorsLoaded) {
-                const opRes = await fetch('/api/operators');
-                const operators = await opRes.json();
-                operators.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                const sel = document.getElementById('inspOperator');
-                if (sel) {
-                    sel.innerHTML = '<option value="">-- Select Operator --</option>';
-                    operators.forEach(o => {
-                        const opt = document.createElement('option');
-                        opt.value = o.name;
-                        opt.textContent = o.name;
-                        sel.appendChild(opt);
-                    });
-                }
-                inspOperatorsLoaded = true;
+                try {
+                    const opRes = await fetch('/api/operators');
+                    const operators = await opRes.json();
+                    operators.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                    const sel = document.getElementById('inspOperator');
+                    if (sel) {
+                        sel.innerHTML = '<option value="">-- Select Operator --</option>';
+                        operators.forEach(o => {
+                            const opt = document.createElement('option');
+                            opt.value = o.name;
+                            opt.textContent = o.name;
+                            sel.appendChild(opt);
+                        });
+                    }
+                    inspOperatorsLoaded = true;
+                } catch(e) { console.error('Error loading insp operators', e); }
             }
             
             loadPastInspectionReasons();
@@ -4567,8 +5984,16 @@ document.addEventListener('DOMContentLoaded', () => {
             fetchInspectionLogs();
             
             const deptSelect = document.getElementById('inspDeptSelect');
-            if (deptSelect.value) {
-                fetchInspectionStatus();
+            if (deptSelect) {
+                if (!deptSelect.value) {
+                    const firstOption = Array.from(deptSelect.options).find(o => o.value && o.value.trim() !== '');
+                    if (firstOption) {
+                        deptSelect.value = firstOption.value;
+                    }
+                }
+                if (deptSelect.value) {
+                    fetchInspectionStatus();
+                }
             }
         } catch (e) {
             console.error('Error init inspection', e);
@@ -4578,77 +6003,104 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchInspectionStatus() {
         const dept = document.getElementById('inspDeptSelect').value;
         const tbody = document.getElementById('inspPartsBody');
-        tbody.innerHTML = '';
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;"><i class="fas fa-spinner fa-spin"></i> Loading pending parts...</td></tr>';
         if (!dept) {
             tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">Select a department</td></tr>';
             return;
         }
 
+        const month = document.getElementById('inspMonth')?.value || (document.getElementById('inspDate')?.value || '').slice(0, 7) || new Date().toISOString().slice(0, 7);
+
         try {
-            const [schedRes, logRes, pmRes] = await Promise.all([
-                fetch('/api/schedule'),
-                fetch('/api/prodlog'),
-                fetch('/api/partmaster')
+            if (!inspAllParts || inspAllParts.length === 0) {
+                try {
+                    const partsRes = await fetch('/api/partmaster');
+                    inspAllParts = await partsRes.json();
+                } catch(e) { inspAllParts = []; }
+            }
+
+            const [schedRes, logRes] = await Promise.all([
+                fetch('/api/schedule').then(r => r.ok ? r.json() : []).catch(() => []),
+                fetch('/api/prodlog').then(r => r.ok ? r.json() : []).catch(() => [])
             ]);
             
-            const allSchedules = await schedRes.json();
-            const allLogs = await logRes.json();
-            const allPartMasters = await pmRes.json();
-            
-            const deptSchedules = allSchedules.filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase() && (s.status === 'Pending' || !s.status));
-            const uniqueParts = [...new Set(deptSchedules.map(s => s.partno))];
+            const allSchedules = schedRes || [];
+            const allLogs = logRes || [];
+
+            // Filter logs for the selected month
+            const monthLogs = allLogs.filter(l => isDateInMonth(l.date, month));
+
+            const masterDeptParts = (inspAllParts || [])
+                .filter(p => (p.department || '').trim().toUpperCase() === dept.trim().toUpperCase() || (p.dept || '').trim().toUpperCase() === dept.trim().toUpperCase())
+                .map(p => (p.partno || p.part_no || '').trim());
+
+            const schedDeptParts = allSchedules
+                .filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase())
+                .map(s => (s.partno || '').trim());
+
+            const prodLogDeptParts = allLogs
+                .filter(l => (l.department || '').trim().toUpperCase() === dept.trim().toUpperCase() || (l.dept || '').trim().toUpperCase() === dept.trim().toUpperCase())
+                .map(l => (l.partno || '').trim());
+
+            const uniqueParts = [...new Set([...masterDeptParts, ...schedDeptParts, ...prodLogDeptParts])].filter(Boolean);
+            uniqueParts.sort((a, b) => a.localeCompare(b));
             
             if (uniqueParts.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">No pending parts for this department</td></tr>';
                 return;
             }
             
+            tbody.innerHTML = '';
             for (const partno of uniqueParts) {
-                const partObj = allPartMasters.find(p => (p.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase());
-                let lastOpnNo = '';
-                if (partObj) {
-                    const opsRes = await fetch(`/api/partmaster/${partObj.id}/operations`);
-                    const operations = await opsRes.json();
-                    if (operations.length > 0) {
-                        operations.sort((a, b) => (parseInt(a.opn_no) || 0) - (parseInt(b.opn_no) || 0));
-                        lastOpnNo = (operations[operations.length - 1].opn_no || '').trim().toLowerCase();
-                    }
-                }
-
-                const deburredTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const forInsLogTotal = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const lastOpProd = lastOpnNo ? allLogs.filter(l => l.partno === partno && (l.opn_no || '').trim().toLowerCase() === lastOpnNo).reduce((sum, l) => sum + (l.prod_qty || 0), 0) : 0;
+                // On completion of debur to show for ins
+                const deburredTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const forInsLogTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const rfdProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const reworkProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const ncProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const rejectionProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rejection').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
 
                 const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
-
-                const rfdProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const reworkProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const ncProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const rejectionProd = allLogs.filter(l => l.partno === partno && (l.opn_no || '').toLowerCase() === 'rejection').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-
                 const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
-
                 const balance = Math.max(0, effectiveForIns - totalInspected);
                 
-                if (balance <= 0) continue; // Only show parts with positive balance for inspection
+                const deburredMonthTotal = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+
+                if (balance <= 0 && deburredMonthTotal <= 0) continue;
                 
+                const displayQty = balance;
+                if (displayQty <= 0) continue;
+
                 const tr = document.createElement('tr');
                 tr.style.cursor = 'pointer';
+                tr.style.transition = 'background-color 0.2s';
                 tr.innerHTML = `
-                    <td>${partno}</td>
-                    <td style="font-weight: 600; color: var(--primary-color);">${balance}</td>
+                    <td style="padding: 0.6rem 0.75rem; font-weight: 500;">${escapeHtml(partno)}</td>
+                    <td style="padding: 0.6rem 0.75rem; font-weight: 700; color: var(--primary-color);">${displayQty}</td>
                 `;
                 tr.addEventListener('click', () => {
                     document.getElementById('inspPartNo').value = partno;
+                    const rfdInput = document.getElementById('inspRFD');
+                    if (rfdInput) {
+                        rfdInput.placeholder = `Max: ${displayQty}`;
+                        rfdInput.value = displayQty;
+                    }
+                    if (typeof autoSumInspection === 'function') {
+                        autoSumInspection();
+                    }
+                    Array.from(tbody.children).forEach(r => r.style.background = '');
+                    tr.style.background = '#e0f2fe';
                 });
                 tbody.appendChild(tr);
             }
             
             if (tbody.children.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">No parts pending inspection</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;">No parts pending inspection for this month</td></tr>';
             }
         } catch (e) {
             console.error('Error fetching inspection status', e);
+            tbody.innerHTML = '<tr><td colspan="2" style="color:#ef4444; text-align:center;">Error fetching pending inspection parts</td></tr>';
         }
     }
     
@@ -4776,7 +6228,11 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch('/api/prodlog');
             const allLogs = await res.json();
-            const inspLogs = allLogs.filter(l => (l.opn_no || '').toLowerCase() === 'for ins');
+            const month = document.getElementById('inspMonth')?.value || '';
+            let inspLogs = allLogs.filter(l => (l.opn_no || '').toLowerCase() === 'for ins');
+            if (month) {
+                inspLogs = inspLogs.filter(l => isDateInMonth(l.date, month));
+            }
             
             inspLogs.sort((a, b) => b.id - a.id);
             
@@ -4784,7 +6240,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tbody.innerHTML = '';
             
             if (inspLogs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted)">No inspection logs found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--text-muted)">No inspection logs found for this month.</td></tr>';
                 currentInspExportData = [];
                 return;
             }
@@ -4928,40 +6384,967 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // ====== LINE INSPECTION LOGIC ======
+    let lineAllParts = [];
+    let lineAllMachines = [];
+    let lineAllOperators = [];
+    let lineTemplateParams = [];
+    let lineCurrentPartId = null;
+    let lineRecentRecords = [];
+
+    async function initLineInspection() {
+        const dateInput = document.getElementById('lineInspDate');
+        if (dateInput && !dateInput.value) {
+            dateInput.value = new Date().toISOString().slice(0, 10);
+        }
+
+        await Promise.all([
+            fetchLineParts(),
+            fetchLineMachines(),
+            fetchLineOperators(),
+            fetchLineInspectionRecords()
+        ]);
+    }
+
+    async function fetchLineParts() {
+        try {
+            const res = await fetch('/api/partmaster');
+            lineAllParts = await res.json();
+            const select = document.getElementById('linePartSelect');
+            if (!select) return;
+
+            const currentVal = select.value;
+            select.innerHTML = '<option value="">-- Select Part No --</option>';
+
+            lineAllParts.sort((a, b) => (a.partno || a.part_no || '').localeCompare(b.partno || b.part_no || ''));
+
+            lineAllParts.forEach(p => {
+                const pno = p.partno || p.part_no || '';
+                if (pno) {
+                    const desc = p.family || p.forge_pn || p.description || '';
+                    const opt = document.createElement('option');
+                    opt.value = pno;
+                    opt.textContent = `${pno}${desc ? ' - ' + desc : ''}`;
+                    opt.dataset.partId = p.id;
+                    opt.dataset.desc = desc;
+                    select.appendChild(opt);
+                }
+            });
+
+            if (currentVal) select.value = currentVal;
+        } catch (err) {
+            console.error('Error fetching parts for line inspection:', err);
+        }
+    }
+
+    async function fetchLineMachines() {
+        try {
+            const res = await fetch('/api/machines');
+            lineAllMachines = await res.json();
+            const select = document.getElementById('lineInspMachine');
+            if (!select) return;
+            select.innerHTML = '<option value="">-- Select Machine --</option>';
+            lineAllMachines.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.name;
+                opt.textContent = m.name;
+                select.appendChild(opt);
+            });
+        } catch (e) {
+            console.error('Error fetching machines:', e);
+        }
+    }
+
+    async function fetchLineOperators() {
+        try {
+            const res = await fetch('/api/operators');
+            lineAllOperators = await res.json();
+            const select = document.getElementById('lineInspOperator');
+            if (!select) return;
+            select.innerHTML = '<option value="">-- Select Operator --</option>';
+            lineAllOperators.forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.name;
+                opt.textContent = o.name;
+                select.appendChild(opt);
+            });
+        } catch (e) {
+            console.error('Error fetching operators:', e);
+        }
+    }
+
+    // Part Selection Listener
+    document.getElementById('linePartSelect')?.addEventListener('change', async (e) => {
+        const pno = e.target.value;
+        const selectedOpt = e.target.selectedOptions[0];
+        const partDescInput = document.getElementById('linePartDesc');
+        const tblHdrPartNo = document.getElementById('tblHdrPartNo');
+        const tblHdrPartDesc = document.getElementById('tblHdrPartDesc');
+        const opnSelect = document.getElementById('lineOpnSelect');
+        const opnDescInput = document.getElementById('lineOpnDesc');
+
+        if (!pno || !selectedOpt) {
+            if (partDescInput) partDescInput.value = '';
+            if (tblHdrPartNo) tblHdrPartNo.textContent = '--';
+            if (tblHdrPartDesc) tblHdrPartDesc.textContent = '--';
+            if (opnSelect) opnSelect.innerHTML = '<option value="">-- Select Opn No --</option>';
+            if (opnDescInput) opnDescInput.value = '';
+            lineCurrentPartId = null;
+            resetLineParamTable();
+            return;
+        }
+
+        const partId = selectedOpt.dataset.partId;
+        lineCurrentPartId = partId;
+        const desc = selectedOpt.dataset.desc || '';
+
+        if (partDescInput) partDescInput.value = desc;
+        if (tblHdrPartNo) tblHdrPartNo.textContent = pno;
+        if (tblHdrPartDesc) tblHdrPartDesc.textContent = desc || 'N/A';
+
+        // Fetch Operations for this part
+        if (opnSelect) {
+            opnSelect.innerHTML = '<option value="">-- Loading operations... --</option>';
+            try {
+                const res = await fetch(`/api/partmaster/${partId}/operations`);
+                const ops = await res.json();
+                opnSelect.innerHTML = '<option value="">-- Select Opn No --</option>';
+                if (Array.isArray(ops) && ops.length > 0) {
+                    ops.forEach(op => {
+                        const opt = document.createElement('option');
+                        opt.value = op.opn_no;
+                        opt.textContent = `${op.opn_no} - ${op.description || ''}`;
+                        opt.dataset.desc = op.description || '';
+                        opt.dataset.machine = op.machine || '';
+                        opnSelect.appendChild(opt);
+                    });
+                } else {
+                    opnSelect.innerHTML = '<option value="">No operations defined in Part Master</option>';
+                }
+            } catch (err) {
+                console.error('Error fetching part operations:', err);
+                opnSelect.innerHTML = '<option value="">-- Select Opn No --</option>';
+            }
+        }
+
+        if (opnDescInput) opnDescInput.value = '';
+        resetLineParamTable();
+    });
+
+    // Opn Selection Listener
+    document.getElementById('lineOpnSelect')?.addEventListener('change', async (e) => {
+        const opnNo = e.target.value;
+        const selectedOpt = e.target.selectedOptions[0];
+        const opnDescInput = document.getElementById('lineOpnDesc');
+        const tblHdrOpnNo = document.getElementById('tblHdrOpnNo');
+        const tblHdrOpnDesc = document.getElementById('tblHdrOpnDesc');
+        const partNo = document.getElementById('linePartSelect')?.value || '';
+
+        if (!opnNo || !selectedOpt) {
+            if (opnDescInput) opnDescInput.value = '';
+            if (tblHdrOpnNo) tblHdrOpnNo.textContent = '--';
+            if (tblHdrOpnDesc) tblHdrOpnDesc.textContent = '--';
+            resetLineParamTable();
+            return;
+        }
+
+        const opnDesc = selectedOpt.dataset.desc || '';
+        if (opnDescInput) opnDescInput.value = opnDesc;
+        if (tblHdrOpnNo) tblHdrOpnNo.textContent = opnNo;
+        if (tblHdrOpnDesc) tblHdrOpnDesc.textContent = opnDesc || 'N/A';
+
+        // Auto select machine if matching
+        const mc = selectedOpt.dataset.machine;
+        const machineSelect = document.getElementById('lineInspMachine');
+        if (mc && machineSelect) {
+            const found = Array.from(machineSelect.options).find(o => (o.value || '').toLowerCase() === mc.toLowerCase());
+            if (found) machineSelect.value = found.value;
+        }
+
+        await loadLineTemplateParameters(partNo, opnNo);
+    });
+
+    async function loadLineTemplateParameters(partNo, opnNo) {
+        const statusNotice = document.getElementById('lineTemplateStatusNotice');
+        try {
+            const res = await fetch(`/api/inspection-parameters?part_no=${encodeURIComponent(partNo)}&opn_no=${encodeURIComponent(opnNo)}`);
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+                lineTemplateParams = data.map((p, idx) => ({
+                    id: p.id,
+                    sl_no: p.sl_no || idx + 1,
+                    description: p.description || '',
+                    nominal_dimension: p.nominal_dimension !== null && p.nominal_dimension !== undefined ? p.nominal_dimension : '',
+                    lo_tol: p.lo_tol !== null && p.lo_tol !== undefined ? p.lo_tol : '',
+                    hi_tol: p.hi_tol !== null && p.hi_tol !== undefined ? p.hi_tol : ''
+                }));
+                if (statusNotice) {
+                    statusNotice.innerHTML = `<span style="color: #10b981; font-weight: 600;"><i class="fas fa-check-circle"></i> Loaded saved template with ${lineTemplateParams.length} parameter(s) for Part ${escapeHtml(partNo)} (Opn ${escapeHtml(opnNo)}).</span>`;
+                }
+            } else {
+                lineTemplateParams = [
+                    { sl_no: 1, description: '', nominal_dimension: '', lo_tol: '', hi_tol: '' },
+                    { sl_no: 2, description: '', nominal_dimension: '', lo_tol: '', hi_tol: '' },
+                    { sl_no: 3, description: '', nominal_dimension: '', lo_tol: '', hi_tol: '' },
+                    { sl_no: 4, description: '', nominal_dimension: '', lo_tol: '', hi_tol: '' },
+                    { sl_no: 5, description: '', nominal_dimension: '', lo_tol: '', hi_tol: '' }
+                ];
+                if (statusNotice) {
+                    statusNotice.innerHTML = `<span style="color: #d97706;"><i class="fas fa-info-circle"></i> No existing template for this operation. Fill parameters and click <b>'Save Template'</b>.</span>`;
+                }
+            }
+            renderLineParamRows();
+        } catch (err) {
+            console.error('Error loading template parameters:', err);
+        }
+    }
+
+    function resetLineParamTable() {
+        const tbody = document.getElementById('lineParamTableBody');
+        const statusNotice = document.getElementById('lineTemplateStatusNotice');
+        if (statusNotice) {
+            statusNotice.innerHTML = `<i class="fas fa-info-circle"></i> Please select a Part No and Opn No to load or configure the inspection template.`;
+        }
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="6" style="padding: 2rem; text-align: center; color: var(--text-muted);">Select Part No and Opn No above to load or create template.</td></tr>`;
+        }
+        lineTemplateParams = [];
+    }
+
+    function renderLineParamRows() {
+        const tbody = document.getElementById('lineParamTableBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        if (lineTemplateParams.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="padding: 1.5rem; text-align: center; color: var(--text-muted);">No parameter rows. Click "+ Add Parameter Row" to add one.</td></tr>`;
+            return;
+        }
+
+        lineTemplateParams.forEach((param, idx) => {
+            const tr = document.createElement('tr');
+            tr.dataset.idx = idx;
+            tr.style.borderBottom = '1px solid #e2e8f0';
+
+            const dimVal = param.nominal_dimension !== null && param.nominal_dimension !== undefined ? param.nominal_dimension : '';
+            const lowVal = param.lo_tol !== null && param.lo_tol !== undefined ? param.lo_tol : '';
+            const hiVal = param.hi_tol !== null && param.hi_tol !== undefined ? param.hi_tol : '';
+
+            tr.innerHTML = `
+                <td style="padding: 6px; text-align: left;">
+                    <input type="text" class="line-param-desc" value="${escapeHtml(param.description || '')}" placeholder="Param Description (e.g. Bore, OD)" style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-family: 'Inter', sans-serif;">
+                </td>
+                <td style="padding: 6px;">
+                    <input type="number" step="0.001" class="line-param-dim" value="${dimVal}" placeholder="100.0" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center; font-family: 'Inter', sans-serif;">
+                </td>
+                <td style="padding: 6px;">
+                    <input type="number" step="0.001" class="line-param-low" value="${lowVal}" placeholder="0.05" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center; font-family: 'Inter', sans-serif;">
+                </td>
+                <td style="padding: 6px;">
+                    <input type="number" step="0.001" class="line-param-hi" value="${hiVal}" placeholder="0.05" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; text-align: center; font-family: 'Inter', sans-serif;">
+                </td>
+                <td style="padding: 6px; background: #f0fdf4;">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                        <input type="number" step="0.001" class="line-param-reading" placeholder="Observed Reading" style="width: 100%; padding: 6px; border: 1px solid #86efac; border-radius: 4px; text-align: center; font-weight: 700; font-family: 'Inter', sans-serif;">
+                        <span class="line-reading-badge" style="display: none; font-size: 0.75rem; font-weight: 700;"></span>
+                    </div>
+                </td>
+                <td style="padding: 6px; text-align: center;">
+                    <button type="button" class="line-del-row-btn btn btn-outline" title="Delete Row" style="padding: 2px 8px; font-size: 0.8rem; color: #ef4444; border-color: #ef4444;">✕</button>
+                </td>
+            `;
+
+            const descInput = tr.querySelector('.line-param-desc');
+            const dimInput = tr.querySelector('.line-param-dim');
+            const lowInput = tr.querySelector('.line-param-low');
+            const hiInput = tr.querySelector('.line-param-hi');
+            const readingInput = tr.querySelector('.line-param-reading');
+            const badge = tr.querySelector('.line-reading-badge');
+            const delBtn = tr.querySelector('.line-del-row-btn');
+
+            descInput.addEventListener('input', () => { lineTemplateParams[idx].description = descInput.value; });
+            dimInput.addEventListener('input', () => {
+                lineTemplateParams[idx].nominal_dimension = dimInput.value !== '' ? parseFloat(dimInput.value) : '';
+                validateLineReading(readingInput, badge, dimInput, lowInput, hiInput);
+            });
+            lowInput.addEventListener('input', () => {
+                lineTemplateParams[idx].lo_tol = lowInput.value !== '' ? parseFloat(lowInput.value) : '';
+                validateLineReading(readingInput, badge, dimInput, lowInput, hiInput);
+            });
+            hiInput.addEventListener('input', () => {
+                lineTemplateParams[idx].hi_tol = hiInput.value !== '' ? parseFloat(hiInput.value) : '';
+                validateLineReading(readingInput, badge, dimInput, lowInput, hiInput);
+            });
+
+            readingInput.addEventListener('input', () => {
+                validateLineReading(readingInput, badge, dimInput, lowInput, hiInput);
+                evaluateOverallLineStatus();
+            });
+
+            delBtn.addEventListener('click', () => {
+                lineTemplateParams.splice(idx, 1);
+                renderLineParamRows();
+            });
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    function validateLineReading(readingInput, badge, dimInput, lowInput, hiInput) {
+        const valStr = readingInput.value.trim();
+        if (!valStr) {
+            readingInput.style.background = '';
+            readingInput.style.borderColor = '#86efac';
+            readingInput.style.color = '';
+            badge.style.display = 'none';
+            return null;
+        }
+
+        const actual = parseFloat(valStr);
+        const dim = parseFloat(dimInput.value);
+        const low = Math.abs(parseFloat(lowInput.value) || 0);
+        const hi = Math.abs(parseFloat(hiInput.value) || 0);
+
+        if (isNaN(actual) || isNaN(dim)) {
+            readingInput.style.background = '';
+            badge.style.display = 'none';
+            return null;
+        }
+
+        const minVal = dim - low;
+        const maxVal = dim + hi;
+        const isOk = (actual >= minVal - 0.0001 && actual <= maxVal + 0.0001);
+
+        badge.style.display = 'inline-block';
+        if (isOk) {
+            readingInput.style.background = '#dcfce7';
+            readingInput.style.borderColor = '#22c55e';
+            readingInput.style.color = '#15803d';
+            badge.style.color = '#16a34a';
+            badge.textContent = '✔ OK';
+            return true;
+        } else {
+            readingInput.style.background = '#fee2e2';
+            readingInput.style.borderColor = '#ef4444';
+            readingInput.style.color = '#b91c1c';
+            badge.style.color = '#dc2626';
+            const diff = actual < minVal ? (actual - minVal).toFixed(3) : `+${(actual - maxVal).toFixed(3)}`;
+            badge.textContent = `✖ NOT OK (${diff})`;
+            return false;
+        }
+    }
+
+    function evaluateOverallLineStatus() {
+        const statusSelect = document.getElementById('lineInspStatus');
+        if (!statusSelect) return;
+
+        const readingInputs = Array.from(document.querySelectorAll('.line-param-reading'));
+        let hasFail = false;
+        let hasReadings = false;
+
+        readingInputs.forEach(input => {
+            const tr = input.closest('tr');
+            if (!tr) return;
+            const dimInput = tr.querySelector('.line-param-dim');
+            const lowInput = tr.querySelector('.line-param-low');
+            const hiInput = tr.querySelector('.line-param-hi');
+            const valStr = input.value.trim();
+            if (valStr) {
+                hasReadings = true;
+                const actual = parseFloat(valStr);
+                const dim = parseFloat(dimInput?.value);
+                const low = Math.abs(parseFloat(lowInput?.value) || 0);
+                const hi = Math.abs(parseFloat(hiInput?.value) || 0);
+                if (!isNaN(actual) && !isNaN(dim)) {
+                    if (actual < dim - low - 0.0001 || actual > dim + hi + 0.0001) {
+                        hasFail = true;
+                    }
+                }
+            }
+        });
+
+        if (hasReadings) {
+            statusSelect.value = hasFail ? 'Rejected' : 'Accepted';
+        }
+    }
+
+    // Add Row button
+    document.getElementById('lineAddRowBtn')?.addEventListener('click', () => {
+        const partNo = document.getElementById('linePartSelect')?.value;
+        if (!partNo) {
+            alert('Please select a Part No and Opn No first.');
+            return;
+        }
+        lineTemplateParams.push({
+            sl_no: lineTemplateParams.length + 1,
+            description: '',
+            nominal_dimension: '',
+            lo_tol: '',
+            hi_tol: ''
+        });
+        renderLineParamRows();
+    });
+
+    // Save Template button
+    document.getElementById('lineSaveTemplateBtn')?.addEventListener('click', async () => {
+        const partNo = document.getElementById('linePartSelect')?.value;
+        const opnNo = document.getElementById('lineOpnSelect')?.value;
+        const partDesc = document.getElementById('linePartDesc')?.value || '';
+        const opnDesc = document.getElementById('lineOpnDesc')?.value || '';
+
+        if (!partNo || !opnNo) {
+            alert('Please select both Part No and Opn No to save a template.');
+            return;
+        }
+
+        const validParams = [];
+        lineTemplateParams.forEach((p, idx) => {
+            const desc = (p.description || '').trim();
+            const dim = parseFloat(p.nominal_dimension);
+            if (desc || !isNaN(dim)) {
+                validParams.push({
+                    part_no: partNo,
+                    part_desc: partDesc,
+                    opn_no: opnNo,
+                    opn_desc: opnDesc,
+                    sl_no: idx + 1,
+                    description: desc || `Param ${idx + 1}`,
+                    nominal_dimension: !isNaN(dim) ? dim : 0.0,
+                    lo_tol: !isNaN(parseFloat(p.lo_tol)) ? Math.abs(parseFloat(p.lo_tol)) : 0.0,
+                    hi_tol: !isNaN(parseFloat(p.hi_tol)) ? Math.abs(parseFloat(p.hi_tol)) : 0.0
+                });
+            }
+        });
+
+        if (validParams.length === 0) {
+            alert('Please enter at least one parameter with a description or dimension before saving.');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/inspection-parameters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(validParams)
+            });
+            if (res.ok) {
+                alert(`Template for Part: ${partNo} (Opn: ${opnNo}) saved successfully with ${validParams.length} parameter(s)!`);
+                await loadLineTemplateParameters(partNo, opnNo);
+            } else {
+                alert('Failed to save inspection template.');
+            }
+        } catch (err) {
+            console.error('Error saving template:', err);
+            alert('Error saving inspection template.');
+        }
+    });
+
+    // Clear Values button
+    document.getElementById('lineClearInputsBtn')?.addEventListener('click', () => {
+        document.getElementById('linePartSlNo').value = '';
+        document.getElementById('lineInspRemarks').value = '';
+        document.querySelectorAll('.line-param-reading').forEach(inp => {
+            inp.value = '';
+            inp.style.background = '';
+            inp.style.borderColor = '#86efac';
+            inp.style.color = '';
+        });
+        document.querySelectorAll('.line-reading-badge').forEach(b => {
+            b.style.display = 'none';
+        });
+        document.getElementById('lineInspStatus').value = 'Accepted';
+    });
+
+    // Save Line Inspection Instance button
+    document.getElementById('lineSaveInstanceBtn')?.addEventListener('click', async () => {
+        const partNo = document.getElementById('linePartSelect')?.value;
+        const opnNo = document.getElementById('lineOpnSelect')?.value;
+        const partDesc = document.getElementById('linePartDesc')?.value || '';
+        const opnDesc = document.getElementById('lineOpnDesc')?.value || '';
+        const partSlNo = document.getElementById('linePartSlNo')?.value.trim();
+
+        if (!partNo || !opnNo) {
+            alert('Please select Part No and Opn No first.');
+            return;
+        }
+
+        if (!partSlNo) {
+            alert('Please enter the Part Sl No (Component Serial Number).');
+            document.getElementById('linePartSlNo')?.focus();
+            return;
+        }
+
+        const date = document.getElementById('lineInspDate')?.value || new Date().toISOString().slice(0, 10);
+        const shift = document.getElementById('lineInspShift')?.value || 'Shift 1';
+        const machine = document.getElementById('lineInspMachine')?.value || '';
+        const operator = document.getElementById('lineInspOperator')?.value || '';
+        const status = document.getElementById('lineInspStatus')?.value || 'Accepted';
+        const remarks = document.getElementById('lineInspRemarks')?.value || '';
+
+        const readings = [];
+        const rows = document.querySelectorAll('#lineParamTableBody tr');
+        rows.forEach(tr => {
+            const desc = tr.querySelector('.line-param-desc')?.value || '';
+            const dim = parseFloat(tr.querySelector('.line-param-dim')?.value) || 0;
+            const low = parseFloat(tr.querySelector('.line-param-low')?.value) || 0;
+            const hi = parseFloat(tr.querySelector('.line-param-hi')?.value) || 0;
+            const readingInp = tr.querySelector('.line-param-reading');
+            const actualVal = readingInp?.value.trim();
+            const actual = actualVal !== '' && !isNaN(parseFloat(actualVal)) ? parseFloat(actualVal) : null;
+            const isOk = actual !== null ? (actual >= dim - low - 0.0001 && actual <= dim + hi + 0.0001) : null;
+
+            readings.push({
+                desc: desc,
+                nominal: dim,
+                low: low,
+                hi: hi,
+                actual: actual,
+                status: isOk === true ? 'OK' : (isOk === false ? 'NOT OK' : '')
+            });
+        });
+
+        const payload = {
+            part_no: partNo,
+            part_desc: partDesc,
+            opn_no: opnNo,
+            opn_desc: opnDesc,
+            part_sl_no: partSlNo,
+            inspection_date: date,
+            shift: shift,
+            machine_name: machine,
+            operator_name: operator,
+            status: status,
+            remarks: remarks,
+            readings_json: JSON.stringify(readings)
+        };
+
+        try {
+            const res = await fetch('/api/line-inspections', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                alert(`Line Inspection for Part ${partNo} (Sl No: ${partSlNo}) saved successfully!`);
+                document.getElementById('linePartSlNo').value = '';
+                document.getElementById('lineInspRemarks').value = '';
+                document.querySelectorAll('.line-param-reading').forEach(inp => {
+                    inp.value = '';
+                    inp.style.background = '';
+                    inp.style.borderColor = '#86efac';
+                    inp.style.color = '';
+                });
+                document.querySelectorAll('.line-reading-badge').forEach(b => {
+                    b.style.display = 'none';
+                });
+                document.getElementById('lineInspStatus').value = 'Accepted';
+                document.getElementById('linePartSlNo')?.focus();
+
+                fetchLineInspectionRecords();
+            } else {
+                alert('Failed to save Line Inspection record.');
+            }
+        } catch (err) {
+            console.error('Error saving line inspection:', err);
+            alert('Error saving line inspection.');
+        }
+    });
+
+    async function fetchLineInspectionRecords() {
+        try {
+            const res = await fetch('/api/line-inspections');
+            lineRecentRecords = await res.json();
+            renderLineInspectionRecords();
+        } catch (err) {
+            console.error('Error fetching line inspections:', err);
+        }
+    }
+
+    function renderLineInspectionRecords() {
+        const tbody = document.getElementById('lineRecordsBody');
+        if (!tbody) return;
+        const filterVal = (document.getElementById('lineSearchFilter')?.value || '').trim().toLowerCase();
+
+        let records = lineRecentRecords || [];
+        if (filterVal) {
+            records = records.filter(r => 
+                (r.part_no || '').toLowerCase().includes(filterVal) ||
+                (r.part_sl_no || r.comp_sl_nos || '').toLowerCase().includes(filterVal) ||
+                (r.opn_no || '').toLowerCase().includes(filterVal) ||
+                (r.operator_name || '').toLowerCase().includes(filterVal) ||
+                (r.status || '').toLowerCase().includes(filterVal)
+            );
+        }
+
+        tbody.innerHTML = '';
+        if (records.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; padding:2rem; color:var(--text-muted);">No line inspection records found.</td></tr>`;
+            return;
+        }
+
+        records.forEach((r, idx) => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--border-color)';
+
+            const status = r.status || 'Accepted';
+            let badgeStyle = 'background:#dcfce7; color:#16a34a;';
+            if (status.toLowerCase() === 'rejected') badgeStyle = 'background:#fee2e2; color:#dc2626;';
+            else if (status.toLowerCase() === 'rework') badgeStyle = 'background:#fef3c7; color:#d97706;';
+
+            tr.innerHTML = `
+                <td style="padding:8px; text-align:center; color:var(--text-muted);">${idx + 1}</td>
+                <td style="padding:8px;">${escapeHtml(r.inspection_date || '')}</td>
+                <td style="padding:8px;">${escapeHtml(r.shift || '')}</td>
+                <td style="padding:8px; font-weight:700; color:var(--primary-color);">${escapeHtml(r.part_no || '')}</td>
+                <td style="padding:8px;">${escapeHtml(r.part_desc || '')}</td>
+                <td style="padding:8px;">${escapeHtml(r.opn_no || '')}</td>
+                <td style="padding:8px;">${escapeHtml(r.opn_desc || '')}</td>
+                <td style="padding:8px; font-weight:700; color:#0f172a;">${escapeHtml(r.part_sl_no || r.comp_sl_nos || '')}</td>
+                <td style="padding:8px;">${escapeHtml(r.machine_name || '')}</td>
+                <td style="padding:8px;">${escapeHtml(r.operator_name || '')}</td>
+                <td style="padding:8px; text-align:center;">
+                    <span style="${badgeStyle} padding: 2px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 700;">${escapeHtml(status)}</span>
+                </td>
+                <td style="padding:8px; text-align:center;">
+                    <div style="display:flex; gap:6px; justify-content:center;">
+                        <button type="button" class="btn btn-outline line-view-slip-btn" data-id="${r.id}" title="View Details" style="padding:2px 8px; font-size:0.8rem; color:#2563eb; border-color:#2563eb;">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline line-del-record-btn delete-btn" data-id="${r.id}" title="Delete Record" style="padding:2px 8px; font-size:0.8rem; color:#ef4444; border-color:#ef4444;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+
+            tr.querySelector('.line-view-slip-btn')?.addEventListener('click', () => viewLineInspectionDetails(r));
+            tr.querySelector('.line-del-record-btn')?.addEventListener('click', () => deleteLineInspectionRecord(r.id));
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    document.getElementById('lineSearchFilter')?.addEventListener('input', () => {
+        renderLineInspectionRecords();
+    });
+
+    function viewLineInspectionDetails(record) {
+        const modal = document.getElementById('lineViewModal');
+        const content = document.getElementById('lineViewModalContent');
+        if (!modal || !content) return;
+
+        let readings = [];
+        try {
+            readings = typeof record.readings_json === 'string' ? JSON.parse(record.readings_json || '[]') : record.readings_json || [];
+        } catch(e) {}
+
+        const status = record.status || 'Accepted';
+        let badgeColor = '#16a34a';
+        if (status.toLowerCase() === 'rejected') badgeColor = '#dc2626';
+        else if (status.toLowerCase() === 'rework') badgeColor = '#d97706';
+
+        let rowsHtml = '';
+        if (Array.isArray(readings) && readings.length > 0) {
+            readings.forEach((item, idx) => {
+                const isOk = item.status === 'OK';
+                const statusBadge = item.actual !== null && item.actual !== undefined ? 
+                    (isOk ? '<span style="color:#16a34a; font-weight:700;">✔ OK</span>' : '<span style="color:#dc2626; font-weight:700;">✖ NOT OK</span>') : 
+                    '<span style="color:#94a3b8;">--</span>';
+                rowsHtml += `
+                    <tr style="border-bottom: 1px solid #e2e8f0;">
+                        <td style="padding:8px; text-align:center;">${idx + 1}</td>
+                        <td style="padding:8px; text-align:left; font-weight:500;">${escapeHtml(item.desc || '')}</td>
+                        <td style="padding:8px; text-align:center;">${item.nominal !== undefined ? item.nominal : '--'}</td>
+                        <td style="padding:8px; text-align:center;">-${item.low !== undefined ? item.low : '0'}</td>
+                        <td style="padding:8px; text-align:center;">+${item.hi !== undefined ? item.hi : '0'}</td>
+                        <td style="padding:8px; text-align:center; font-weight:700; background:#f0fdf4;">${item.actual !== null && item.actual !== undefined ? item.actual : '--'}</td>
+                        <td style="padding:8px; text-align:center;">${statusBadge}</td>
+                    </tr>
+                `;
+            });
+        } else {
+            rowsHtml = `<tr><td colspan="7" style="padding:1.5rem; text-align:center; color:var(--text-muted);">No individual parameter readings recorded.</td></tr>`;
+        }
+
+        content.innerHTML = `
+            <div style="border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <h3 style="margin: 0; font-size: 1.25rem; color: var(--text-main); display:flex; align-items:center; gap:8px;">
+                        <i class="fas fa-clipboard-check" style="color:#2563eb;"></i> Line Inspection Slip
+                    </h3>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">Traceability Code: <b>${escapeHtml(record.report_code || 'N/A')}</b></span>
+                </div>
+                <button type="button" class="btn btn-outline" onclick="window.print()" style="display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+                    <i class="fas fa-print"></i> Print
+                </button>
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; background:rgba(0,0,0,0.02); padding:12px; border-radius:8px; border:1px solid var(--border-color); margin-bottom:20px; font-size:0.9rem;">
+                <div><b>Part No:</b> <span style="color:#2563eb; font-weight:700;">${escapeHtml(record.part_no || '')}</span></div>
+                <div><b>Part Desc:</b> ${escapeHtml(record.part_desc || 'N/A')}</div>
+                <div><b>Part Sl No:</b> <span style="font-weight:700; color:#0f172a;">${escapeHtml(record.part_sl_no || record.comp_sl_nos || '')}</span></div>
+                <div><b>Opn No:</b> ${escapeHtml(record.opn_no || '')}</div>
+                <div><b>Opn Desc:</b> ${escapeHtml(record.opn_desc || 'N/A')}</div>
+                <div><b>Date:</b> ${escapeHtml(record.inspection_date || '')} (${escapeHtml(record.shift || '')})</div>
+                <div><b>Machine:</b> ${escapeHtml(record.machine_name || 'N/A')}</div>
+                <div><b>Inspector:</b> ${escapeHtml(record.operator_name || 'N/A')}</div>
+                <div><b>Status:</b> <span style="color:${badgeColor}; font-weight:700;">${escapeHtml(status)}</span></div>
+            </div>
+
+            ${record.remarks ? `<div style="margin-bottom:15px; font-size:0.85rem; color:#475569;"><b>Remarks:</b> ${escapeHtml(record.remarks)}</div>` : ''}
+
+            <table style="width:100%; border-collapse:collapse; border:1px solid var(--border-color); font-size:0.88rem;">
+                <thead>
+                    <tr style="background:#f8fafc; border-bottom:2px solid #cbd5e1;">
+                        <th style="padding:8px; text-align:center; width:40px;">#</th>
+                        <th style="padding:8px; text-align:left;">Desc</th>
+                        <th style="padding:8px; text-align:center;">Dim</th>
+                        <th style="padding:8px; text-align:center;">Low Tol</th>
+                        <th style="padding:8px; text-align:center;">Hi Tol</th>
+                        <th style="padding:8px; text-align:center; background:#ecfdf5;">Observed</th>
+                        <th style="padding:8px; text-align:center;">Result</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rowsHtml}
+                </tbody>
+            </table>
+        `;
+
+        modal.style.display = 'flex';
+    }
+
+    document.getElementById('closeLineViewModalBtn')?.addEventListener('click', () => {
+        const modal = document.getElementById('lineViewModal');
+        if (modal) modal.style.display = 'none';
+    });
+
+    async function deleteLineInspectionRecord(id) {
+        if (!checkAdminAccess()) return;
+        if (confirm('Are you sure you want to delete this Line Inspection record?')) {
+            try {
+                const res = await fetch(`/api/line-inspections/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    fetchLineInspectionRecords();
+                } else {
+                    alert('Failed to delete inspection record.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error deleting inspection record.');
+            }
+        }
+    }
+
+    // Export to Excel
+    document.getElementById('lineExportExcelBtn')?.addEventListener('click', () => {
+        window.location.href = '/api/export/line-inspections/excel';
+    });
+
     // --- PROD LOG LOGIC ---
     let prodLogAllMachines = [];
     let prodLogAllOperators = [];
     let prodLogAllSetters = [];
     let prodLogSchedules = [];
     let prodLogAllPartMasters = [];
+    let prodLogAllPartsFallback = [];
     let currentPartOperations = [];
 
-    function updateProdLogPartList(dept = '') {
-        const partList = document.getElementById('prodLogPartNoList');
-        if (!partList) return;
-        partList.innerHTML = '';
+    let prodLogPartNoSelect = null;
+    const prodLogPartNoEl = document.getElementById('prodLogPartNo');
+    if (prodLogPartNoEl && window.TomSelect) {
+        prodLogPartNoSelect = new TomSelect(prodLogPartNoEl, {
+            create: false,
+            sortField: { field: "text", direction: "asc" },
+            placeholder: "Type to search Part No...",
+            allowEmptyOption: true,
+            onChange: async (val) => {
+                await handleProdLogPartChange(val);
+            }
+        });
+    }
 
+    async function handleProdLogPartChange(partno) {
+        const opnSelect = document.getElementById('prodLogOpnNo');
+        if (!opnSelect) return;
+        opnSelect.innerHTML = '<option value="">-- Select Operation --</option>';
+        document.getElementById('prodLogDescription').value = '';
+        document.getElementById('prodLogCycleTime').value = '';
+        recalcProdLog();
+        
+        if (!partno) return;
+        const cleanPart = String(partno).trim().toLowerCase();
+        
+        // 1. Try from partmaster
+        let pmPart = (prodLogAllPartMasters || []).find(p => String(p.partno || p.part_no || '').trim().toLowerCase() === cleanPart);
+        if (pmPart && pmPart.id) {
+            try {
+                const opRes = await fetch(`/api/partmaster/${pmPart.id}/operations`);
+                if (opRes.ok) {
+                    const ops = await opRes.json();
+                    if (Array.isArray(ops) && ops.length > 0) {
+                        currentPartOperations = ops;
+                        opnSelect.innerHTML = '<option value="">-- Select Operation --</option>';
+                        currentPartOperations.forEach(op => {
+                            opnSelect.innerHTML += `<option value="${op.opn_no}">${op.opn_no}</option>`;
+                        });
+                        if (currentPartOperations.length === 1) {
+                            opnSelect.value = currentPartOperations[0].opn_no;
+                            opnSelect.dispatchEvent(new Event('change'));
+                        }
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.error('Error fetching pm operations:', e);
+            }
+        }
+
+        // 2. Try from parts table fallback
+        let fallbackPart = (prodLogAllPartsFallback || []).find(p => String(p.part_no || p.partno || '').trim().toLowerCase() === cleanPart);
+        if (fallbackPart && Array.isArray(fallbackPart.operations) && fallbackPart.operations.length > 0) {
+            currentPartOperations = fallbackPart.operations;
+            opnSelect.innerHTML = '<option value="">-- Select Operation --</option>';
+            currentPartOperations.forEach(op => {
+                opnSelect.innerHTML += `<option value="${op.opn_no}">${op.opn_no}</option>`;
+            });
+            if (currentPartOperations.length === 1) {
+                opnSelect.value = currentPartOperations[0].opn_no;
+                opnSelect.dispatchEvent(new Event('change'));
+            }
+        }
+    }
+
+    function updateProdLogPartList(dept = '') {
         const deptUpper = (dept || '').trim().toUpperCase();
         const partNoSet = new Set();
 
         // 1. Scheduled parts matching dept (or all if no dept)
-        const schedParts = prodLogSchedules.filter(s => !deptUpper || (s.department || '').trim().toUpperCase() === deptUpper);
-        schedParts.forEach(s => s.partno && partNoSet.add(String(s.partno).trim()));
+        if (Array.isArray(prodLogSchedules)) {
+            const schedParts = prodLogSchedules.filter(s => !deptUpper || (s.department || '').trim().toUpperCase() === deptUpper);
+            schedParts.forEach(s => s && s.partno && partNoSet.add(String(s.partno).trim()));
+        }
 
         // 2. Part Master parts matching dept
-        const pmPartsMatching = prodLogAllPartMasters.filter(p => !deptUpper || !p.department || (p.department || '').trim().toUpperCase() === deptUpper);
-        pmPartsMatching.forEach(p => p.partno && partNoSet.add(String(p.partno).trim()));
+        if (Array.isArray(prodLogAllPartMasters)) {
+            const pmPartsMatching = prodLogAllPartMasters.filter(p => !deptUpper || !p.department || (p.department || '').trim().toUpperCase() === deptUpper);
+            pmPartsMatching.forEach(p => p && (p.partno || p.part_no) && partNoSet.add(String(p.partno || p.part_no).trim()));
 
-        // 3. Always include ALL Part Master parts as fallback so user can search any part
-        prodLogAllPartMasters.forEach(p => p.partno && partNoSet.add(String(p.partno).trim()));
+            // 3. Always include ALL Part Master parts as fallback so user can search any part
+            prodLogAllPartMasters.forEach(p => p && (p.partno || p.part_no) && partNoSet.add(String(p.partno || p.part_no).trim()));
+        }
 
-        const sortedParts = Array.from(partNoSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+        // 4. Parts table fallback
+        if (Array.isArray(prodLogAllPartsFallback)) {
+            prodLogAllPartsFallback.forEach(p => p && (p.part_no || p.partno) && partNoSet.add(String(p.part_no || p.partno).trim()));
+        }
 
-        sortedParts.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p;
-            partList.appendChild(opt);
-        });
+        const sortedParts = Array.from(partNoSet).filter(Boolean).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+        if (!prodLogPartNoSelect && window.TomSelect) {
+            const el = document.getElementById('prodLogPartNo');
+            if (el) {
+                prodLogPartNoSelect = new TomSelect(el, {
+                    create: false,
+                    sortField: { field: "text", direction: "asc" },
+                    placeholder: "Type to search Part No...",
+                    allowEmptyOption: true,
+                    onChange: async (val) => {
+                        await handleProdLogPartChange(val);
+                    }
+                });
+            }
+        }
+
+        if (prodLogPartNoSelect) {
+            prodLogPartNoSelect.clear(true);
+            prodLogPartNoSelect.clearOptions();
+            prodLogPartNoSelect.addOption({ value: '', text: '-- Select Part No --' });
+            sortedParts.forEach(p => {
+                prodLogPartNoSelect.addOption({ value: p, text: p });
+            });
+            prodLogPartNoSelect.refreshOptions(false);
+        } else {
+            const selectEl = document.getElementById('prodLogPartNo');
+            if (selectEl) {
+                selectEl.innerHTML = '<option value="">-- Select Part No --</option>';
+                sortedParts.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p;
+                    opt.textContent = p;
+                    selectEl.appendChild(opt);
+                });
+            }
+        }
+    }
+
+    function populateProdLogDeptFields(dept = '') {
+        const deptUpper = (dept || '').trim().toUpperCase();
+        const machSelect = document.getElementById('prodLogMachine');
+        const opSelect = document.getElementById('prodLogOperator');
+        const setterSelect = document.getElementById('prodLogSetter');
+
+        if (machSelect) {
+            const currentMach = machSelect.value;
+            machSelect.innerHTML = '<option value="">-- Select Machine --</option>';
+            const machs = (prodLogAllMachines || []).filter(m => !deptUpper || (m.department || m.dept || '').trim().toUpperCase() === deptUpper);
+            const machsToDisplay = machs.length > 0 ? machs : (prodLogAllMachines || []);
+            machsToDisplay.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.name;
+                opt.textContent = m.name;
+                machSelect.appendChild(opt);
+            });
+            if (currentMach && machsToDisplay.some(m => m.name === currentMach)) {
+                machSelect.value = currentMach;
+            }
+        }
+
+        if (opSelect) {
+            const currentOp = opSelect.value;
+            opSelect.innerHTML = '<option value="">-- Select Operator --</option>';
+            const filteredOperators = (prodLogAllOperators || []).filter(o => !deptUpper || (o.department || o.dept || '').trim().toUpperCase() === deptUpper);
+            const opsToDisplay = filteredOperators.length > 0 ? filteredOperators : (prodLogAllOperators || []);
+            opsToDisplay.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.name;
+                opt.textContent = o.name;
+                opSelect.appendChild(opt);
+            });
+            if (currentOp && opsToDisplay.some(o => o.name === currentOp)) {
+                opSelect.value = currentOp;
+            }
+        }
+
+        if (setterSelect) {
+            const currentSetter = setterSelect.value;
+            setterSelect.innerHTML = '<option value="">-- Select Setter --</option>';
+            const filteredSetters = (prodLogAllSetters || []).filter(s => !deptUpper || (s.department || s.dept || '').trim().toUpperCase() === deptUpper);
+            const settersToDisplay = filteredSetters.length > 0 ? filteredSetters : (prodLogAllSetters || []);
+            settersToDisplay.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.name;
+                opt.textContent = s.name;
+                setterSelect.appendChild(opt);
+            });
+            if (currentSetter && settersToDisplay.some(s => s.name === currentSetter)) {
+                setterSelect.value = currentSetter;
+            }
+        }
+
+        if (prodLogPartNoSelect) prodLogPartNoSelect.clear(true);
+        else if (document.getElementById('prodLogPartNo')) document.getElementById('prodLogPartNo').value = '';
+
+        updateProdLogPartList(deptUpper);
+
+        // Reset dependent fields
+        const opnEl = document.getElementById('prodLogOpnNo');
+        if (opnEl) opnEl.innerHTML = '<option value="">-- Select Operation --</option>';
+        const descEl = document.getElementById('prodLogDescription');
+        if (descEl) descEl.value = '';
+        const ctEl = document.getElementById('prodLogCycleTime');
+        if (ctEl) ctEl.value = '';
+        recalcProdLog();
     }
 
     async function initProdLog() {
@@ -4969,100 +7352,60 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('prodLogDate').valueAsDate = new Date();
         }
         
-        // Fetch dependencies
-        const [machRes, opRes, setterRes, schedRes, pmRes] = await Promise.all([
-            fetch('/api/machines'),
-            fetch('/api/operators'),
-            fetch('/api/setters'),
-            fetch('/api/schedule'),
-            fetch('/api/partmaster')
+        // Fetch dependencies independently so one failure never blocks the others
+        const [machData, opData, setterData, schedData, pmData, shiftData, partsData] = await Promise.all([
+            fetch('/api/machines').then(r => r.ok ? r.json() : []).catch(() => []),
+            fetch('/api/operators').then(r => r.ok ? r.json() : []).catch(() => []),
+            fetch('/api/setters').then(r => r.ok ? r.json() : []).catch(() => []),
+            fetch('/api/schedules').then(r => r.ok ? r.json() : []).catch(() => []),
+            fetch('/api/partmaster').then(r => r.ok ? r.json() : []).catch(() => []),
+            fetch('/api/shifts').then(r => r.ok ? r.json() : []).catch(() => []),
+            fetch('/api/parts').then(r => r.ok ? r.json() : []).catch(() => [])
         ]);
 
-        prodLogAllMachines = await machRes.json();
-        prodLogAllOperators = await opRes.json();
-        prodLogAllSetters = await setterRes.json();
-        const schedData = await schedRes.json();
-        prodLogSchedules = schedData.filter(s => s.status === 'Pending' || !s.status);
-        prodLogAllPartMasters = await pmRes.json();
+        prodLogAllMachines = machData || [];
+        prodLogAllOperators = opData || [];
+        prodLogAllSetters = setterData || [];
+        prodLogSchedules = (schedData || []).filter(s => s.status === 'Pending' || !s.status);
+        prodLogAllPartMasters = pmData || [];
+        prodLogAllPartsFallback = partsData || [];
 
-        // Populate Setter dropdown
-        const setterSelect = document.getElementById('prodLogSetter');
-        if (setterSelect) {
-            setterSelect.innerHTML = '<option value="">-- Select Setter --</option>';
-            prodLogAllSetters.forEach(s => {
-                setterSelect.innerHTML += `<option value="${s.name}">${s.name}</option>`;
+        // Populate Shift dropdown
+        const shiftSelect = document.getElementById('prodLogShift');
+        if (shiftSelect && shiftData && shiftData.length > 0) {
+            const currentShift = shiftSelect.value;
+            shiftSelect.innerHTML = '<option value="">-- Select Shift --</option>';
+            shiftData.forEach(s => {
+                const shiftLabel = `${s.name} (${s.hours} Hrs)`;
+                const opt = document.createElement('option');
+                opt.value = shiftLabel;
+                opt.textContent = shiftLabel;
+                shiftSelect.appendChild(opt);
             });
+            if (currentShift && shiftData.some(s => `${s.name} (${s.hours} Hrs)` === currentShift || s.name === currentShift)) {
+                shiftSelect.value = currentShift;
+            } else if (shiftSelect.options.length > 1) {
+                shiftSelect.selectedIndex = 1;
+            }
         }
-        
+
         const currentDept = document.getElementById('prodLogDept')?.value || '';
-        updateProdLogPartList(currentDept);
+        populateProdLogDeptFields(currentDept);
         
         fetchProdLogs();
     }
 
-    document.getElementById('prodLogDept').addEventListener('change', (e) => {
-        const dept = e.target.value.trim().toUpperCase();
-        const machSelect = document.getElementById('prodLogMachine');
-        const opSelect = document.getElementById('prodLogOperator');
-        const setterSelect = document.getElementById('prodLogSetter');
-        
-        machSelect.innerHTML = '<option value="">-- Select Machine --</option>';
-        opSelect.innerHTML = '<option value="">-- Select Operator --</option>';
-        if (setterSelect) setterSelect.innerHTML = '<option value="">-- Select Setter --</option>';
-        document.getElementById('prodLogPartNo').value = '';
-        
-        prodLogAllMachines.filter(m => (m.department || '').trim().toUpperCase() === dept).forEach(m => {
-            machSelect.innerHTML += `<option value="${m.name}">${m.name}</option>`;
-        });
-        
-        const filteredOperators = prodLogAllOperators.filter(o => !dept || !o.department || (o.department || '').trim().toUpperCase() === dept);
-        const opsToDisplay = filteredOperators.length > 0 ? filteredOperators : prodLogAllOperators;
-        opsToDisplay.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        opsToDisplay.forEach(o => {
-            opSelect.innerHTML += `<option value="${o.name}">${o.name}</option>`;
-        });
-
-        if (setterSelect) {
-            const filteredSetters = prodLogAllSetters.filter(s => !dept || !s.department || s.department.trim().toUpperCase() === dept);
-            const settersToDisplay = filteredSetters.length > 0 ? filteredSetters : prodLogAllSetters;
-            settersToDisplay.forEach(s => {
-                setterSelect.innerHTML += `<option value="${s.name}">${s.name}</option>`;
-            });
-        }
-        
-        updateProdLogPartList(dept);
-        
-        // Reset dependent fields
-        document.getElementById('prodLogOpnNo').innerHTML = '<option value="">-- Select Operation --</option>';
-        document.getElementById('prodLogDescription').value = '';
-        document.getElementById('prodLogCycleTime').value = '';
-        recalcProdLog();
+    document.getElementById('prodLogDept')?.addEventListener('change', (e) => {
+        populateProdLogDeptFields(e.target.value);
     });
 
-    document.getElementById('prodLogPartNo').addEventListener('change', async (e) => {
-        const partno = e.target.value;
-        const opnSelect = document.getElementById('prodLogOpnNo');
-        opnSelect.innerHTML = '<option value="">-- Select Operation --</option>';
-        document.getElementById('prodLogDescription').value = '';
-        document.getElementById('prodLogCycleTime').value = '';
-        recalcProdLog();
-        
-        if (!partno) return;
-        
-        // Need part_id to get operations. Let's fetch partmaster and find the id.
-        const res = await fetch('/api/partmaster');
-        const allParts = await res.json();
-        const part = allParts.find(p => String(p.partno).trim().toLowerCase() === String(partno).trim().toLowerCase());
-        if (part) {
-            const opRes = await fetch(`/api/partmaster/${part.id}/operations`);
-            currentPartOperations = await opRes.json();
-            currentPartOperations.forEach(op => {
-                opnSelect.innerHTML += `<option value="${op.opn_no}">${op.opn_no}</option>`;
-            });
+    document.getElementById('prodLogPartNo')?.addEventListener('change', async (e) => {
+        if (!prodLogPartNoSelect) {
+            await handleProdLogPartChange(e.target.value);
         }
     });
 
-    document.getElementById('prodLogOpnNo').addEventListener('change', (e) => {
+    document.getElementById('prodLogOpnNo')?.addEventListener('change', (e) => {
         const opn_no = String(e.target.value).trim();
         const op = currentPartOperations.find(o => String(o.opn_no).trim() === opn_no);
         if (op) {
@@ -5301,7 +7644,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 machine: document.getElementById('prodLogMachine').value,
                 operator: isIdle ? "" : document.getElementById('prodLogOperator').value,
                 multiple_mc: isIdle ? 1 : (parseInt(document.getElementById('prodLogMultipleMc').value) || 1),
-                partno: isIdle ? "MACHINE IDLE" : document.getElementById('prodLogPartNo').value,
+                partno: isIdle ? "MACHINE IDLE" : (prodLogPartNoSelect ? prodLogPartNoSelect.getValue() : (document.getElementById('prodLogPartNo')?.value || '')),
                 opn_no: isIdle ? "IDLE" : document.getElementById('prodLogOpnNo').value,
                 description: isIdle ? (document.getElementById('prodLogIdleReason').value || "Machine Idle") : document.getElementById('prodLogDescription').value,
                 cycle_time: isIdle ? 0 : (parseFloat(document.getElementById('prodLogCycleTime').value) || 0),
@@ -6469,20 +8812,37 @@ document.addEventListener('DOMContentLoaded', () => {
             deptForm.reset();
             deptIdInput.value = '';
         }
+        deptModal.classList.add('active');
         deptModal.classList.add('show');
     }
 
-    if (cancelDeptBtn) {
-        cancelDeptBtn.addEventListener('click', () => {
+    function closeDeptModal() {
+        if (deptModal) {
+            deptModal.classList.remove('active');
             deptModal.classList.remove('show');
-        });
+        }
+        if (deptForm) deptForm.reset();
+        if (deptIdInput) deptIdInput.value = '';
+    }
+
+    if (cancelDeptBtn) {
+        cancelDeptBtn.addEventListener('click', closeDeptModal);
+    }
+    const closeDeptModalBtn = document.getElementById('closeDeptModalBtn');
+    if (closeDeptModalBtn) {
+        closeDeptModalBtn.addEventListener('click', closeDeptModal);
     }
 
     if (deptForm) {
         deptForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const nameVal = (deptNameInput.value || '').trim();
+            if (!nameVal) {
+                alert('Please enter a department name.');
+                return;
+            }
             const payload = {
-                name: deptNameInput.value
+                name: nameVal
             };
             const id = deptIdInput.value;
             const method = id ? 'PUT' : 'POST';
@@ -6495,14 +8855,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify(payload)
                 });
                 if (res.ok) {
-                    deptModal.classList.remove('show');
+                    closeDeptModal();
                     fetchDepartments();
                 } else {
-                    alert('Error saving department');
+                    const errText = await res.text().catch(() => '');
+                    alert('Error saving department: ' + (errText || 'Please try again.'));
                 }
             } catch (err) {
                 console.error(err);
-                alert('Error saving department');
+                alert('Error saving department: ' + err);
             }
         });
     }
@@ -6609,20 +8970,37 @@ document.addEventListener('DOMContentLoaded', () => {
             shiftForm.reset();
             shiftIdInput.value = '';
         }
+        shiftModal.classList.add('active');
         shiftModal.classList.add('show');
     }
 
-    if (cancelShiftBtn) {
-        cancelShiftBtn.addEventListener('click', () => {
+    function closeShiftModal() {
+        if (shiftModal) {
+            shiftModal.classList.remove('active');
             shiftModal.classList.remove('show');
-        });
+        }
+        if (shiftForm) shiftForm.reset();
+        if (shiftIdInput) shiftIdInput.value = '';
+    }
+
+    if (cancelShiftBtn) {
+        cancelShiftBtn.addEventListener('click', closeShiftModal);
+    }
+    const closeShiftModalBtn = document.getElementById('closeShiftModalBtn');
+    if (closeShiftModalBtn) {
+        closeShiftModalBtn.addEventListener('click', closeShiftModal);
     }
 
     if (shiftForm) {
         shiftForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const nameVal = (shiftNameInput.value || '').trim();
+            if (!nameVal) {
+                alert('Please enter a shift name.');
+                return;
+            }
             const payload = {
-                name: shiftNameInput.value,
+                name: nameVal,
                 hours: parseFloat(shiftHoursInput.value) || 8.0
             };
             const id = shiftIdInput.value;
@@ -6636,14 +9014,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify(payload)
                 });
                 if (res.ok) {
-                    shiftModal.classList.remove('show');
+                    closeShiftModal();
                     fetchShifts();
                 } else {
-                    alert('Error saving shift');
+                    const errText = await res.text().catch(() => '');
+                    alert('Error saving shift: ' + (errText || 'Please try again.'));
                 }
             } catch (err) {
                 console.error(err);
-                alert('Error saving shift');
+                alert('Error saving shift: ' + err);
             }
         });
     }
@@ -7370,11 +9749,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         availableParts.forEach(p => {
+            const prevLabel = p.prev_opn_no ? (p.prev_opn_desc ? `${p.prev_opn_no}: ${p.prev_opn_desc}` : p.prev_opn_no) : 'RM';
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><strong>${p.partno}</strong></td>
-                <td>${p.department || '-'}</td>
-                <td>${p.produced_qty} (${p.prev_opn_no}: ${p.prev_opn_desc})</td>
+                <td>${p.department || 'BC'}</td>
+                <td>${p.produced_qty} (${prevLabel})</td>
                 <td>${p.pc_sent_qty}</td>
                 <td><span style="font-weight: bold; color: #16a34a;">${p.available_qty}</span></td>
                 <td>
@@ -7771,84 +10151,145 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch('/api/prodlog');
                 const allLogs = await res.json();
                 
-                // Filter
+                // Filter by department and date range
                 const filtered = allLogs.filter(l => {
-                    if (dept && (l.dept || '').toUpperCase() !== dept.toUpperCase()) return false;
-                    if (l.date < fromDate || l.date > toDate) return false;
+                    const lDept = (l.dept || l.department || '').trim().toUpperCase();
+                    if (dept && lDept !== dept.trim().toUpperCase()) return false;
+                    const lDate = (l.date || '').trim();
+                    if (lDate < fromDate || lDate > toDate) return false;
+
+                    // Exclude specific machines for BC department: leadwell, new 2 way, pc, tapping 1
+                    const effectiveDept = lDept || (dept ? dept.trim().toUpperCase() : '');
+                    const mcNorm = (l.machine || l.machine_name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+                    if (effectiveDept === 'BC') {
+                        if (mcNorm === 'leadwell' || mcNorm === 'new 2 way' || mcNorm === 'new 2way' || mcNorm === 'pc' || mcNorm === 'tapping 1' || mcNorm === 'tapping1') {
+                            return false;
+                        }
+                    }
+                    // Exclude specific machines for SPIDER department: HT, NH22-1
+                    if (effectiveDept === 'SPIDER') {
+                        if (mcNorm === 'ht' || mcNorm === 'nh22-1' || mcNorm === 'nh22 - 1' || mcNorm === 'nh 22-1' || mcNorm === 'nh-22-1') {
+                            return false;
+                        }
+                    }
+
                     return true;
                 });
                 
-                // Collect unique idle reasons
-                const idleReasonsSet = new Set();
-                filtered.forEach(l => {
-                    if (l.idle_reason) idleReasonsSet.add(l.idle_reason.trim());
-                    if (l.idle_reason_2) idleReasonsSet.add(l.idle_reason_2.trim());
-                    if (l.idle_reason_3) idleReasonsSet.add(l.idle_reason_3.trim());
-                });
-                const idleReasons = Array.from(idleReasonsSet).filter(r => r).sort();
-                
-                // Group by machine
+                // Group by machine (ignore empty or invalid machine names)
                 const machineData = {};
                 filtered.forEach(l => {
-                    const mc = (l.machine || 'Unknown').trim();
+                    const mc = (l.machine || l.machine_name || '').trim();
+                    if (!mc || mc === '-' || mc.toLowerCase() === 'none' || mc.toLowerCase() === 'unknown') return;
+                    
+                    const lDept = (l.dept || l.department || dept || '').trim().toUpperCase();
+                    const mcNorm = mc.toLowerCase().replace(/\s+/g, ' ').trim();
+                    if (lDept === 'BC') {
+                        if (mcNorm === 'leadwell' || mcNorm === 'new 2 way' || mcNorm === 'new 2way' || mcNorm === 'pc' || mcNorm === 'tapping 1' || mcNorm === 'tapping1') {
+                            return;
+                        }
+                    }
+                    if (lDept === 'SPIDER') {
+                        if (mcNorm === 'ht' || mcNorm === 'nh22-1' || mcNorm === 'nh22 - 1' || mcNorm === 'nh 22-1' || mcNorm === 'nh-22-1') {
+                            return;
+                        }
+                    }
+
                     if (!machineData[mc]) {
-                        machineData[mc] = { runtime: 0, idleTotal: 0 };
-                        idleReasons.forEach(r => machineData[mc][r] = 0);
+                        machineData[mc] = { runtime: 0, idleTotal: 0, byDate: {} };
                     }
                     
-                    machineData[mc].runtime += (l.runtime || 0);
-                    
-                    let idle1 = l.idle_hours || 0;
-                    let idle2 = l.idle_hours_2 || 0;
-                    let idle3 = l.idle_hours_3 || 0;
-                    
-                    machineData[mc].idleTotal += (idle1 + idle2 + idle3);
-                    
-                    if (l.idle_reason && idle1 > 0) machineData[mc][l.idle_reason.trim()] += idle1;
-                    if (l.idle_reason_2 && idle2 > 0) machineData[mc][l.idle_reason_2.trim()] += idle2;
-                    if (l.idle_reason_3 && idle3 > 0) machineData[mc][l.idle_reason_3.trim()] += idle3;
+                    const rTime = parseFloat(l.runtime) || 0;
+                    const idle1 = parseFloat(l.idle_hours) || 0;
+                    const idle2 = parseFloat(l.idle_hours_2) || 0;
+                    const idle3 = parseFloat(l.idle_hours_3) || 0;
+                    const iTotal = idle1 + idle2 + idle3;
+
+                    machineData[mc].runtime += rTime;
+                    machineData[mc].idleTotal += iTotal;
+
+                    const lDate = (l.date || '').trim();
+                    if (lDate) {
+                        if (!machineData[mc].byDate[lDate]) {
+                            machineData[mc].byDate[lDate] = { runtime: 0, idleTotal: 0 };
+                        }
+                        machineData[mc].byDate[lDate].runtime += rTime;
+                        machineData[mc].byDate[lDate].idleTotal += iTotal;
+                    }
                 });
                 
-                // Render table
+                // Render table: Machine, Run Time, Idle Time, Log Time, Actual Time, Util %
                 const thead = document.getElementById('mcUtilHead');
                 const tbody = document.getElementById('mcUtilBody');
                 
-                let headHtml = `<tr>
-                    <th>Machine</th>
-                    <th>Run Time</th>
-                    <th>Idle Time</th>
-                    <th>Log Time</th>
-                    <th>Util %</th>`;
-                idleReasons.forEach(r => {
-                    headHtml += `<th>${r}</th>`;
-                });
-                headHtml += `</tr>`;
-                thead.innerHTML = headHtml;
+                thead.innerHTML = `<tr>
+                    <th style="text-align: left; padding: 10px 14px;">Machine</th>
+                    <th style="text-align: right; padding: 10px 14px;">Run Time</th>
+                    <th style="text-align: right; padding: 10px 14px;">Idle Time</th>
+                    <th style="text-align: right; padding: 10px 14px;">Log Time</th>
+                    <th style="text-align: right; padding: 10px 14px;">Actual Time</th>
+                    <th style="text-align: right; padding: 10px 14px;">Util %</th>
+                </tr>`;
                 
                 tbody.innerHTML = '';
                 
                 const sortedMachines = Object.keys(machineData).sort();
                 if (sortedMachines.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="${5 + idleReasons.length}" style="text-align:center; color: var(--text-muted);">No data found for selected period</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color: var(--text-muted); padding: 15px;">No machine data found for selected period</td></tr>`;
                 } else {
-                    let totalRowHtml = '';
+                    let rowsHtml = '';
+                    let totalRunTime = 0;
+                    let totalIdleTime = 0;
+                    let totalLogTime = 0;
+                    let totalActualTime = 0;
+                    
                     sortedMachines.forEach(mc => {
                         const d = machineData[mc];
                         const logTime = d.runtime + d.idleTotal;
-                        const utilPercent = (d.runtime / 21) * 100;
-                        let rowHtml = `<tr>
-                            <td style="font-weight: 500;">${mc}</td>
-                            <td>${d.runtime.toFixed(2)}</td>
-                            <td>${d.idleTotal.toFixed(2)}</td>
-                            <td>${logTime.toFixed(2)}</td>
-                            <td>${utilPercent.toFixed(2)}%</td>`;
-                        idleReasons.forEach(r => {
-                            rowHtml += `<td>${d[r] ? d[r].toFixed(2) : '-'}</td>`;
-                        });
-                        rowHtml += `</tr>`;
-                        totalRowHtml += rowHtml;
+
+                        // Actual Time logic:
+                        // If log time >= 22, actual time = log time; if log time < 22, actual time = 21
+                        let actualTime = 0;
+                        const dates = Object.keys(d.byDate);
+                        if (dates.length > 0) {
+                            dates.forEach(dt => {
+                                const day = d.byDate[dt];
+                                const dayLog = day.runtime + day.idleTotal;
+                                actualTime += (dayLog >= 22 ? dayLog : 21);
+                            });
+                        } else {
+                            actualTime = logTime >= 22 ? logTime : 21;
+                        }
+
+                        // util% = (runtime / actual time) * 100
+                        const utilPercent = actualTime > 0 ? (d.runtime / actualTime) * 100 : 0;
+                        
+                        totalRunTime += d.runtime;
+                        totalIdleTime += d.idleTotal;
+                        totalLogTime += logTime;
+                        totalActualTime += actualTime;
+                        
+                        rowsHtml += `<tr>
+                            <td style="font-weight: 600; text-align: left; padding: 8px 14px;">${escapeHtml(mc)}</td>
+                            <td style="text-align: right; padding: 8px 14px;">${d.runtime.toFixed(2)}</td>
+                            <td style="text-align: right; padding: 8px 14px;">${d.idleTotal.toFixed(2)}</td>
+                            <td style="text-align: right; padding: 8px 14px; font-weight: 600;">${logTime.toFixed(2)}</td>
+                            <td style="text-align: right; padding: 8px 14px; font-weight: 600;">${actualTime.toFixed(2)}</td>
+                            <td style="text-align: right; padding: 8px 14px; font-weight: 700; color: #0284c7;">${utilPercent.toFixed(2)}%</td>
+                        </tr>`;
                     });
-                    tbody.innerHTML = totalRowHtml;
+                    
+                    const overallUtil = totalActualTime > 0 ? (totalRunTime / totalActualTime) * 100 : 0;
+                    rowsHtml += `<tr style="background: #f1f5f9; font-weight: 700; border-top: 2px solid #cbd5e1;">
+                        <td style="text-align: left; padding: 10px 14px;">Total</td>
+                        <td style="text-align: right; padding: 10px 14px;">${totalRunTime.toFixed(2)}</td>
+                        <td style="text-align: right; padding: 10px 14px;">${totalIdleTime.toFixed(2)}</td>
+                        <td style="text-align: right; padding: 10px 14px;">${totalLogTime.toFixed(2)}</td>
+                        <td style="text-align: right; padding: 10px 14px;">${totalActualTime.toFixed(2)}</td>
+                        <td style="text-align: right; padding: 10px 14px; color: #0284c7;">${overallUtil.toFixed(2)}%</td>
+                    </tr>`;
+                    
+                    tbody.innerHTML = rowsHtml;
                 }
                 
             } catch(e) {
@@ -7864,6 +10305,287 @@ document.addEventListener('DOMContentLoaded', () => {
             exportTableToExcel('mcUtilTable', 'Machine_Utilization_Report');
         });
     }
+
+    // --- WhatsApp Machine Utilization Sharing ---
+    const whatsappMcUtilBtn = document.getElementById('whatsappMcUtilBtn');
+    const mcUtilWhatsappModal = document.getElementById('mcUtilWhatsappModal');
+    const closeMcUtilWhatsappModalBtn = document.getElementById('closeMcUtilWhatsappModalBtn');
+    const copyMcUtilWhatsappTextBtn = document.getElementById('copyMcUtilWhatsappTextBtn');
+    const sendMcUtilWhatsappConfirmBtn = document.getElementById('sendMcUtilWhatsappConfirmBtn');
+    const mcUtilWhatsappPhone = document.getElementById('mcUtilWhatsappPhone');
+    const mcUtilWhatsappPreview = document.getElementById('mcUtilWhatsappPreview');
+
+    function generateMcUtilWhatsappText() {
+        const fromDate = document.getElementById('mcUtilFromDate')?.value || '';
+        const toDate = document.getElementById('mcUtilToDate')?.value || '';
+        const deptSelect = document.getElementById('mcUtilDept');
+        let dept = 'ALL';
+        if (deptSelect) {
+            dept = deptSelect.options[deptSelect.selectedIndex]?.text || deptSelect.value || 'ALL';
+            if (dept.startsWith('--')) dept = 'ALL';
+        }
+
+        const tbody = document.getElementById('mcUtilBody');
+        if (!tbody) return '';
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        if (rows.length === 0 || (rows[0] && rows[0].innerText.includes('No machine data'))) {
+            return '';
+        }
+
+        let text = `🏭 *GRS ENGINEERING PVT LTD*\n`;
+        text += `📊 *MACHINE UTILIZATION REPORT*\n`;
+        text += `📅 *Period:* ${fromDate} to ${toDate}\n`;
+        text += `🏢 *Dept:* ${dept}\n`;
+        text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+
+        let summaryTotal = null;
+
+        rows.forEach(r => {
+            const cells = Array.from(r.querySelectorAll('td')).map(td => td.innerText.trim());
+            if (cells.length >= 6) {
+                const mcName = cells[0];
+                const run = cells[1];
+                const idle = cells[2];
+                const log = cells[3];
+                const act = cells[4];
+                const util = cells[5];
+
+                if (mcName.toLowerCase() === 'total') {
+                    summaryTotal = { run, idle, log, act, util };
+                } else {
+                    text += `*${mcName}* • *${util}*\n`;
+                    text += `Run: ${run} | Idle: ${idle} | Log: ${log} | Act: ${act}\n`;
+                    text += `─────────────────────\n`;
+                }
+            }
+        });
+
+        if (summaryTotal) {
+            text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+            text += `🏆 *TOTAL SUMMARY:*\n`;
+            text += `• *Run Time:* ${summaryTotal.run} hrs\n`;
+            text += `• *Idle Time:* ${summaryTotal.idle} hrs\n`;
+            text += `• *Log Time:* ${summaryTotal.log} hrs\n`;
+            text += `• *Actual Time:* ${summaryTotal.act} hrs\n`;
+            text += `• *Overall Utilization:* *${summaryTotal.util}*\n`;
+            text += `━━━━━━━━━━━━━━━━━━━━━\n`;
+        }
+
+        return text;
+    }
+
+    async function generateMcUtilImageBlob() {
+        const table = document.getElementById('mcUtilTable');
+        if (!table || typeof html2canvas === 'undefined') return null;
+
+        const fromDate = document.getElementById('mcUtilFromDate')?.value || '';
+        const toDate = document.getElementById('mcUtilToDate')?.value || '';
+        const deptSelect = document.getElementById('mcUtilDept');
+        let dept = 'ALL';
+        if (deptSelect) {
+            dept = deptSelect.options[deptSelect.selectedIndex]?.text || deptSelect.value || 'ALL';
+            if (dept.startsWith('--')) dept = 'ALL';
+        }
+
+        const cloneContainer = document.createElement('div');
+        cloneContainer.style.position = 'fixed';
+        cloneContainer.style.top = '-9999px';
+        cloneContainer.style.left = '-9999px';
+        cloneContainer.style.width = '640px';
+        cloneContainer.style.background = '#ffffff';
+        cloneContainer.style.padding = '16px';
+        cloneContainer.style.fontFamily = "'Inter', Arial, sans-serif";
+        cloneContainer.style.color = '#1e293b';
+
+        cloneContainer.innerHTML = `
+            <div style="text-align: center; margin-bottom: 12px; border-bottom: 2px solid #0284c7; padding-bottom: 8px;">
+                <div style="font-size: 16px; font-weight: 800; color: #0f172a; letter-spacing: 0.5px;">GRS ENGINEERING PVT LTD</div>
+                <div style="font-size: 13px; font-weight: 700; color: #0284c7; margin-top: 2px;">MACHINE UTILIZATION REPORT</div>
+                <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+                    <strong>Period:</strong> ${fromDate} to ${toDate} &nbsp;|&nbsp; <strong>Dept:</strong> ${dept}
+                </div>
+            </div>
+            <div style="width: 100%;">
+                ${table.outerHTML}
+            </div>
+        `;
+
+        document.body.appendChild(cloneContainer);
+
+        try {
+            const canvas = await html2canvas(cloneContainer, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                useCORS: true
+            });
+            document.body.removeChild(cloneContainer);
+            return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        } catch (err) {
+            if (cloneContainer.parentNode) document.body.removeChild(cloneContainer);
+            console.error('html2canvas error:', err);
+            return null;
+        }
+    }
+
+    if (whatsappMcUtilBtn && mcUtilWhatsappModal) {
+        whatsappMcUtilBtn.addEventListener('click', () => {
+            const text = generateMcUtilWhatsappText();
+            if (!text) {
+                alert('Please generate the Machine Utilization Report first.');
+                return;
+            }
+            if (mcUtilWhatsappPreview) {
+                mcUtilWhatsappPreview.value = text;
+            }
+            const savedPhone = localStorage.getItem('mc_util_whatsapp_phone') || '';
+            if (mcUtilWhatsappPhone && !mcUtilWhatsappPhone.value) {
+                mcUtilWhatsappPhone.value = savedPhone;
+            }
+            mcUtilWhatsappModal.style.display = 'flex';
+            mcUtilWhatsappModal.classList.add('show');
+        });
+    }
+
+    if (closeMcUtilWhatsappModalBtn && mcUtilWhatsappModal) {
+        closeMcUtilWhatsappModalBtn.addEventListener('click', () => {
+            mcUtilWhatsappModal.style.display = 'none';
+            mcUtilWhatsappModal.classList.remove('show');
+        });
+    }
+
+    if (copyMcUtilWhatsappTextBtn && mcUtilWhatsappPreview) {
+        copyMcUtilWhatsappTextBtn.addEventListener('click', () => {
+            const text = mcUtilWhatsappPreview.value;
+            if (!text) return;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Report text copied to clipboard! You can paste (Ctrl+V) directly into WhatsApp or Email.');
+            }).catch(() => {
+                mcUtilWhatsappPreview.select();
+                document.execCommand('copy');
+                alert('Report text copied to clipboard!');
+            });
+        });
+    }
+
+    const copyMcUtilImageBtn = document.getElementById('copyMcUtilImageBtn');
+    if (copyMcUtilImageBtn) {
+        copyMcUtilImageBtn.addEventListener('click', async () => {
+            const blob = await generateMcUtilImageBlob();
+            if (!blob) {
+                alert('Could not generate report image.');
+                return;
+            }
+            try {
+                await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blob })
+                ]);
+                alert('Report table HD Image copied to clipboard! You can paste (Ctrl+V) directly into WhatsApp or Email.');
+            } catch (err) {
+                alert('Clipboard image copy not supported by your browser. Please use "Download Image" instead.');
+            }
+        });
+    }
+
+    const downloadMcUtilImageBtn = document.getElementById('downloadMcUtilImageBtn');
+    if (downloadMcUtilImageBtn) {
+        downloadMcUtilImageBtn.addEventListener('click', async () => {
+            const blob = await generateMcUtilImageBlob();
+            if (!blob) {
+                alert('Could not generate report image.');
+                return;
+            }
+            const link = document.createElement('a');
+            link.download = `Machine_Utilization_Report_${new Date().toISOString().slice(0, 10)}.png`;
+            link.href = URL.createObjectURL(blob);
+            link.click();
+        });
+    }
+
+    const sendMcUtilWhatsappImageBtn = document.getElementById('sendMcUtilWhatsappImageBtn');
+    if (sendMcUtilWhatsappImageBtn) {
+        sendMcUtilWhatsappImageBtn.addEventListener('click', async () => {
+            const blob = await generateMcUtilImageBlob();
+            if (!blob) {
+                alert('Could not generate report image.');
+                return;
+            }
+
+            const file = new File([blob], `Machine_Utilization_${new Date().toISOString().slice(0,10)}.png`, { type: 'image/png' });
+
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                try {
+                    await navigator.share({
+                        files: [file],
+                        title: 'Machine Utilization Report',
+                        text: 'Machine Utilization Report - GRS Engineering'
+                    });
+                    return;
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.error('navigator.share failed:', err);
+                    }
+                }
+            }
+
+            try {
+                await navigator.clipboard.write([
+                    new ClipboardItem({ 'image/png': blob })
+                ]);
+                alert('Table HD Image copied to clipboard! Opening WhatsApp... Paste (Ctrl+V) directly into your chat.');
+                
+                let phone = (mcUtilWhatsappPhone?.value || '').trim().replace(/\D/g, '');
+                if (phone.length === 10) phone = '91' + phone;
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                let url = '';
+                if (phone) {
+                    url = `https://wa.me/${phone}`;
+                } else {
+                    url = isMobile ? `https://api.whatsapp.com/send` : `https://web.whatsapp.com/`;
+                }
+                window.open(url, '_blank');
+            } catch (copyErr) {
+                const link = document.createElement('a');
+                link.download = `Machine_Utilization_${new Date().toISOString().slice(0,10)}.png`;
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                alert('Report image downloaded! You can attach it directly in WhatsApp.');
+            }
+        });
+    }
+
+    if (sendMcUtilWhatsappConfirmBtn && mcUtilWhatsappPreview) {
+        sendMcUtilWhatsappConfirmBtn.addEventListener('click', () => {
+            const text = mcUtilWhatsappPreview.value;
+            if (!text) return;
+
+            let phone = (mcUtilWhatsappPhone?.value || '').trim();
+            phone = phone.replace(/\D/g, '');
+            if (phone.length === 10) {
+                phone = '91' + phone;
+            }
+            if (phone) {
+                localStorage.setItem('mc_util_whatsapp_phone', phone);
+            }
+
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            let url = '';
+            if (phone) {
+                url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+            } else {
+                url = isMobile 
+                    ? `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`
+                    : `https://web.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+            }
+            window.open(url, '_blank');
+        });
+    }
+
+    window.addEventListener('click', (e) => {
+        if (mcUtilWhatsappModal && e.target === mcUtilWhatsappModal) {
+            mcUtilWhatsappModal.style.display = 'none';
+            mcUtilWhatsappModal.classList.remove('show');
+        }
+    });
 
     // --- OPERATOR EFFICIENCY REPORT LOGIC ---
     async function fetchOperEffReport() {
@@ -10285,7 +13007,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/insert_receipts');
             allReceiptsCache = await res.json();
 
-            const matchingReceipts = allReceiptsCache.filter(r => (r.insert_spec || '').trim().toLowerCase() === spec.trim().toLowerCase() && r.qty >= 0);
+            const matchingReceipts = allReceiptsCache.filter(r => {
+                const isSpecMatch = (r.insert_spec || '').trim().toLowerCase() === spec.trim().toLowerCase();
+                const bNo = (r.batch_no || `ID-${r.id}`).trim();
+                const isSelected = selectedBatch && selectedBatch.trim().toLowerCase() === bNo.toLowerCase();
+                const hasStock = (parseFloat(r.qty) || 0) > 0;
+                return isSpecMatch && (hasStock || isSelected);
+            });
             
             if (matchingReceipts.length === 0) {
                 batchSel.innerHTML = '<option value="">-- No Batches Available --</option>';
@@ -11407,49 +14135,122 @@ document.addEventListener('DOMContentLoaded', () => {
     const addBdSlipBtn = document.getElementById('addBdSlipBtn');
     const cancelBdSlipBtn = document.getElementById('cancelBdSlipBtn');
     const closeBdSlipModalBtn = document.getElementById('closeBdSlipModalBtn');
+    let currentBdSlips = [];
+    let bdSlipExportInitialized = false;
 
     async function fetchBdSlips() {
         try {
             const res = await fetch('/api/breakdown_slips');
-            const data = await res.json();
-            renderBdSlips(data);
+            currentBdSlips = await res.json();
+            renderBdSlips(currentBdSlips);
         } catch (err) { console.error('Error fetching breakdown slips:', err); }
+    }
+
+    function updateBdSlipKpis(slips) {
+        const totalEl = document.getElementById('kpiBdTotal');
+        const openEl = document.getElementById('kpiBdOpen');
+        const signedOffEl = document.getElementById('kpiBdSignedOff');
+        const machEl = document.getElementById('kpiBdMachines');
+
+        if (!totalEl) return;
+        totalEl.innerText = slips.length;
+
+        let openCount = 0;
+        let signedOffCount = 0;
+        const machines = new Set();
+
+        slips.forEach(s => {
+            const isSignedOff = s.status === 'Signed Off' || (s.signoff_date_time && s.signoff_date_time.trim() !== '');
+            if (isSignedOff) signedOffCount++;
+            else openCount++;
+            if (s.machine) machines.add(s.machine.trim().toUpperCase());
+        });
+
+        if (openEl) openEl.innerText = openCount;
+        if (signedOffEl) signedOffEl.innerText = signedOffCount;
+        if (machEl) machEl.innerText = machines.size;
     }
 
     function renderBdSlips(slips) {
         const tbody = document.getElementById('bdSlipBody');
         if (!tbody) return;
         tbody.innerHTML = '';
+
+        updateBdSlipKpis(slips || []);
+
         if (!slips || slips.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 0.75rem;">No breakdown slips found. Click "+ Add Breakdown Slip" to create a record.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 1.5rem;">No breakdown slips found. Click "+ Add Breakdown Slip" to create a record.</td></tr>';
             return;
         }
 
-        slips.forEach(item => {
+        slips.forEach((item, idx) => {
             const tr = document.createElement('tr');
+            tr.style.backgroundColor = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+
             const isSignedOff = item.status === 'Signed Off' || (item.signoff_date_time && item.signoff_date_time.trim() !== '');
             const statusBadge = isSignedOff 
-                ? '<span style="color: #16a34a; font-weight: 600; background: #dcfce7; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">Signed Off</span>' 
-                : '<span style="color: #d97706; font-weight: 600; background: #fef3c7; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">Open</span>';
+                ? '<span style="display: inline-flex; align-items: center; gap: 5px; background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; font-weight: 700; padding: 3px 10px; border-radius: 20px; font-size: 0.78rem; white-space: nowrap;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #16a34a; display: inline-block;"></span>Signed Off</span>' 
+                : '<span style="display: inline-flex; align-items: center; gap: 5px; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; font-weight: 700; padding: 3px 10px; border-radius: 20px; font-size: 0.78rem; white-space: nowrap;"><span style="width: 7px; height: 7px; border-radius: 50%; background: #d97706; display: inline-block;"></span>Open</span>';
 
             const formattedDateTime = item.date_time ? item.date_time.replace('T', ' ') : '';
-            const formattedSignoff = item.signoff_date_time ? item.signoff_date_time.replace('T', ' ') : '-';
+            let [dPart, tPart] = formattedDateTime.split(' ');
+            let dateHtml = dPart ? `<div style="font-weight: 600; color: #1e293b; white-space: nowrap;"><i class="far fa-calendar-alt" style="color: #64748b; margin-right: 4px;"></i>${escapeHtml(dPart)}</div>` : '-';
+            if (tPart) dateHtml += `<div style="font-size: 0.75rem; color: #64748b; margin-top: 2px; white-space: nowrap;"><i class="far fa-clock" style="margin-right: 3px;"></i>${escapeHtml(tPart)}</div>`;
+
+            const formattedSignoff = item.signoff_date_time ? item.signoff_date_time.replace('T', ' ') : '';
+            let signoffHtml = '<span style="color: #94a3b8; font-style: italic; font-size: 0.8rem;">Pending</span>';
+            if (formattedSignoff) {
+                let [soD, soT] = formattedSignoff.split(' ');
+                signoffHtml = `<div style="font-weight: 600; color: #15803d; font-size: 0.82rem; white-space: nowrap;"><i class="fas fa-check" style="margin-right: 4px;"></i>${escapeHtml(soD)}</div>`;
+                if (soT) signoffHtml += `<div style="font-size: 0.75rem; color: #64748b; margin-top: 2px; white-space: nowrap;"><i class="far fa-clock" style="margin-right: 3px;"></i>${escapeHtml(soT)}</div>`;
+            }
+
+            let mType = item.maint_type || 'Breakdown';
+            let mTypeBadge = '';
+            if (mType.toLowerCase().includes('breakdown')) {
+                mTypeBadge = `<span style="background: #fee2e2; color: #991b1b; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; display: inline-block; white-space: nowrap;"><i class="fas fa-exclamation-triangle" style="margin-right: 3px;"></i>${escapeHtml(mType)}</span>`;
+            } else if (mType.toLowerCase().includes('corrective')) {
+                mTypeBadge = `<span style="background: #e0f2fe; color: #075985; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; display: inline-block; white-space: nowrap;"><i class="fas fa-wrench" style="margin-right: 3px;"></i>${escapeHtml(mType)}</span>`;
+            } else if (mType.toLowerCase().includes('preventive')) {
+                mTypeBadge = `<span style="background: #ede9fe; color: #5b21b6; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; display: inline-block; white-space: nowrap;"><i class="fas fa-shield-alt" style="margin-right: 3px;"></i>${escapeHtml(mType)}</span>`;
+            } else {
+                mTypeBadge = `<span style="background: #f1f5f9; color: #334155; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; display: inline-block; white-space: nowrap;">${escapeHtml(mType)}</span>`;
+            }
+
+            const deptPill = item.department ? `<span style="background: #e0e7ff; color: #3730a3; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; display: inline-block; white-space: nowrap;">${escapeHtml(item.department)}</span>` : '-';
+            const shiftPill = item.shift ? `<span style="background: #f1f5f9; color: #334155; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 500; display: inline-block; white-space: nowrap;">${escapeHtml(item.shift)}</span>` : '-';
+            const reqByHtml = item.request_by ? `<div style="font-weight: 600; color: #334155; font-size: 0.82rem;"><i class="far fa-user" style="color: #94a3b8; margin-right: 4px;"></i>${escapeHtml(item.request_by)}</div>` : '-';
+            const machBadge = item.machine ? `<span style="background: #ffffff; border: 1px solid #cbd5e1; color: #0f172a; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; display: inline-block; white-space: nowrap;">${escapeHtml(item.machine)}</span>` : '-';
+
+            let problemText = item.problem || '';
+            let problemHtml = '<span style="color: #94a3b8;">-</span>';
+            if (problemText) {
+                problemHtml = `
+                    <div style="max-width: 300px; min-width: 200px; font-size: 0.82rem; line-height: 1.45; color: #1e293b; background: #fffbeb; border-left: 3px solid #f59e0b; padding: 6px 10px; border-radius: 0 6px 6px 0; word-break: break-word; white-space: pre-wrap; max-height: 110px; overflow-y: auto;">
+                        ${escapeHtml(problemText)}
+                    </div>
+                `;
+            }
 
             tr.innerHTML = `
-                <td>${item.id}</td>
-                <td><span style="font-weight: 500;">${formattedDateTime}</span></td>
-                <td>${item.department || ''}</td>
-                <td>${item.shift || ''}</td>
-                <td><strong>${item.maint_type || 'Breakdown'}</strong></td>
-                <td>${item.request_by || ''}</td>
-                <td><strong>${item.machine || ''}</strong></td>
-                <td style="max-width: 200px; white-space: pre-wrap; font-size: 0.85rem;">${item.problem || ''}</td>
-                <td>${formattedSignoff}</td>
-                <td>${statusBadge}</td>
-                <td class="actions-cell">
-                    ${!isSignedOff ? `<button class="btn btn-outline signoff-bd-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; color: #16a34a; border-color: #16a34a; margin-right: 4px;">Sign-off</button>` : ''}
-                    <button class="btn btn-outline edit-bd-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; margin-right: 4px;">Edit</button>
-                    <button class="btn btn-outline delete-bd-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                <td style="text-align: center; padding: 8px 10px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">
+                    <span style="background: #f1f5f9; color: #475569; font-weight: 700; padding: 3px 8px; border-radius: 6px; font-size: 0.8rem;">#${item.id}</span>
+                </td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${dateHtml}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${deptPill}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${shiftPill}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${mTypeBadge}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${reqByHtml}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${machBadge}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${problemHtml}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${signoffHtml}</td>
+                <td style="text-align: center; padding: 8px 12px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #f1f5f9; vertical-align: middle;">${statusBadge}</td>
+                <td style="text-align: center; padding: 8px 12px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">
+                    <div style="display: flex; gap: 5px; align-items: center; justify-content: center;">
+                        ${!isSignedOff ? `<button class="btn btn-outline signoff-bd-btn" data-id="${item.id}" title="Sign off breakdown" style="padding: 4px 8px; font-size: 0.78rem; font-weight: 600; color: #16a34a; border-color: #86efac; background: #f0fdf4;"><i class="fas fa-check" style="margin-right: 3px;"></i>Sign-off</button>` : ''}
+                        <button class="btn btn-outline edit-bd-btn" data-id="${item.id}" title="Edit breakdown slip" style="padding: 4px 8px; font-size: 0.78rem; font-weight: 600; color: #0284c7; border-color: #bae6fd; background: #f0f9ff;"><i class="fas fa-edit" style="margin-right: 3px;"></i>Edit</button>
+                        <button class="btn btn-outline delete-bd-btn" data-id="${item.id}" title="Delete record" style="padding: 4px 8px; font-size: 0.78rem; font-weight: 600; color: #ef4444; border-color: #fca5a5; background: #fef2f2;"><i class="fas fa-trash-alt"></i></button>
+                    </div>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -11457,7 +14258,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.querySelectorAll('.signoff-bd-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const id = e.target.getAttribute('data-id');
+                const id = e.currentTarget.getAttribute('data-id');
                 const now = new Date();
                 const nowStr = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
                 const res = await fetch('/api/breakdown_slips');
@@ -11480,7 +14281,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.querySelectorAll('.edit-bd-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const id = e.target.getAttribute('data-id');
+                const id = e.currentTarget.getAttribute('data-id');
                 const res = await fetch('/api/breakdown_slips');
                 const data = await res.json();
                 const item = data.find(x => x.id == id);
@@ -11490,8 +14291,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.querySelectorAll('.delete-bd-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
+                const id = e.currentTarget.getAttribute('data-id');
                 if (confirm('Delete this Breakdown Slip record?')) {
-                    const id = e.target.getAttribute('data-id');
                     try {
                         const res = await fetch(`/api/breakdown_slips/${id}`, { method: 'DELETE' });
                         if (res.ok) fetchBdSlips();
@@ -11500,34 +14301,76 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
+
+        if (!bdSlipExportInitialized) {
+            bdSlipExportInitialized = true;
+            const exportBtn = document.getElementById('exportBdSlipBtn');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', () => {
+                    if (!currentBdSlips || currentBdSlips.length === 0) {
+                        alert('No breakdown slips to export.');
+                        return;
+                    }
+                    const exportData = currentBdSlips.map(s => ({
+                        'ID': s.id,
+                        'Date & Time': s.date_time ? s.date_time.replace('T', ' ') : '',
+                        'Dept': s.department || '',
+                        'Shift': s.shift || '',
+                        'Maint Type': s.maint_type || 'Breakdown',
+                        'Request By': s.request_by || '',
+                        'Machine': s.machine || '',
+                        'Problem': s.problem || '',
+                        'Sign-off Date & Time': s.signoff_date_time ? s.signoff_date_time.replace('T', ' ') : '',
+                        'Status': (s.status === 'Signed Off' || (s.signoff_date_time && s.signoff_date_time.trim() !== '')) ? 'Signed Off' : 'Open'
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(exportData);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, 'Breakdown_Slips');
+                    const today = new Date().toISOString().split('T')[0];
+                    XLSX.writeFile(wb, `Breakdown_Slips_${today}.xlsx`);
+                });
+            }
+        }
+
+        applyTableColFilters('bdSlipTable');
     }
 
     async function openBdSlipModal(item = null) {
         if (!bdSlipModal) return;
 
-        const [deptRes, shiftRes, machRes] = await Promise.all([
-            fetch('/api/departments'),
-            fetch('/api/shifts'),
-            fetch('/api/machines')
-        ]);
-        const depts = await deptRes.json();
-        const shifts = await shiftRes.json();
-        const machines = await machRes.json();
+        let depts = [], shifts = [], machines = [];
+        try {
+            const [deptRes, shiftRes, machRes] = await Promise.all([
+                fetch('/api/departments'),
+                fetch('/api/shifts'),
+                fetch('/api/machines')
+            ]);
+            if (deptRes && deptRes.ok) depts = await deptRes.json();
+            if (shiftRes && shiftRes.ok) shifts = await shiftRes.json();
+            if (machRes && machRes.ok) machines = await machRes.json();
+        } catch (err) {
+            console.error('Error fetching masters for BD Slip modal:', err);
+        }
 
         const deptSel = document.getElementById('bdDeptSelect');
-        deptSel.innerHTML = '<option value="">-- Select Dept --</option>';
-        depts.forEach(d => {
-            deptSel.innerHTML += `<option value="${d.name}">${d.name}</option>`;
-        });
+        if (deptSel) {
+            deptSel.innerHTML = '<option value="">-- Select Dept --</option>';
+            depts.forEach(d => {
+                deptSel.innerHTML += `<option value="${d.name}">${d.name}</option>`;
+            });
+        }
 
         const shiftSel = document.getElementById('bdShiftSelect');
-        shiftSel.innerHTML = '<option value="">-- Select Shift --</option>';
-        shifts.forEach(s => {
-            shiftSel.innerHTML += `<option value="${s.name}">${s.name}</option>`;
-        });
+        if (shiftSel) {
+            shiftSel.innerHTML = '<option value="">-- Select Shift --</option>';
+            shifts.forEach(s => {
+                shiftSel.innerHTML += `<option value="${s.name}">${s.name}</option>`;
+            });
+        }
 
         const updateMachineDropdown = (selectedDept, currentMach = '') => {
             const machSel = document.getElementById('bdMachineSelect');
+            if (!machSel) return;
             machSel.innerHTML = '<option value="">-- Select Machine --</option>';
             const cleanDept = (selectedDept || '').trim().toUpperCase();
             let filtered = machines;
@@ -11544,16 +14387,18 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         };
 
-        deptSel.onchange = (e) => {
-            updateMachineDropdown(e.target.value);
-        };
+        if (deptSel) {
+            deptSel.onchange = (e) => {
+                updateMachineDropdown(e.target.value);
+            };
+        }
 
         if (item) {
             document.getElementById('bdSlipModalTitle').textContent = 'Edit Breakdown Slip';
             document.getElementById('bdSlipId').value = item.id;
             document.getElementById('bdDateTimeInput').value = item.date_time || '';
-            document.getElementById('bdDeptSelect').value = item.department || '';
-            document.getElementById('bdShiftSelect').value = item.shift || '';
+            if (deptSel) deptSel.value = item.department || '';
+            if (shiftSel) shiftSel.value = item.shift || '';
             document.getElementById('bdMaintTypeSelect').value = item.maint_type || 'Breakdown';
             document.getElementById('bdRequestByInput').value = item.request_by || '';
             updateMachineDropdown(item.department || '', item.machine || '');
@@ -11605,13 +14450,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 if (res.ok) {
                     bdSlipModal.classList.remove('show');
-                    fetchBdSlips();
+                    const filterInputs = document.querySelectorAll('#bdSlipTable thead input');
+                    filterInputs.forEach(inp => inp.value = '');
+                    await fetchBdSlips();
+                    alert(id ? 'Breakdown Slip updated successfully!' : 'Breakdown Slip saved successfully!');
+                    if (typeof loadOpenBreakdownMachinesDropdown === 'function') {
+                        loadOpenBreakdownMachinesDropdown();
+                    }
                 } else {
-                    alert('Error saving Breakdown Slip');
+                    const err = await res.text();
+                    alert('Error saving Breakdown Slip: ' + (err || res.statusText));
                 }
             } catch (err) {
                 console.error(err);
-                alert('Error saving Breakdown Slip');
+                alert('Error saving Breakdown Slip: ' + (err.message || err));
             }
         });
     }
@@ -11667,42 +14519,98 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadOpenBreakdownMachinesDropdown() {
         const select = document.getElementById('sdBreakdownSelect');
         if (!select) return;
-        select.innerHTML = '<option value="">-- Loading Open Breakdown Slips... --</option>';
+        select.innerHTML = '<option value="">-- Loading Machines & Breakdown Slips... --</option>';
 
         try {
-            const res = await fetch('/api/breakdown_slips');
-            const data = await res.json();
+            const [bdRes, machRes] = await Promise.all([
+                fetch('/api/breakdown_slips'),
+                fetch('/api/machines')
+            ]);
+            const slips = (bdRes && bdRes.ok) ? await bdRes.json() : [];
+            const machines = (machRes && machRes.ok) ? await machRes.json() : [];
             openBreakdownSlipsMap = {};
 
-            const openSlips = data.filter(s => s.status !== 'Signed Off' && (!s.signoff_date_time || s.signoff_date_time.trim() === ''));
+            const openSlips = slips.filter(s => s.status !== 'Signed Off' && (!s.signoff_date_time || s.signoff_date_time.trim() === ''));
+            const closedSlips = slips.filter(s => s.status === 'Signed Off' || (s.signoff_date_time && s.signoff_date_time.trim() !== ''));
 
-            select.innerHTML = '<option value="">-- Select Open Breakdown Machine --</option>';
+            select.innerHTML = '<option value="">-- Select Breakdown Slip or Machine --</option>';
+
+            // Group 1: Open Breakdowns
+            const openGroup = document.createElement('optgroup');
+            openGroup.label = `Open Breakdown Slips (${openSlips.length})`;
             if (openSlips.length === 0) {
-                select.innerHTML += '<option value="" disabled>(No open breakdown slips currently available)</option>';
+                const disabledOpt = document.createElement('option');
+                disabledOpt.value = "";
+                disabledOpt.disabled = true;
+                disabledOpt.textContent = "(No active open breakdown slips)";
+                openGroup.appendChild(disabledOpt);
+            } else {
+                openSlips.forEach(item => {
+                    const key = 'bd_' + item.id;
+                    openBreakdownSlipsMap[key] = item;
+                    openBreakdownSlipsMap[item.id] = item;
+                    const probText = item.problem ? item.problem.substring(0, 45) : 'No problem text';
+                    const opt = document.createElement('option');
+                    opt.value = key;
+                    opt.textContent = `[OPEN] ${item.machine} | ${probText} (ID: ${item.id}, Dept: ${item.department || '-'})`;
+                    openGroup.appendChild(opt);
+                });
+            }
+            select.appendChild(openGroup);
+
+            // Group 2: Closed/Signed-Off Breakdowns
+            if (closedSlips.length > 0) {
+                const closedGroup = document.createElement('optgroup');
+                closedGroup.label = `Signed Off / Completed Slips (${closedSlips.length})`;
+                closedSlips.forEach(item => {
+                    const key = 'bd_' + item.id;
+                    openBreakdownSlipsMap[key] = item;
+                    openBreakdownSlipsMap[item.id] = item;
+                    const probText = item.problem ? item.problem.substring(0, 45) : 'No problem text';
+                    const opt = document.createElement('option');
+                    opt.value = key;
+                    opt.textContent = `[SIGNED OFF] ${item.machine} | ${probText} (ID: ${item.id})`;
+                    closedGroup.appendChild(opt);
+                });
+                select.appendChild(closedGroup);
             }
 
-            openSlips.forEach(item => {
-                openBreakdownSlipsMap[item.id] = item;
-                const probText = item.problem ? item.problem.substring(0, 45) : 'No problem text';
-                const opt = document.createElement('option');
-                opt.value = item.id;
-                opt.textContent = `${item.machine} | ${probText} (Dept: ${item.department || '-'}, ID: ${item.id})`;
-                select.appendChild(opt);
-            });
+            // Group 3: Direct Machine Maintenance (No Slip)
+            if (machines.length > 0) {
+                const machGroup = document.createElement('optgroup');
+                machGroup.label = `Direct Machine Maintenance (${machines.length})`;
+                machines.forEach(m => {
+                    const key = 'mach_' + m.name;
+                    openBreakdownSlipsMap[key] = {
+                        isMachineOnly: true,
+                        machine: m.name,
+                        department: m.department || '',
+                        id: null,
+                        date_time: '',
+                        request_by: '',
+                        problem: 'Direct Machine Maintenance / Service'
+                    };
+                    const opt = document.createElement('option');
+                    opt.value = key;
+                    opt.textContent = `${m.name} (Dept: ${m.department || '-'})`;
+                    machGroup.appendChild(opt);
+                });
+                select.appendChild(machGroup);
+            }
         } catch (err) {
-            console.error('Error loading breakdown slips:', err);
-            select.innerHTML = '<option value="">-- Error loading open breakdowns --</option>';
+            console.error('Error loading breakdown slips & machines:', err);
+            select.innerHTML = '<option value="">-- Error loading options --</option>';
         }
     }
 
     const sdBreakdownSelect = document.getElementById('sdBreakdownSelect');
     if (sdBreakdownSelect) {
         sdBreakdownSelect.addEventListener('change', async (e) => {
-            const bdId = e.target.value;
+            const selVal = e.target.value;
             const infoCard = document.getElementById('sdBreakdownInfoCard');
-            if (bdId && openBreakdownSlipsMap[bdId]) {
-                const item = openBreakdownSlipsMap[bdId];
-                document.getElementById('sdInfoId').textContent = item.id;
+            if (selVal && openBreakdownSlipsMap[selVal]) {
+                const item = openBreakdownSlipsMap[selVal];
+                document.getElementById('sdInfoId').textContent = item.id ? item.id : 'Direct (No Slip)';
                 document.getElementById('sdInfoDate').textContent = item.date_time ? item.date_time.replace('T', ' ') : '-';
                 document.getElementById('sdInfoDept').textContent = item.department || '-';
                 document.getElementById('sdInfoMachine').textContent = item.machine || '-';
@@ -11710,12 +14618,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('sdInfoProblem').textContent = item.problem || '-';
                 if (infoCard) infoCard.style.display = 'block';
 
-                await loadExistingServiceDetailForBreakdown(item.id);
+                if (item.id) {
+                    await loadExistingServiceDetailForBreakdown(item.id);
+                } else if (item.machine) {
+                    await loadExistingServiceDetailForMachine(item.machine);
+                }
             } else {
                 if (infoCard) infoCard.style.display = 'none';
                 resetServiceDetailsForm(false);
             }
         });
+    }
+
+    function populateServiceDetailsForm(existing) {
+        currentServiceDetailId = existing.id;
+        
+        // Load Spares Data
+        let sparesList = [];
+        try { sparesList = JSON.parse(existing.spares_data || '[]'); } catch(e) {}
+        sdSparesBody.innerHTML = '';
+        if (sparesList.length > 0) {
+            sparesList.forEach(sp => addSpareRow(sp));
+        } else {
+            addSpareRow();
+        }
+
+        // Load Service Data
+        let serviceList = [];
+        try { serviceList = JSON.parse(existing.service_data || '[]'); } catch(e) {}
+        sdServiceBody.innerHTML = '';
+        if (serviceList.length > 0) {
+            serviceList.forEach(srv => addServiceRow(srv));
+        } else {
+            addServiceRow();
+        }
+
+        // Load Remarks
+        document.getElementById('sdRemarksInput').value = existing.remarks || '';
+        calcServiceTotals();
     }
 
     async function loadExistingServiceDetailForBreakdown(breakdownSlipId) {
@@ -11724,31 +14664,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const list = await res.json();
             const existing = list.find(s => s.breakdown_slip_id == breakdownSlipId);
             if (existing) {
-                currentServiceDetailId = existing.id;
-                
-                // Load Spares Data
-                let sparesList = [];
-                try { sparesList = JSON.parse(existing.spares_data || '[]'); } catch(e) {}
-                sdSparesBody.innerHTML = '';
-                if (sparesList.length > 0) {
-                    sparesList.forEach(sp => addSpareRow(sp));
-                } else {
-                    addSpareRow();
-                }
-
-                // Load Service Data
-                let serviceList = [];
-                try { serviceList = JSON.parse(existing.service_data || '[]'); } catch(e) {}
-                sdServiceBody.innerHTML = '';
-                if (serviceList.length > 0) {
-                    serviceList.forEach(srv => addServiceRow(srv));
-                } else {
-                    addServiceRow();
-                }
-
-                // Load Remarks
-                document.getElementById('sdRemarksInput').value = existing.remarks || '';
-                calcServiceTotals();
+                populateServiceDetailsForm(existing);
             } else {
                 currentServiceDetailId = null;
                 if (sdSparesBody) sdSparesBody.innerHTML = '';
@@ -11760,6 +14676,27 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (err) {
             console.error('Error loading existing service detail:', err);
+        }
+    }
+
+    async function loadExistingServiceDetailForMachine(machineName) {
+        try {
+            const res = await fetch('/api/service_details');
+            const list = await res.json();
+            const existing = list.find(s => (!s.breakdown_slip_id || s.breakdown_slip_id === '') && (s.machine || '').trim().toUpperCase() === machineName.trim().toUpperCase());
+            if (existing) {
+                populateServiceDetailsForm(existing);
+            } else {
+                currentServiceDetailId = null;
+                if (sdSparesBody) sdSparesBody.innerHTML = '';
+                if (sdServiceBody) sdServiceBody.innerHTML = '';
+                addSpareRow();
+                addServiceRow();
+                document.getElementById('sdRemarksInput').value = '';
+                calcServiceTotals();
+            }
+        } catch (err) {
+            console.error('Error loading existing service detail for machine:', err);
         }
     }
 
@@ -11899,11 +14836,26 @@ document.addEventListener('DOMContentLoaded', () => {
         saveServiceDetailBtn.addEventListener('click', async () => {
             const bdIdVal = document.getElementById('sdBreakdownSelect').value;
             if (!bdIdVal && !currentServiceDetailId) {
-                alert('Please select an Open Breakdown Machine');
+                alert('Please select a Breakdown Slip or Machine');
                 return;
             }
 
             const bdItem = openBreakdownSlipsMap[bdIdVal] || {};
+            let machineName = bdItem.machine || '';
+            if (!machineName && bdIdVal && bdIdVal.startsWith('mach_')) {
+                machineName = bdIdVal.replace('mach_', '');
+            }
+
+            let breakdownSlipId = null;
+            if (bdIdVal) {
+                if (bdIdVal.startsWith('bd_')) {
+                    breakdownSlipId = parseInt(bdIdVal.replace('bd_', '')) || null;
+                } else if (!isNaN(parseInt(bdIdVal)) && !bdIdVal.startsWith('mach_')) {
+                    breakdownSlipId = parseInt(bdIdVal) || null;
+                }
+            } else if (bdItem.id) {
+                breakdownSlipId = parseInt(bdItem.id) || null;
+            }
 
             const sparesList = [];
             document.querySelectorAll('.spare-row').forEach(tr => {
@@ -11938,8 +14890,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const remarks = document.getElementById('sdRemarksInput').value.trim();
 
             const payload = {
-                breakdown_slip_id: parseInt(bdIdVal) || (bdItem.id ? parseInt(bdItem.id) : null),
-                machine: bdItem.machine || '',
+                breakdown_slip_id: breakdownSlipId,
+                machine: machineName,
                 spares_data: JSON.stringify(sparesList),
                 service_data: JSON.stringify(serviceList),
                 spares_cost,
@@ -11960,15 +14912,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (res.ok) {
                     const savedItem = await res.json();
-                    currentServiceDetailId = savedItem.id;
-                    alert('Service Details saved successfully!');
-                    fetchServiceHistory();
+                    if (savedItem && savedItem.id) {
+                        currentServiceDetailId = savedItem.id;
+                    }
+                    alert(method === 'PUT' ? 'Service Details updated successfully!' : 'Service Details saved successfully!');
+                    await fetchServiceHistory();
                 } else {
-                    alert('Error saving Service Details');
+                    const errText = await res.text();
+                    alert('Error saving Service Details: ' + (errText || res.statusText));
                 }
             } catch (err) {
                 console.error(err);
-                alert('Error saving Service Details');
+                alert('Error saving Service Details: ' + (err.message || err));
             }
         });
     }
@@ -12020,10 +14975,35 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><strong style="color: #0369a1;">₹${(item.total_cost || 0).toFixed(2)}</strong></td>
                     <td style="max-width: 160px; white-space: pre-wrap; font-size: 0.85rem;">${item.remarks || '-'}</td>
                     <td class="actions-cell">
+                        <button class="btn btn-primary edit-sd-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; margin-right: 4px;">Edit</button>
                         <button class="btn btn-outline delete-sd-btn" data-id="${item.id}" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; color: #ef4444; border-color: #ef4444;">Delete</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
+            });
+
+            tbody.querySelectorAll('.edit-sd-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const id = e.target.getAttribute('data-id');
+                    const item = data.find(d => String(d.id) === String(id));
+                    if (item) {
+                        currentServiceDetailId = item.id;
+                        populateServiceDetailsForm(item);
+                        const select = document.getElementById('sdBreakdownSelect');
+                        if (select) {
+                            if (item.breakdown_slip_id) {
+                                select.value = 'bd_' + item.breakdown_slip_id;
+                                if (!select.value) select.value = String(item.breakdown_slip_id);
+                            } else if (item.machine) {
+                                select.value = 'mach_' + item.machine;
+                            }
+                            select.dispatchEvent(new Event('change'));
+                        }
+                        showServiceFormView();
+                        const formElem = document.getElementById('sdFormContainer');
+                        if (formElem) formElem.scrollIntoView({ behavior: 'smooth' });
+                    }
+                });
             });
 
             tbody.querySelectorAll('.delete-sd-btn').forEach(btn => {
@@ -12037,6 +15017,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             });
+
+            if (typeof applyTableColFilters === 'function') {
+                applyTableColFilters('sdHistoryTable');
+            }
         } catch (err) { console.error(err); }
     }
 
@@ -12372,6 +15356,411 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!table) return;
         const wb = XLSX.utils.table_to_book(table, { sheet: "Insert_CPC_Report" });
         XLSX.writeFile(wb, `Insert_CPC_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    });
+
+    // --- Insert Consumption Report Implementation ---
+    let allInsertConsumRows = [];
+    let activeInsertConsumColFilters = {};
+
+    function initInsertConsumptionReport() {
+        const fromInput = document.getElementById('insertConsumFromDate');
+        const toInput = document.getElementById('insertConsumToDate');
+        if (fromInput && !fromInput.value) {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            fromInput.value = `${yyyy}-${mm}-01`;
+        }
+        if (toInput && !toInput.value) {
+            toInput.value = new Date().toISOString().slice(0, 10);
+        }
+        fetchInsertConsumptionReport();
+    }
+
+    async function fetchInsertConsumptionReport() {
+        const tbody = document.getElementById('insertConsumptionBody');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 25px; color: #64748b;">Loading consumption data...</td></tr>';
+
+        const fromDate = document.getElementById('insertConsumFromDate')?.value || '';
+        const toDate = document.getElementById('insertConsumToDate')?.value || '';
+        const filterDept = (document.getElementById('insertConsumFilterDept')?.value || '').trim();
+        const filterPart = (document.getElementById('insertConsumFilterPart')?.value || '').trim();
+
+        try {
+            const [issuesRes, partsRes, deptsRes, mastersRes, receiptsRes] = await Promise.all([
+                fetch('/api/insert_issues'),
+                fetch('/api/partmaster'),
+                fetch('/api/departments'),
+                fetch('/api/insert_masters'),
+                fetch('/api/insert_receipts')
+            ]);
+
+            const issues = await issuesRes.json();
+            const parts = await partsRes.json();
+            const depts = await deptsRes.json();
+            const masters = await mastersRes.json();
+            const receipts = await receiptsRes.json();
+
+            populateInsertConsumFilterDropdowns(issues, parts, depts);
+
+            // Build Rate Maps from Insert Receipts & Insert Masters (matches Insert CPC logic)
+            const receiptIdRateMap = {};
+            const batchSpecRateMap = {};
+            const specRateMap = {};
+
+            if (Array.isArray(receipts)) {
+                receipts.forEach(r => {
+                    const rate = parseFloat(r.rate) || 0;
+                    if (r.id) receiptIdRateMap[String(r.id)] = rate;
+
+                    const cleanSpec = (r.insert_spec || '').replace(/\s+/g, '').toLowerCase();
+                    const cleanBatch = (r.batch_no || '').replace(/\s+/g, '').toLowerCase();
+
+                    if (cleanBatch && cleanSpec && rate > 0) {
+                        batchSpecRateMap[`${cleanBatch}_${cleanSpec}`] = rate;
+                    }
+                    if (cleanSpec && rate > 0) {
+                        specRateMap[cleanSpec] = rate;
+                    }
+                });
+            }
+
+            if (Array.isArray(masters)) {
+                masters.forEach(m => {
+                    const cleanSpec = (m.insert_spec || m.name || '').replace(/\s+/g, '').toLowerCase();
+                    const rate = parseFloat(m.rate || m.cost || m.price || 0) || 0;
+                    if (cleanSpec && rate > 0 && !specRateMap[cleanSpec]) {
+                        specRateMap[cleanSpec] = rate;
+                    }
+                });
+            }
+
+            const getRateForInsert = (item, rawSpec) => {
+                if (item.receipt_id && receiptIdRateMap[String(item.receipt_id)] > 0) {
+                    return receiptIdRateMap[String(item.receipt_id)];
+                }
+                const cleanBatch = (item.batch_no || '').replace(/\s+/g, '').toLowerCase();
+                const cleanSpec = (rawSpec || item.insert_spec || '').replace(/\s+/g, '').toLowerCase();
+                if (cleanBatch && cleanSpec && batchSpecRateMap[`${cleanBatch}_${cleanSpec}`] > 0) {
+                    return batchSpecRateMap[`${cleanBatch}_${cleanSpec}`];
+                }
+                if (cleanSpec && specRateMap[cleanSpec] > 0) {
+                    return specRateMap[cleanSpec];
+                }
+                return 0;
+            };
+
+            // Filter issues by date period and optional department filter
+            const filteredIssues = (Array.isArray(issues) ? issues : []).filter(item => {
+                const d = formatExcelDate(item.date);
+                if (fromDate && d < fromDate) return false;
+                if (toDate && d > toDate) return false;
+                if (filterDept && (item.department || '').trim().toLowerCase() !== filterDept.toLowerCase()) return false;
+                return true;
+            });
+
+            // Aggregate map keyed by dept__partno__insertspec
+            const aggMap = {};
+
+            filteredIssues.forEach(item => {
+                const rawDept = (item.department || 'WIPRO').trim() || 'WIPRO';
+                const rawSpec = (item.insert_spec || '').trim();
+                if (!rawSpec) return;
+
+                let usages = [];
+                if (item.usages) {
+                    try {
+                        let parsed = item.usages;
+                        while (typeof parsed === 'string') parsed = JSON.parse(parsed);
+                        if (Array.isArray(parsed)) usages = parsed;
+                    } catch(e) {}
+                }
+
+                if (!usages || !Array.isArray(usages) || usages.length === 0) {
+                    usages = [{
+                        partno: item.partno || '',
+                        opn_no: item.opn_no || ''
+                    }];
+                }
+
+                const totalIssued = parseFloat(item.qty_issued) || 0;
+                if (totalIssued <= 0) return;
+                const qtyPerUsage = totalIssued / usages.length;
+                const rate = getRateForInsert(item, rawSpec);
+
+                usages.forEach(u => {
+                    const rawPart = (u.partno || item.partno || '').trim();
+                    if (!rawPart) return;
+                    if (filterPart && rawPart.toLowerCase() !== filterPart.toLowerCase()) return;
+
+                    const groupKey = `${rawDept.toUpperCase()}___${rawPart.toUpperCase()}___${rawSpec.toUpperCase()}`;
+
+                    if (!aggMap[groupKey]) {
+                        aggMap[groupKey] = {
+                            dept: rawDept,
+                            partno: rawPart,
+                            insert_spec: rawSpec,
+                            qty: 0,
+                            cost: 0
+                        };
+                    }
+                    aggMap[groupKey].qty += qtyPerUsage;
+                    aggMap[groupKey].cost += (qtyPerUsage * rate);
+                });
+            });
+
+            allInsertConsumRows = Object.values(aggMap).sort((a, b) => {
+                const dCmp = a.dept.localeCompare(b.dept, undefined, { numeric: true, sensitivity: 'base' });
+                if (dCmp !== 0) return dCmp;
+                const pCmp = a.partno.localeCompare(b.partno, undefined, { numeric: true, sensitivity: 'base' });
+                if (pCmp !== 0) return pCmp;
+                return a.insert_spec.localeCompare(b.insert_spec, undefined, { numeric: true, sensitivity: 'base' });
+            });
+
+            activeInsertConsumColFilters = {};
+            document.querySelectorAll('.insert-consum-col-filter').forEach(inp => inp.value = '');
+
+            applyInsertConsumColFilters();
+        } catch (err) {
+            console.error('Error in fetchInsertConsumptionReport:', err);
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 25px; color: #ef4444;">Failed to load consumption report. Please try again.</td></tr>';
+        }
+    }
+
+    function populateInsertConsumFilterDropdowns(issues, parts, depts) {
+        const deptSelect = document.getElementById('insertConsumFilterDept');
+        const partSelect = document.getElementById('insertConsumFilterPart');
+        if (!deptSelect || !partSelect) return;
+
+        if (deptSelect.options.length <= 1) {
+            const deptSet = new Set();
+            if (Array.isArray(issues)) {
+                issues.forEach(i => { if (i.department) deptSet.add(i.department.trim()); });
+            }
+            if (Array.isArray(depts)) {
+                depts.forEach(d => { if (d.name) deptSet.add(d.name.trim()); });
+            }
+            Array.from(deptSet).sort().forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d;
+                opt.textContent = d;
+                deptSelect.appendChild(opt);
+            });
+        }
+
+        if (partSelect.options.length <= 1) {
+            const partSet = new Set();
+            if (Array.isArray(issues)) {
+                issues.forEach(i => {
+                    if (i.partno) partSet.add(i.partno.trim());
+                    if (i.usages) {
+                        try {
+                            let parsed = i.usages;
+                            while (typeof parsed === 'string') parsed = JSON.parse(parsed);
+                            if (Array.isArray(parsed)) {
+                                parsed.forEach(u => { if (u.partno) partSet.add(u.partno.trim()); });
+                            }
+                        } catch(e) {}
+                    }
+                });
+            }
+            if (Array.isArray(parts)) {
+                parts.forEach(p => { if (p.partno) partSet.add(p.partno.trim()); });
+            }
+            Array.from(partSet).sort().forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.textContent = p;
+                partSelect.appendChild(opt);
+            });
+        }
+    }
+
+    function applyInsertConsumColFilters() {
+        let filtered = allInsertConsumRows;
+
+        const filters = Object.entries(activeInsertConsumColFilters).filter(([_, val]) => val && val.trim() !== '');
+        if (filters.length > 0) {
+            filtered = filtered.filter(row => {
+                return filters.every(([colIdx, filterVal]) => {
+                    const f = filterVal.trim().toLowerCase();
+                    if (colIdx === '0') return (row.dept || '').toLowerCase().includes(f);
+                    if (colIdx === '1') return (row.partno || '').toLowerCase().includes(f);
+                    if (colIdx === '2') return (row.insert_spec || '').toLowerCase().includes(f);
+                    if (colIdx === '3') {
+                        const qStr = Number.isInteger(row.qty) ? String(row.qty) : row.qty.toFixed(2);
+                        return qStr.includes(f);
+                    }
+                    if (colIdx === '4') {
+                        const cStr = (row.cost || 0).toFixed(2);
+                        return cStr.includes(f);
+                    }
+                    return true;
+                });
+            });
+        }
+
+        renderInsertConsumptionTable(filtered);
+    }
+
+    function renderInsertConsumptionTable(rows) {
+        const tbody = document.getElementById('insertConsumptionBody');
+        const footerQty = document.getElementById('insertConsumFooterQty');
+        const footerCost = document.getElementById('insertConsumFooterCost');
+        const kpiTotalQty = document.getElementById('insertConsumKpiTotalQty');
+        const kpiTotalCost = document.getElementById('insertConsumKpiTotalCost');
+        const kpiUniqueParts = document.getElementById('insertConsumKpiUniqueParts');
+        const kpiUniqueSpecs = document.getElementById('insertConsumKpiUniqueSpecs');
+        const kpiTotalRows = document.getElementById('insertConsumKpiTotalRows');
+
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        if (!rows || rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 25px; color: #64748b;">No insert consumption data found for the selected period.</td></tr>';
+            if (footerQty) footerQty.textContent = '0';
+            if (footerCost) footerCost.textContent = '₹0.00';
+            if (kpiTotalQty) kpiTotalQty.textContent = '0';
+            if (kpiTotalCost) kpiTotalCost.textContent = '₹0.00';
+            if (kpiUniqueParts) kpiUniqueParts.textContent = '0';
+            if (kpiUniqueSpecs) kpiUniqueSpecs.textContent = '0';
+            if (kpiTotalRows) kpiTotalRows.textContent = '0';
+            return;
+        }
+
+        let totalQty = 0;
+        let totalCost = 0;
+        const partSet = new Set();
+        const specSet = new Set();
+
+        const fragment = document.createDocumentFragment();
+
+        rows.forEach((row, idx) => {
+            totalQty += row.qty;
+            totalCost += (row.cost || 0);
+            if (row.partno) partSet.add(row.partno.trim());
+            if (row.insert_spec) specSet.add(row.insert_spec.trim());
+
+            const tr = document.createElement('tr');
+            tr.style.background = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+            tr.style.borderBottom = '1px solid #e2e8f0';
+
+            const qtyFormatted = Number.isInteger(row.qty) ? row.qty : row.qty.toFixed(2);
+            const costFormatted = (row.cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            tr.innerHTML = `
+                <td style="padding: 9px 14px; border-right: 1px solid #e2e8f0; font-weight: 500; color: #334155;">${escapeHtml(row.dept)}</td>
+                <td style="padding: 9px 14px; border-right: 1px solid #e2e8f0; font-weight: 600; color: #0284c7;">${escapeHtml(row.partno)}</td>
+                <td style="padding: 9px 14px; border-right: 1px solid #e2e8f0; font-weight: 500; color: #1e293b;">${escapeHtml(row.insert_spec)}</td>
+                <td style="padding: 9px 14px; border-right: 1px solid #e2e8f0; text-align: right; font-weight: 700; color: #0f172a;">${qtyFormatted}</td>
+                <td style="padding: 9px 14px; text-align: right; font-weight: 600; color: #b45309;">₹${costFormatted}</td>
+            `;
+            fragment.appendChild(tr);
+        });
+
+        tbody.appendChild(fragment);
+
+        const totalQtyFormatted = Number.isInteger(totalQty) ? totalQty : totalQty.toFixed(2);
+        const totalCostFormatted = totalCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        if (footerQty) footerQty.textContent = totalQtyFormatted;
+        if (footerCost) footerCost.textContent = `₹${totalCostFormatted}`;
+        if (kpiTotalQty) kpiTotalQty.textContent = totalQtyFormatted;
+        if (kpiTotalCost) kpiTotalCost.textContent = `₹${totalCostFormatted}`;
+        if (kpiUniqueParts) kpiUniqueParts.textContent = partSet.size;
+        if (kpiUniqueSpecs) kpiUniqueSpecs.textContent = specSet.size;
+        if (kpiTotalRows) kpiTotalRows.textContent = rows.length;
+    }
+
+    // Insert Consumption Event Listeners
+    document.getElementById('generateInsertConsumBtn')?.addEventListener('click', fetchInsertConsumptionReport);
+    document.getElementById('filterInsertConsumBtn')?.addEventListener('click', fetchInsertConsumptionReport);
+    document.getElementById('insertConsumFromDate')?.addEventListener('change', fetchInsertConsumptionReport);
+    document.getElementById('insertConsumToDate')?.addEventListener('change', fetchInsertConsumptionReport);
+    document.getElementById('insertConsumFilterDept')?.addEventListener('change', fetchInsertConsumptionReport);
+    document.getElementById('insertConsumFilterPart')?.addEventListener('change', fetchInsertConsumptionReport);
+
+    document.getElementById('resetInsertConsumBtn')?.addEventListener('click', () => {
+        const fromInput = document.getElementById('insertConsumFromDate');
+        const toInput = document.getElementById('insertConsumToDate');
+        if (fromInput) {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            fromInput.value = `${yyyy}-${mm}-01`;
+        }
+        if (toInput) toInput.value = new Date().toISOString().slice(0, 10);
+        if (document.getElementById('insertConsumFilterDept')) document.getElementById('insertConsumFilterDept').value = '';
+        if (document.getElementById('insertConsumFilterPart')) document.getElementById('insertConsumFilterPart').value = '';
+        activeInsertConsumColFilters = {};
+        document.querySelectorAll('.insert-consum-col-filter').forEach(inp => inp.value = '');
+        fetchInsertConsumptionReport();
+    });
+
+    document.getElementById('exportInsertConsumBtn')?.addEventListener('click', () => {
+        const table = document.getElementById('insertConsumptionTable');
+        if (!table) return;
+
+        // Build clean export data without filter inputs
+        const exportData = [];
+        const fromDate = document.getElementById('insertConsumFromDate')?.value || '';
+        const toDate = document.getElementById('insertConsumToDate')?.value || '';
+
+        // Header
+        exportData.push(['Dept', 'Part No', 'Insert Spec', 'Qty', 'Cost (₹)']);
+
+        let totalQty = 0;
+        let totalCost = 0;
+        allInsertConsumRows.forEach(row => {
+            // Respect active column filters if any
+            const filters = Object.entries(activeInsertConsumColFilters).filter(([_, val]) => val && val.trim() !== '');
+            if (filters.length > 0) {
+                const match = filters.every(([colIdx, filterVal]) => {
+                    const f = filterVal.trim().toLowerCase();
+                    if (colIdx === '0') return (row.dept || '').toLowerCase().includes(f);
+                    if (colIdx === '1') return (row.partno || '').toLowerCase().includes(f);
+                    if (colIdx === '2') return (row.insert_spec || '').toLowerCase().includes(f);
+                    if (colIdx === '3') {
+                        const qStr = Number.isInteger(row.qty) ? String(row.qty) : row.qty.toFixed(2);
+                        return qStr.includes(f);
+                    }
+                    if (colIdx === '4') {
+                        const cStr = (row.cost || 0).toFixed(2);
+                        return cStr.includes(f);
+                    }
+                    return true;
+                });
+                if (!match) return;
+            }
+
+            totalQty += row.qty;
+            totalCost += (row.cost || 0);
+            exportData.push([
+                row.dept,
+                row.partno,
+                row.insert_spec,
+                Number.isInteger(row.qty) ? row.qty : Number(row.qty.toFixed(2)),
+                Number((row.cost || 0).toFixed(2))
+            ]);
+        });
+
+        exportData.push(['Total', '', '', Number.isInteger(totalQty) ? totalQty : Number(totalQty.toFixed(2)), Number(totalCost.toFixed(2))]);
+
+        const ws = XLSX.utils.aoa_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Insert_Consumption");
+        const filename = `Insert_Consumption_${fromDate || 'all'}_to_${toDate || 'all'}.xlsx`;
+        XLSX.writeFile(wb, filename);
+    });
+
+    // Delegated event listener for column filter typing
+    document.addEventListener('input', (e) => {
+        if (e.target && e.target.classList.contains('insert-consum-col-filter')) {
+            const col = e.target.getAttribute('data-col');
+            activeInsertConsumColFilters[col] = e.target.value;
+            applyInsertConsumColFilters();
+        }
     });
 
     // --- Insert Stock Summary Implementation ---
@@ -14160,6 +17549,469 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert('Error saving Quotation: ' + err.message);
                 }
             };
+        }
+    }
+
+    // ====== SERVICE: SETTERS LOG LOGIC ======
+    let serviceSettersInitialized = false;
+    let cachedSettersList = [];
+    let cachedSetterMachines = [];
+    let cachedSetterParts = [];
+    let currentSetterLogs = [];
+
+    async function initServiceSettersSection() {
+        const dateInput = document.getElementById('setterLogDate');
+        if (dateInput && !dateInput.value) {
+            dateInput.valueAsDate = new Date();
+        }
+
+        const clearAllBtn = document.getElementById('clearAllSetterLogsBtn');
+        if (clearAllBtn) {
+            clearAllBtn.style.display = isUserAdmin() ? 'inline-block' : 'none';
+        }
+
+        await Promise.all([
+            loadServiceSettersData(),
+            loadServiceSetterMachines(),
+            loadServiceSetterParts(),
+            fetchServiceSetterLogs()
+        ]);
+
+        const deptSelect = document.getElementById('setterLogDept');
+        filterSetterDropdownsByDept(deptSelect ? deptSelect.value : '');
+
+        if (!serviceSettersInitialized) {
+            serviceSettersInitialized = true;
+            setupServiceSettersEvents();
+        }
+    }
+
+    async function loadServiceSettersData() {
+        try {
+            const res = await fetch('/api/service/setters');
+            cachedSettersList = await res.json();
+        } catch (err) {
+            console.error('Error loading setters:', err);
+        }
+    }
+
+    async function loadServiceSetterMachines() {
+        try {
+            const res = await fetch('/api/machines');
+            cachedSetterMachines = await res.json();
+        } catch (err) {
+            console.error('Error loading machines:', err);
+        }
+    }
+
+    async function loadServiceSetterParts() {
+        try {
+            const res = await fetch('/api/partmaster');
+            cachedSetterParts = await res.json();
+        } catch (err) {
+            console.error('Error loading parts:', err);
+        }
+    }
+
+    function filterSetterDropdownsByDept(dept) {
+        const dUpper = (dept || '').trim().toUpperCase();
+
+        // 1. Filter Setters
+        const setterSelect = document.getElementById('setterLogName');
+        if (setterSelect) {
+            const curSetter = setterSelect.value;
+            let filteredSetters = cachedSettersList;
+            if (dUpper) {
+                filteredSetters = cachedSettersList.filter(s => (s.department || s.dept || '').trim().toUpperCase() === dUpper);
+            }
+            let html = '<option value="">-- Select Setter --</option>';
+            filteredSetters.forEach(s => {
+                html += `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`;
+            });
+            setterSelect.innerHTML = html;
+            if (curSetter && filteredSetters.some(s => s.name === curSetter)) {
+                setterSelect.value = curSetter;
+            }
+        }
+
+        // 2. Filter Machines
+        const machineSelect = document.getElementById('setterLogMachine');
+        if (machineSelect) {
+            const curMachine = machineSelect.value;
+            let filteredMachines = cachedSetterMachines;
+            if (dUpper) {
+                filteredMachines = cachedSetterMachines.filter(m => {
+                    const mDept = (m.department || m.dept || '').trim().toUpperCase();
+                    return !mDept || mDept === dUpper;
+                });
+            }
+            let html = '<option value="">-- Select Machine --</option>';
+            filteredMachines.forEach(m => {
+                const mName = m.name || m.machine_name || m.machine || '';
+                if (mName) {
+                    html += `<option value="${escapeHtml(mName)}">${escapeHtml(mName)}</option>`;
+                }
+            });
+            machineSelect.innerHTML = html;
+            if (curMachine && filteredMachines.some(m => (m.name || m.machine_name || m.machine) === curMachine)) {
+                machineSelect.value = curMachine;
+            }
+        }
+
+        // 3. Filter Parts
+        const partSelect = document.getElementById('setterLogPartNo');
+        if (partSelect) {
+            const curPart = partSelect.value;
+            let filteredParts = cachedSetterParts;
+            if (dUpper) {
+                filteredParts = cachedSetterParts.filter(p => (p.dept || p.department || '').trim().toUpperCase() === dUpper);
+            }
+            let html = '<option value="">-- Select Part No --</option>';
+            filteredParts.forEach(p => {
+                const pNo = p.partno || p.part_no || '';
+                if (pNo) {
+                    html += `<option value="${escapeHtml(pNo)}" data-id="${p.id || ''}">${escapeHtml(pNo)}</option>`;
+                }
+            });
+            partSelect.innerHTML = html;
+            if (curPart && filteredParts.some(p => (p.partno || p.part_no) === curPart)) {
+                partSelect.value = curPart;
+            } else {
+                onSetterPartNoChanged('');
+            }
+        }
+    }
+
+    async function onSetterPartNoChanged(partNo) {
+        const opnSelect = document.getElementById('setterLogOpnNo');
+        const descInput = document.getElementById('setterLogDesc');
+        if (!opnSelect) return;
+        opnSelect.innerHTML = '<option value="">-- Select Opn --</option>';
+        if (descInput) descInput.value = '';
+
+        if (!partNo) return;
+        const partObj = cachedSetterParts.find(p => (p.partno || p.part_no || '').trim().toUpperCase() === partNo.trim().toUpperCase());
+        if (!partObj || !partObj.id) return;
+
+        try {
+            const res = await fetch(`/api/partmaster/${partObj.id}/operations`);
+            const ops = await res.json();
+            let html = '<option value="">-- Select Opn --</option>';
+            ops.forEach(o => {
+                const opn = o.opn_no || '';
+                const desc = o.description || '';
+                html += `<option value="${escapeHtml(opn)}" data-desc="${escapeHtml(desc)}">${escapeHtml(opn)}${desc ? ' - ' + escapeHtml(desc) : ''}</option>`;
+            });
+            opnSelect.innerHTML = html;
+        } catch (e) {
+            console.error('Error loading part operations:', e);
+        }
+    }
+
+    function calculateDuration(timeFrom, timeTo) {
+        if (!timeFrom || !timeTo) return '-';
+        try {
+            const [h1, m1] = timeFrom.split(':').map(Number);
+            const [h2, m2] = timeTo.split(':').map(Number);
+            let diffMins = (h2 * 60 + m2) - (h1 * 60 + m1);
+            if (diffMins < 0) diffMins += 24 * 60; // overnight shift
+            const hrs = Math.floor(diffMins / 60);
+            const mins = diffMins % 60;
+            if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
+            if (hrs > 0) return `${hrs}h`;
+            return `${mins}m`;
+        } catch (e) {
+            return '-';
+        }
+    }
+
+    function calculateDurationInHours(timeFrom, timeTo) {
+        if (!timeFrom || !timeTo) return 0;
+        try {
+            const [h1, m1] = timeFrom.split(':').map(Number);
+            const [h2, m2] = timeTo.split(':').map(Number);
+            let diffMins = (h2 * 60 + m2) - (h1 * 60 + m1);
+            if (diffMins < 0) diffMins += 24 * 60;
+            return diffMins / 60.0;
+        } catch (e) {
+            return 0;
+        }
+    }
+
+    async function fetchServiceSetterLogs() {
+        try {
+            const res = await fetch('/api/service/setter-logs');
+            currentSetterLogs = await res.json();
+            renderServiceSetterLogs(currentSetterLogs);
+        } catch (err) {
+            console.error('Error fetching setter logs:', err);
+        }
+    }
+
+    function renderServiceSetterLogs(logs) {
+        const tbody = document.getElementById('setterLogsBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        if (!logs || logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="15" style="text-align: center; color: var(--text-muted); padding: 1.25rem;">No setter entries logged yet.</td></tr>';
+            updateSetterKpis([]);
+            return;
+        }
+
+        updateSetterKpis(logs);
+
+        logs.forEach(l => {
+            const dur = calculateDuration(l.time_from, l.time_to);
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${l.id}</td>
+                <td><strong>${l.date}</strong></td>
+                <td><span style="background: #f1f5f9; color: #334155; font-weight: 600; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">${escapeHtml(l.dept || '-')}</span></td>
+                <td><span style="font-weight: 600; color: #0284c7;">${escapeHtml(l.setter_name)}</span></td>
+                <td>${l.time_from || '-'}</td>
+                <td>${l.time_to || '-'}</td>
+                <td><span style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 0.8rem;">${dur}</span></td>
+                <td><span style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 500;">${escapeHtml(l.activity || '-')}</span></td>
+                <td><strong>${escapeHtml(l.machine || '-')}</strong></td>
+                <td>${escapeHtml(l.partno || '-')}</td>
+                <td>${escapeHtml(l.opn_no || '-')}</td>
+                <td>${escapeHtml(l.description || '-')}</td>
+                <td style="text-align: right; font-weight: 600;">${l.qty || 0}</td>
+                <td>${escapeHtml(l.remarks || '-')}</td>
+                <td style="text-align: center; white-space: nowrap;">
+                    <button class="btn btn-outline edit-setter-log-btn" data-id="${l.id}" style="padding: 2px 6px; font-size: 0.78rem; margin-right: 4px;">Edit</button>
+                    <button class="btn btn-outline delete-setter-log-btn" data-id="${l.id}" style="padding: 2px 6px; font-size: 0.78rem; color: #ef4444; border-color: #ef4444;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.edit-setter-log-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = parseInt(e.currentTarget.getAttribute('data-id'));
+                editServiceSetterLog(id);
+            });
+        });
+
+        tbody.querySelectorAll('.delete-setter-log-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const id = parseInt(e.currentTarget.getAttribute('data-id'));
+                if (confirm(`Delete setter log #${id}?`)) {
+                    try {
+                        const res = await fetch(`/api/service/setter-logs/${id}`, { method: 'DELETE' });
+                        if (res.ok) {
+                            fetchServiceSetterLogs();
+                        } else {
+                            alert('Failed to delete setter log');
+                        }
+                    } catch (err) {
+                        console.error(err);
+                    }
+                }
+            });
+        });
+
+        applyTableColFilters('setterLogsTable');
+    }
+
+    function updateSetterKpis(logs) {
+        const totalEntriesEl = document.getElementById('kpiSetterTotalEntries');
+        const totalHoursEl = document.getElementById('kpiSetterTotalHours');
+        const activeCountEl = document.getElementById('kpiSetterActiveCount');
+        const machineCountEl = document.getElementById('kpiSetterMachineCount');
+
+        if (!totalEntriesEl) return;
+        totalEntriesEl.innerText = logs.length;
+
+        let totalHours = 0;
+        const uniqueSetters = new Set();
+        const uniqueMachines = new Set();
+
+        logs.forEach(l => {
+            totalHours += calculateDurationInHours(l.time_from, l.time_to);
+            if (l.setter_name) uniqueSetters.add(l.setter_name.trim().toUpperCase());
+            if (l.machine) uniqueMachines.add(l.machine.trim().toUpperCase());
+        });
+
+        if (totalHoursEl) totalHoursEl.innerText = totalHours.toFixed(1) + ' hrs';
+        if (activeCountEl) activeCountEl.innerText = uniqueSetters.size;
+        if (machineCountEl) machineCountEl.innerText = uniqueMachines.size;
+    }
+
+    async function editServiceSetterLog(id) {
+        const item = currentSetterLogs.find(l => l.id === id);
+        if (!item) return;
+
+        document.getElementById('editingSetterLogId').value = item.id;
+        document.getElementById('setterLogDate').value = item.date;
+
+        const deptSelect = document.getElementById('setterLogDept');
+        if (deptSelect) deptSelect.value = item.dept || '';
+        filterSetterDropdownsByDept(item.dept || '');
+
+        document.getElementById('setterLogName').value = item.setter_name;
+        document.getElementById('setterLogTimeFrom').value = item.time_from;
+        document.getElementById('setterLogTimeTo').value = item.time_to;
+        document.getElementById('setterLogActivity').value = item.activity;
+        document.getElementById('setterLogMachine').value = item.machine;
+        document.getElementById('setterLogPartNo').value = item.partno;
+
+        await onSetterPartNoChanged(item.partno);
+        const opnSelect = document.getElementById('setterLogOpnNo');
+        if (opnSelect) opnSelect.value = item.opn_no;
+
+        document.getElementById('setterLogDesc').value = item.description;
+        document.getElementById('setterLogQty').value = item.qty || 0;
+        document.getElementById('setterLogRemarks').value = item.remarks;
+
+        const formTitle = document.getElementById('setterFormTitle');
+        if (formTitle) formTitle.innerHTML = `<i class="fas fa-edit" style="color: #eab308; margin-right: 6px;"></i>Edit Setter Entry #${item.id}`;
+        const editBadge = document.getElementById('setterEditBadge');
+        if (editBadge) editBadge.style.display = 'inline-block';
+        const saveBtn = document.getElementById('saveSetterLogBtn');
+        if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-save" style="margin-right: 4px;"></i> Update Entry';
+
+        document.getElementById('serviceSettersSection').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function resetServiceSetterForm() {
+        document.getElementById('editingSetterLogId').value = '';
+        document.getElementById('setterLogForm').reset();
+        document.getElementById('setterLogDate').valueAsDate = new Date();
+        filterSetterDropdownsByDept('');
+        const opnSelect = document.getElementById('setterLogOpnNo');
+        if (opnSelect) opnSelect.innerHTML = '<option value="">-- Select Opn --</option>';
+
+        const formTitle = document.getElementById('setterFormTitle');
+        if (formTitle) formTitle.innerHTML = `<i class="fas fa-edit" style="color: #0284c7; margin-right: 6px;"></i>New Setter Entry`;
+        const editBadge = document.getElementById('setterEditBadge');
+        if (editBadge) editBadge.style.display = 'none';
+        const saveBtn = document.getElementById('saveSetterLogBtn');
+        if (saveBtn) saveBtn.innerHTML = '<i class="fas fa-save" style="margin-right: 4px;"></i> Save Entry';
+    }
+
+    function setupServiceSettersEvents() {
+        const deptSelect = document.getElementById('setterLogDept');
+        if (deptSelect) {
+            deptSelect.addEventListener('change', (e) => {
+                filterSetterDropdownsByDept(e.target.value);
+            });
+        }
+
+        const partSelect = document.getElementById('setterLogPartNo');
+        if (partSelect) {
+            partSelect.addEventListener('change', (e) => {
+                onSetterPartNoChanged(e.target.value);
+            });
+        }
+
+        const opnSelect = document.getElementById('setterLogOpnNo');
+        if (opnSelect) {
+            opnSelect.addEventListener('change', (e) => {
+                const opt = e.target.selectedOptions[0];
+                const desc = opt ? (opt.getAttribute('data-desc') || '') : '';
+                const descInput = document.getElementById('setterLogDesc');
+                if (descInput && desc) {
+                    descInput.value = desc;
+                }
+            });
+        }
+
+        const resetBtn = document.getElementById('resetSetterFormBtn');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', resetServiceSetterForm);
+        }
+
+        const form = document.getElementById('setterLogForm');
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const editingId = document.getElementById('editingSetterLogId').value;
+                const payload = {
+                    date: document.getElementById('setterLogDate').value,
+                    dept: document.getElementById('setterLogDept').value,
+                    setter_name: document.getElementById('setterLogName').value,
+                    time_from: document.getElementById('setterLogTimeFrom').value,
+                    time_to: document.getElementById('setterLogTimeTo').value,
+                    activity: document.getElementById('setterLogActivity').value,
+                    machine: document.getElementById('setterLogMachine').value,
+                    partno: document.getElementById('setterLogPartNo').value,
+                    opn_no: document.getElementById('setterLogOpnNo').value,
+                    description: document.getElementById('setterLogDesc').value,
+                    qty: parseInt(document.getElementById('setterLogQty').value) || 0,
+                    remarks: document.getElementById('setterLogRemarks').value
+                };
+
+                const url = editingId ? `/api/service/setter-logs/${editingId}` : '/api/service/setter-logs';
+                const method = editingId ? 'PUT' : 'POST';
+
+                try {
+                    const res = await fetch(url, {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (res.ok) {
+                        resetServiceSetterForm();
+                        fetchServiceSetterLogs();
+                    } else {
+                        const err = await res.json();
+                        alert('Error: ' + (err.detail || 'Failed to save setter log'));
+                    }
+                } catch (err) {
+                    alert('Error saving setter log: ' + err.message);
+                }
+            });
+        }
+
+        const exportBtn = document.getElementById('exportSetterLogsBtn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                if (!currentSetterLogs || currentSetterLogs.length === 0) {
+                    alert('No setter logs to export.');
+                    return;
+                }
+                const exportData = currentSetterLogs.map(l => ({
+                    'ID': l.id,
+                    'Date': l.date,
+                    'Dept': l.dept || '',
+                    'Setter Name': l.setter_name,
+                    'From': l.time_from,
+                    'To': l.time_to,
+                    'Duration': calculateDuration(l.time_from, l.time_to),
+                    'Activity': l.activity,
+                    'Machine': l.machine,
+                    'Part No': l.partno,
+                    'Opn No': l.opn_no,
+                    'Description': l.description,
+                    'Qty': l.qty,
+                    'Remarks': l.remarks
+                }));
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Setters_Log');
+                const today = new Date().toISOString().split('T')[0];
+                XLSX.writeFile(wb, `Setters_Log_${today}.xlsx`);
+            });
+        }
+
+        const clearAllBtn = document.getElementById('clearAllSetterLogsBtn');
+        if (clearAllBtn) {
+            clearAllBtn.addEventListener('click', async () => {
+                if (confirm('Are you sure you want to clear ALL setter entries? This cannot be undone.')) {
+                    try {
+                        const res = await fetch('/api/service/setter-logs', { method: 'DELETE' });
+                        if (res.ok) {
+                            fetchServiceSetterLogs();
+                        } else {
+                            alert('Failed to clear setter logs.');
+                        }
+                    } catch (err) {
+                        console.error(err);
+                    }
+                }
+            });
         }
     }
 });

@@ -4922,6 +4922,43 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    function isDateInMonth(dStr, monthStr) {
+        if (!dStr || !monthStr) return false;
+        if (typeof parseLocalDateStr === 'function') {
+            const iso = parseLocalDateStr(dStr);
+            if (iso && iso.startsWith(monthStr)) return true;
+        }
+        const raw = String(dStr).trim();
+        if (raw.startsWith(monthStr)) return true;
+        const mParts = monthStr.split('-');
+        if (mParts.length === 2) {
+            const ty = parseInt(mParts[0], 10);
+            const tm = parseInt(mParts[1], 10);
+            const dp = raw.split(/[\/\-\s]/);
+            if (dp.length >= 3) {
+                let y, m;
+                if (dp[0].length === 4) {
+                    y = parseInt(dp[0], 10);
+                    m = parseInt(dp[1], 10);
+                } else if (dp[2].length === 4) {
+                    y = parseInt(dp[2], 10);
+                    const p1 = parseInt(dp[0], 10);
+                    const p2 = parseInt(dp[1], 10);
+                    if (y === ty) {
+                        if (p2 === tm) return true; // DD/MM/YYYY
+                        if (p1 === tm && p2 <= 31) return true; // MM/DD/YYYY
+                    }
+                }
+                if (y === ty && m === tm) return true;
+            } else if (dp.length === 2) {
+                const p1 = parseInt(dp[0], 10);
+                const p2 = parseInt(dp[1], 10);
+                if (p2 === tm || (p1 === tm && p2 <= 31)) return true;
+            }
+        }
+        return false;
+    }
+
     // --- DEBUR LOGIC ---
     let deburAllParts = [];
     let deburOperatorsLoaded = false;
@@ -5053,13 +5090,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const allHtReceiptLogs = htReceiptRes || [];
 
             // Filter logs for the selected month
-            const monthLogs = allLogs.filter(l => (l.date || '').startsWith(month));
-            const monthPcReceiptLogs = allPcReceiptLogs.filter(l => (l.date || '').startsWith(month));
-            const monthHtReceiptLogs = allHtReceiptLogs.filter(l => (l.date || '').startsWith(month));
+            const monthLogs = allLogs.filter(l => isDateInMonth(l.date, month));
+            const monthPcReceiptLogs = allPcReceiptLogs.filter(l => isDateInMonth(l.date, month));
+            const monthHtReceiptLogs = allHtReceiptLogs.filter(l => isDateInMonth(l.date, month));
 
             const masterDeptParts = (deburAllParts || [])
                 .filter(p => (p.department || '').trim().toUpperCase() === dept.trim().toUpperCase() || (p.dept || '').trim().toUpperCase() === dept.trim().toUpperCase())
-                .map(p => (p.partno || '').trim());
+                .map(p => (p.partno || p.part_no || '').trim());
 
             const schedDeptParts = allSchedules
                 .filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase())
@@ -5080,7 +5117,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Fetch operations for all parts in parallel
             const operationsMap = {};
             await Promise.all(uniqueParts.map(async (partno) => {
-                const partObj = deburAllParts.find(p => (p.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase());
+                const partObj = deburAllParts.find(p => (p.partno || p.part_no || '').trim().toUpperCase() === (partno || '').trim().toUpperCase());
                 if (partObj && partObj.id) {
                     try {
                         const opsRes = await fetch(`/api/partmaster/${partObj.id}/operations`);
@@ -5094,11 +5131,19 @@ document.addEventListener('DOMContentLoaded', () => {
             tbody.innerHTML = '';
             for (const partno of uniqueParts) {
                 let operations = operationsMap[partno] || [];
-                operations.sort((a, b) => (parseInt(a.opn_no) || 0) - (parseInt(b.opn_no) || 0));
+                // Filter out non-manufacturing operations if any (like debur, for ins, rfd, rework, rejection, nc)
+                const mfgOperations = operations.filter(o => {
+                    const opn = (o.opn_no || '').toString().trim().toLowerCase();
+                    const desc = (o.description || '').toString().trim().toLowerCase();
+                    return !['debur', 'for ins', 'rfd', 'rework', 'rejection', 'nc', 'idle'].includes(opn) &&
+                           !['debur', 'deburring', 'for ins', 'inspection', 'final inspection', 'rfd'].includes(desc);
+                });
+                mfgOperations.sort((a, b) => (parseInt(a.opn_no) || 0) - (parseInt(b.opn_no) || 0));
 
                 let lastOpProd = 0;
-                if (operations.length > 0) {
-                    const lastOp = operations[operations.length - 1];
+                let lastOpMonthProd = 0;
+                if (mfgOperations.length > 0) {
+                    const lastOp = mfgOperations[mfgOperations.length - 1];
                     const lastOpnClean = (lastOp.opn_no || '').trim().toLowerCase();
                     const lastDescClean = (lastOp.description || '').trim().toLowerCase();
                     const lastMachClean = (lastOp.machine || lastOp.machine_name || '').trim().toLowerCase();
@@ -5106,13 +5151,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     const isLastPc = lastOpnClean === 'pc' || lastDescClean === 'pc' || lastDescClean.includes('powder coat') || lastDescClean.includes('pc') || lastMachClean === 'pc';
                     const isLastHt = lastOpnClean === 'ht' || lastOpnClean === '50' || lastDescClean === 'ht' || lastDescClean.includes('heat treat') || lastMachClean === 'ht';
 
-                    lastOpProd = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && ((l.opn_no || '').trim().toLowerCase() === lastOpnClean || (parseInt(l.opn_no) || -1) === (parseInt(lastOp.opn_no) || -2))).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                    const isMatchOp = (l) => {
+                        if ((l.partno || '').trim().toUpperCase() !== (partno || '').trim().toUpperCase()) return false;
+                        const lOpn = (l.opn_no || '').toString().trim().toLowerCase();
+                        const lDesc = (l.description || '').toString().trim().toLowerCase();
+                        if (lOpn === lastOpnClean || lDesc === lastDescClean) return true;
+                        if (lastDescClean && lOpn.includes(lastDescClean)) return true;
+                        if (lastOpnClean && lDesc.includes(lastOpnClean)) return true;
+                        const numL = parseInt(lOpn, 10);
+                        const numLast = parseInt(lastOpnClean, 10);
+                        if (!isNaN(numL) && !isNaN(numLast) && numL === numLast) return true;
+                        return false;
+                    };
+
+                    lastOpProd = allLogs.filter(isMatchOp).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                    lastOpMonthProd = allLogs.filter(l => isMatchOp(l) && isDateInMonth(l.date, month)).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
 
                     if (isLastPc || lastOpnClean.includes('pc')) {
-                        const pcRec = monthPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                        const pcRec = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                         lastOpProd = Math.max(lastOpProd, pcRec);
                     } else if (isLastHt) {
-                        const htRec = monthHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                        const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                         lastOpProd = Math.max(lastOpProd, htRec);
                     }
                 } else {
@@ -5120,36 +5179,40 @@ document.addEventListener('DOMContentLoaded', () => {
                     const numericOps = partAllLogs.map(l => parseInt(l.opn_no) || 0).filter(n => n > 0);
                     if (numericOps.length > 0) {
                         const maxOp = Math.max(...numericOps);
-                        lastOpProd = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (parseInt(l.opn_no) || 0) === maxOp).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                        lastOpProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (parseInt(l.opn_no) || 0) === maxOp).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                        lastOpMonthProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (parseInt(l.opn_no) || 0) === maxOp && isDateInMonth(l.date, month)).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                     }
-                    const pcRecTotal = monthPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                    const pcRecTotal = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                     if (pcRecTotal > lastOpProd) {
                         lastOpProd = pcRecTotal;
                     }
                 }
 
-                // Show only parts for which last operation completed during the month
                 if (lastOpProd <= 0) continue;
 
-                const deburredProd = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const deburredTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 
-                const balance = Math.max(0, lastOpProd - deburredProd);
+                const balance = Math.max(0, lastOpProd - deburredTotal);
                 
-                if (balance <= 0) continue;
+                // Show if currently pending debur (balance > 0) OR if completed final operation during this month
+                if (balance <= 0 && lastOpMonthProd <= 0) continue;
                 
+                const displayQty = balance;
+                if (displayQty <= 0) continue;
+
                 const tr = document.createElement('tr');
                 tr.style.cursor = 'pointer';
                 tr.style.transition = 'background-color 0.2s';
                 tr.innerHTML = `
                     <td style="padding: 0.6rem 0.75rem; font-weight: 500;">${escapeHtml(partno)}</td>
-                    <td style="padding: 0.6rem 0.75rem; font-weight: 700; color: var(--primary-color);">${balance}</td>
+                    <td style="padding: 0.6rem 0.75rem; font-weight: 700; color: var(--primary-color);">${displayQty}</td>
                 `;
                 tr.addEventListener('click', () => {
                     document.getElementById('deburPartNo').value = partno;
                     const qtyInput = document.getElementById('deburQty');
                     if (qtyInput) {
-                        qtyInput.placeholder = `Max: ${balance}`;
-                        qtyInput.value = balance;
+                        qtyInput.placeholder = `Max: ${displayQty}`;
+                        qtyInput.value = displayQty;
                     }
                     Array.from(tbody.children).forEach(r => r.style.background = '');
                     tr.style.background = '#e0f2fe';
@@ -5216,7 +5279,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const month = document.getElementById('deburMonth')?.value || '';
             let deburLogs = allLogs.filter(l => (l.opn_no || '').toLowerCase() === 'debur');
             if (month) {
-                deburLogs = deburLogs.filter(l => (l.date || '').startsWith(month));
+                deburLogs = deburLogs.filter(l => isDateInMonth(l.date, month));
             }
             
             // Sort descending by ID or Date to show newest first
@@ -5966,17 +6029,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const allLogs = logRes || [];
 
             // Filter logs for the selected month
-            const monthLogs = allLogs.filter(l => (l.date || '').startsWith(month));
+            const monthLogs = allLogs.filter(l => isDateInMonth(l.date, month));
 
             const masterDeptParts = (inspAllParts || [])
                 .filter(p => (p.department || '').trim().toUpperCase() === dept.trim().toUpperCase() || (p.dept || '').trim().toUpperCase() === dept.trim().toUpperCase())
-                .map(p => (p.partno || '').trim());
+                .map(p => (p.partno || p.part_no || '').trim());
 
             const schedDeptParts = allSchedules
                 .filter(s => (s.department || '').trim().toUpperCase() === dept.trim().toUpperCase())
                 .map(s => (s.partno || '').trim());
 
-            const prodLogDeptParts = monthLogs
+            const prodLogDeptParts = allLogs
                 .filter(l => (l.department || '').trim().toUpperCase() === dept.trim().toUpperCase() || (l.dept || '').trim().toUpperCase() === dept.trim().toUpperCase())
                 .map(l => (l.partno || '').trim());
 
@@ -5991,35 +6054,37 @@ document.addEventListener('DOMContentLoaded', () => {
             tbody.innerHTML = '';
             for (const partno of uniqueParts) {
                 // On completion of debur to show for ins
-                const deburredTotal = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                
-                // If debur was not completed in this month, do not show for inspection
-                if (deburredTotal <= 0) continue;
+                const deburredTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const forInsLogTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const rfdProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const reworkProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const ncProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                const rejectionProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rejection').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
 
-                const forInsLogTotal = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'for ins').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const rfdProd = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rfd').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const reworkProd = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rework').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const ncProd = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'nc').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                const rejectionProd = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'rejection').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-
+                const effectiveForIns = deburredTotal > 0 ? deburredTotal : forInsLogTotal;
                 const totalInspected = Math.max(forInsLogTotal, rfdProd + reworkProd + ncProd + rejectionProd);
-                const balance = Math.max(0, deburredTotal - totalInspected);
+                const balance = Math.max(0, effectiveForIns - totalInspected);
                 
-                if (balance <= 0) continue;
+                const deburredMonthTotal = monthLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+
+                if (balance <= 0 && deburredMonthTotal <= 0) continue;
                 
+                const displayQty = balance;
+                if (displayQty <= 0) continue;
+
                 const tr = document.createElement('tr');
                 tr.style.cursor = 'pointer';
                 tr.style.transition = 'background-color 0.2s';
                 tr.innerHTML = `
                     <td style="padding: 0.6rem 0.75rem; font-weight: 500;">${escapeHtml(partno)}</td>
-                    <td style="padding: 0.6rem 0.75rem; font-weight: 700; color: var(--primary-color);">${balance}</td>
+                    <td style="padding: 0.6rem 0.75rem; font-weight: 700; color: var(--primary-color);">${displayQty}</td>
                 `;
                 tr.addEventListener('click', () => {
                     document.getElementById('inspPartNo').value = partno;
                     const rfdInput = document.getElementById('inspRFD');
                     if (rfdInput) {
-                        rfdInput.placeholder = `Max: ${balance}`;
-                        rfdInput.value = balance;
+                        rfdInput.placeholder = `Max: ${displayQty}`;
+                        rfdInput.value = displayQty;
                     }
                     if (typeof autoSumInspection === 'function') {
                         autoSumInspection();
@@ -6166,7 +6231,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const month = document.getElementById('inspMonth')?.value || '';
             let inspLogs = allLogs.filter(l => (l.opn_no || '').toLowerCase() === 'for ins');
             if (month) {
-                inspLogs = inspLogs.filter(l => (l.date || '').startsWith(month));
+                inspLogs = inspLogs.filter(l => isDateInMonth(l.date, month));
             }
             
             inspLogs.sort((a, b) => b.id - a.id);
