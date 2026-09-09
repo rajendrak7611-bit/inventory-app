@@ -1021,6 +1021,13 @@ select.tomselected, .tomselected {
     font-size: 0.9rem !important;
 }
 
+#serviceSettersSection .ts-control {
+    background-color: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 6px !important;
+    min-height: 38px !important;
+}
+
 .ts-dropdown {
     z-index: 10000 !important;
     border-radius: 8px !important;

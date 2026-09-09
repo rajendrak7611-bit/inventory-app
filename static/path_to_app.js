@@ -17920,6 +17920,26 @@ document.addEventListener('DOMContentLoaded', () => {
     let cachedSetterMachines = [];
     let cachedSetterParts = [];
     let currentSetterLogs = [];
+    let setterPartTomSelect = null;
+
+    function initSetterPartTomSelect() {
+        const select = document.getElementById('setterLogPartNo');
+        if (!select || !window.TomSelect) return;
+        if (!setterPartTomSelect) {
+            setterPartTomSelect = new TomSelect(select, {
+                create: false,
+                sortField: { field: "text", direction: "asc" },
+                placeholder: "Type to search Part No...",
+                allowEmptyOption: true,
+                maxOptions: 1000,
+                openOnFocus: true,
+                closeAfterSelect: true,
+                onChange: async (val) => {
+                    await onSetterPartNoChanged(val || '');
+                }
+            });
+        }
+    }
 
     async function initServiceSettersSection() {
         const dateInput = document.getElementById('setterLogDate');
@@ -17931,6 +17951,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (clearAllBtn) {
             clearAllBtn.style.display = isUserAdmin() ? 'inline-block' : 'none';
         }
+
+        initSetterPartTomSelect();
 
         await Promise.all([
             loadServiceSettersData(),
@@ -18023,23 +18045,52 @@ document.addEventListener('DOMContentLoaded', () => {
         // 3. Filter Parts
         const partSelect = document.getElementById('setterLogPartNo');
         if (partSelect) {
-            const curPart = partSelect.value;
+            const curPart = setterPartTomSelect ? setterPartTomSelect.getValue() : partSelect.value;
             let filteredParts = cachedSetterParts;
             if (dUpper) {
                 filteredParts = cachedSetterParts.filter(p => (p.dept || p.department || '').trim().toUpperCase() === dUpper);
             }
-            let html = '<option value="">-- Select Part No --</option>';
-            filteredParts.forEach(p => {
-                const pNo = p.partno || p.part_no || '';
-                if (pNo) {
-                    html += `<option value="${escapeHtml(pNo)}" data-id="${p.id || ''}">${escapeHtml(pNo)}</option>`;
+
+            if (!setterPartTomSelect && window.TomSelect) {
+                initSetterPartTomSelect();
+            }
+
+            if (setterPartTomSelect) {
+                setterPartTomSelect.clear(true);
+                setterPartTomSelect.clearOptions();
+                setterPartTomSelect.addOption({ value: '', text: '-- Select Part No --' });
+                filteredParts.forEach(p => {
+                    const pNo = p.partno || p.part_no || '';
+                    if (pNo) {
+                        const desc = p.family || p.forge_pn || p.description || '';
+                        setterPartTomSelect.addOption({
+                            value: pNo,
+                            text: `${pNo}${desc ? ' - ' + desc : ''}`
+                        });
+                    }
+                });
+                setterPartTomSelect.refreshOptions(false);
+                if (curPart && filteredParts.some(p => (p.partno || p.part_no) === curPart)) {
+                    setterPartTomSelect.setValue(curPart, true);
+                } else {
+                    setterPartTomSelect.setValue('', true);
+                    onSetterPartNoChanged('');
                 }
-            });
-            partSelect.innerHTML = html;
-            if (curPart && filteredParts.some(p => (p.partno || p.part_no) === curPart)) {
-                partSelect.value = curPart;
             } else {
-                onSetterPartNoChanged('');
+                let html = '<option value="">-- Select Part No --</option>';
+                filteredParts.forEach(p => {
+                    const pNo = p.partno || p.part_no || '';
+                    if (pNo) {
+                        const desc = p.family || p.forge_pn || p.description || '';
+                        html += `<option value="${escapeHtml(pNo)}" data-id="${p.id || ''}">${escapeHtml(pNo)}${desc ? ' - ' + escapeHtml(desc) : ''}</option>`;
+                    }
+                });
+                partSelect.innerHTML = html;
+                if (curPart && filteredParts.some(p => (p.partno || p.part_no) === curPart)) {
+                    partSelect.value = curPart;
+                } else {
+                    onSetterPartNoChanged('');
+                }
             }
         }
     }
@@ -18217,7 +18268,12 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('setterLogTimeTo').value = item.time_to;
         document.getElementById('setterLogActivity').value = item.activity;
         document.getElementById('setterLogMachine').value = item.machine;
-        document.getElementById('setterLogPartNo').value = item.partno;
+        if (setterPartTomSelect) {
+            setterPartTomSelect.setValue(item.partno || '', true);
+        } else {
+            const pEl = document.getElementById('setterLogPartNo');
+            if (pEl) pEl.value = item.partno || '';
+        }
 
         await onSetterPartNoChanged(item.partno);
         const opnSelect = document.getElementById('setterLogOpnNo');
@@ -18241,9 +18297,14 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('editingSetterLogId').value = '';
         document.getElementById('setterLogForm').reset();
         document.getElementById('setterLogDate').valueAsDate = new Date();
+        if (setterPartTomSelect) {
+            setterPartTomSelect.setValue('', true);
+        }
         filterSetterDropdownsByDept('');
         const opnSelect = document.getElementById('setterLogOpnNo');
         if (opnSelect) opnSelect.innerHTML = '<option value="">-- Select Opn --</option>';
+        const descInput = document.getElementById('setterLogDesc');
+        if (descInput) descInput.value = '';
 
         const formTitle = document.getElementById('setterFormTitle');
         if (formTitle) formTitle.innerHTML = `<i class="fas fa-edit" style="color: #0284c7; margin-right: 6px;"></i>New Setter Entry`;
@@ -18298,7 +18359,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     time_to: document.getElementById('setterLogTimeTo').value,
                     activity: document.getElementById('setterLogActivity').value,
                     machine: document.getElementById('setterLogMachine').value,
-                    partno: document.getElementById('setterLogPartNo').value,
+                    partno: (setterPartTomSelect ? setterPartTomSelect.getValue() : document.getElementById('setterLogPartNo')?.value || '').trim(),
                     opn_no: document.getElementById('setterLogOpnNo').value,
                     description: document.getElementById('setterLogDesc').value,
                     qty: parseInt(document.getElementById('setterLogQty').value) || 0,
