@@ -10907,6 +10907,10 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchOperEffReport() {
         const selectedDate = document.getElementById('operEffDate')?.value;
         const deptFilter = (document.getElementById('operEffDept')?.value || '').trim().toUpperCase();
+        const desigSelect = document.getElementById('operEffDesig');
+        let desigFilter = desigSelect ? desigSelect.value : 'Operator';
+        if (desigFilter === undefined || desigFilter === null) desigFilter = 'Operator';
+        desigFilter = desigFilter.trim();
 
         const tbody = document.getElementById('operEffBody');
         if (!tbody) return;
@@ -10923,9 +10927,46 @@ document.addEventListener('DOMContentLoaded', () => {
             const allProdLogs = await prodRes.json();
             const allAttendance = await attRes.json();
 
+            // Populate Designation dropdown dynamically with unique designations from operators
+            if (desigSelect) {
+                const curVal = desigSelect.value !== undefined && desigSelect.value !== null ? desigSelect.value : 'Operator';
+                const desigSet = new Set();
+                desigSet.add('Operator');
+                allOperators.forEach(o => {
+                    const d = (o.designation || 'Operator').trim();
+                    if (d) desigSet.add(d);
+                });
+                const sortedOtherDesigs = Array.from(desigSet).filter(d => d.toLowerCase() !== 'operator').sort();
+                
+                const existingVals = Array.from(desigSelect.options).map(o => o.value);
+                const targetVals = ['Operator', '', ...sortedOtherDesigs];
+                if (existingVals.join(',') !== targetVals.join(',')) {
+                    let html = '<option value="Operator">Operator</option><option value="">-- All Designations --</option>';
+                    sortedOtherDesigs.forEach(d => {
+                        html += `<option value="${d}">${d}</option>`;
+                    });
+                    desigSelect.innerHTML = html;
+                    if (targetVals.includes(curVal)) {
+                        desigSelect.value = curVal;
+                    } else {
+                        desigSelect.value = 'Operator';
+                    }
+                }
+            }
+
+            const activeDesig = (desigSelect ? desigSelect.value : 'Operator').trim();
+
             let filteredOperators = allOperators;
             if (deptFilter) {
-                filteredOperators = allOperators.filter(o => (o.department || '').trim().toUpperCase() === deptFilter);
+                filteredOperators = allOperators.filter(o => (o.department || o.dept || '').trim().toUpperCase() === deptFilter);
+            }
+
+            // Filter by designation: default is "Operator". If "-- All Designations --" (empty string), include all.
+            if (activeDesig !== '') {
+                filteredOperators = filteredOperators.filter(o => {
+                    const d = (o.designation || 'Operator').trim();
+                    return d.toLowerCase() === activeDesig.toLowerCase();
+                });
             }
 
             tbody.innerHTML = '';
@@ -11008,6 +11049,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('generateOperEffBtn')?.addEventListener('click', fetchOperEffReport);
     document.getElementById('operEffDept')?.addEventListener('change', fetchOperEffReport);
     document.getElementById('operEffDate')?.addEventListener('change', fetchOperEffReport);
+    document.getElementById('operEffDesig')?.addEventListener('change', fetchOperEffReport);
     document.getElementById('mcUtilDept')?.addEventListener('change', () => document.getElementById('generateMcUtilBtn')?.click());
     document.getElementById('mcUtilFromDate')?.addEventListener('change', () => document.getElementById('generateMcUtilBtn')?.click());
     document.getElementById('mcUtilToDate')?.addEventListener('change', () => document.getElementById('generateMcUtilBtn')?.click());
