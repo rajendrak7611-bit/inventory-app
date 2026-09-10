@@ -537,11 +537,22 @@ def run_startup_migrations():
                 conn.commit()
             except Exception:
                 pass
+            for col_stmt in [
+                "ALTER TABLE operators ADD COLUMN dept TEXT;",
+                "ALTER TABLE operators ADD COLUMN department TEXT;",
+                "ALTER TABLE operators ADD COLUMN designation TEXT DEFAULT 'Operator';"
+            ]:
+                try:
+                    conn.execute(text(col_stmt))
+                    conn.commit()
+                except Exception:
+                    pass
             try:
-                conn.execute(text("ALTER TABLE operators ADD COLUMN IF NOT EXISTS dept TEXT;"))
-                conn.execute(text("ALTER TABLE operators ADD COLUMN IF NOT EXISTS department TEXT;"))
-                conn.execute(text("ALTER TABLE operators ADD COLUMN IF NOT EXISTS designation TEXT DEFAULT 'Operator';"))
                 conn.execute(text("UPDATE operators SET dept = department WHERE (dept IS NULL OR dept = '') AND department IS NOT NULL;"))
+                conn.commit()
+            except Exception:
+                pass
+            try:
                 conn.execute(text("UPDATE operators SET department = dept WHERE (department IS NULL OR department = '') AND dept IS NOT NULL;"))
                 conn.commit()
             except Exception:
@@ -1960,8 +1971,8 @@ def get_operators(db: Session = Depends(get_db)):
             return [{
                 "id": r.get("id"),
                 "name": r.get("name") or r.get("operator_name") or "",
-                "dept": r.get("department") or r.get("dept") or "",
-                "department": r.get("department") or r.get("dept") or "",
+                "dept": r.get("dept") or r.get("department") or "",
+                "department": r.get("dept") or r.get("department") or "",
                 "designation": r.get("designation") or "Operator"
             } for r in rows]
     except Exception:
@@ -1972,9 +1983,9 @@ def get_operators(db: Session = Depends(get_db)):
         return [{
             "id": o.id,
             "name": o.name,
-            "dept": o.dept or "",
-            "department": o.dept or "",
-            "designation": o.designation or "Operator"
+            "dept": getattr(o, "dept", "") or getattr(o, "department", "") or "",
+            "department": getattr(o, "dept", "") or getattr(o, "department", "") or "",
+            "designation": getattr(o, "designation", "Operator") or "Operator"
         } for o in operators]
     except Exception:
         db.rollback()
@@ -1982,16 +1993,34 @@ def get_operators(db: Session = Depends(get_db)):
 
 @app.post("/api/operators")
 def create_operator(data: dict, db: Session = Depends(get_db)):
-    name = data.get("name") or ""
-    dept = data.get("department") or data.get("dept") or ""
-    desig = data.get("designation") or "Operator"
+    name = (data.get("name") or "").strip()
+    dept = (data.get("dept") or data.get("department") or "").strip()
+    desig = (data.get("designation") or "Operator").strip()
+    saved = False
     try:
-        db.execute(text("INSERT INTO operators (name, dept, designation) VALUES (:name, :dept, :designation)"), {"name": name, "dept": dept, "designation": desig})
+        db.execute(text("INSERT INTO operators (name, dept, department, designation) VALUES (:name, :dept, :dept, :designation)"), {"name": name, "dept": dept, "designation": desig})
         db.commit()
+        saved = True
     except Exception:
+        db.rollback()
         try:
-            db.execute(text("INSERT INTO operators (name, department, designation) VALUES (:name, :dept, :designation)"), {"name": name, "dept": dept, "designation": desig})
+            db.execute(text("INSERT INTO operators (name, dept, designation) VALUES (:name, :dept, :designation)"), {"name": name, "dept": dept, "designation": desig})
             db.commit()
+            saved = True
+        except Exception:
+            db.rollback()
+            try:
+                db.execute(text("INSERT INTO operators (name, department, designation) VALUES (:name, :dept, :designation)"), {"name": name, "dept": dept, "designation": desig})
+                db.commit()
+                saved = True
+            except Exception:
+                db.rollback()
+    if not saved:
+        try:
+            op_obj = models.Operator(name=name, dept=dept, designation=desig)
+            db.add(op_obj)
+            db.commit()
+            saved = True
         except Exception:
             db.rollback()
     return {"message": "Operator created", "name": name, "dept": dept, "department": dept, "designation": desig}
@@ -2043,19 +2072,97 @@ async def import_operators_excel(file: UploadFile = File(...), db: Session = Dep
 
 @app.put("/api/operators/{op_id}")
 def update_operator(op_id: int, data: dict, db: Session = Depends(get_db)):
-    name = data.get("name") or ""
-    dept = data.get("department") or data.get("dept") or ""
-    desig = data.get("designation") or "Operator"
+    name = (data.get("name") or "").strip()
+    dept = (data.get("dept") or data.get("department") or "").strip()
+    desig = (data.get("designation") or "Operator").strip()
+    
+    old_name = None
     try:
-        db.execute(text("UPDATE operators SET name = :name, dept = :dept, designation = :designation WHERE id = :id"), {"id": op_id, "name": name, "dept": dept, "designation": desig})
-        db.commit()
+        existing = db.query(models.Operator).filter(models.Operator.id == op_id).first()
+        if existing:
+            old_name = existing.name
     except Exception:
+        pass
+    if not old_name:
         try:
-            db.execute(text("UPDATE operators SET name = :name, department = :dept, designation = :designation WHERE id = :id"), {"id": op_id, "name": name, "dept": dept, "designation": desig})
+            r = db.execute(text("SELECT name FROM operators WHERE id = :id"), {"id": op_id}).mappings().first()
+            if r:
+                old_name = r.get("name")
+        except Exception:
+            pass
+
+    updated = False
+    # Attempt 1: Update both dept and department columns
+    try:
+        db.execute(text("UPDATE operators SET name = :name, dept = :dept, department = :dept, designation = :designation WHERE id = :id"),
+                   {"id": op_id, "name": name, "dept": dept, "designation": desig})
+        db.commit()
+        updated = True
+    except Exception:
+        db.rollback()
+        # Attempt 2: Update dept and designation
+        try:
+            db.execute(text("UPDATE operators SET name = :name, dept = :dept, designation = :designation WHERE id = :id"),
+                       {"id": op_id, "name": name, "dept": dept, "designation": desig})
+            db.commit()
+            updated = True
+        except Exception:
+            db.rollback()
+            # Attempt 3: Update department and designation
+            try:
+                db.execute(text("UPDATE operators SET name = :name, department = :dept, designation = :designation WHERE id = :id"),
+                           {"id": op_id, "name": name, "dept": dept, "designation": desig})
+                db.commit()
+                updated = True
+            except Exception:
+                db.rollback()
+
+    # Also update via ORM model if possible
+    try:
+        op_obj = db.query(models.Operator).filter(models.Operator.id == op_id).first()
+        if op_obj:
+            op_obj.name = name
+            if hasattr(op_obj, "dept"):
+                op_obj.dept = dept
+            if hasattr(op_obj, "department"):
+                op_obj.department = dept
+            if hasattr(op_obj, "designation"):
+                op_obj.designation = desig
+            db.commit()
+            updated = True
+    except Exception:
+        db.rollback()
+
+    # Sync corresponding records in hr_shift_assignments
+    target_names = [n for n in [old_name, name] if n]
+    for nm in target_names:
+        try:
+            db.execute(text("UPDATE hr_shift_assignments SET emp_name = :new_name, dept = :dept, designation = :designation WHERE UPPER(TRIM(emp_name)) = :target_name"),
+                       {"new_name": name, "dept": dept, "designation": desig, "target_name": nm.strip().upper()})
             db.commit()
         except Exception:
             db.rollback()
-    return {"id": op_id, "name": name, "dept": dept, "department": dept, "designation": desig}
+
+    return {"status": "success", "id": op_id, "name": name, "dept": dept, "department": dept, "designation": desig}
+
+@app.delete("/api/operators/{op_id}")
+def delete_single_operator(op_id: int, db: Session = Depends(get_db)):
+    deleted = False
+    try:
+        db.execute(text("DELETE FROM operators WHERE id = :id"), {"id": op_id})
+        db.commit()
+        deleted = True
+    except Exception:
+        db.rollback()
+    try:
+        op = db.query(models.Operator).filter(models.Operator.id == op_id).first()
+        if op:
+            db.delete(op)
+            db.commit()
+            deleted = True
+    except Exception:
+        db.rollback()
+    return {"status": "success", "deleted": deleted, "id": op_id}
 
 @app.delete("/api/operators/clear-all")
 @app.delete("/api/operators/all")
@@ -2071,6 +2178,8 @@ def clear_all_operators(db: Session = Depends(get_db)):
         db.commit()
     except Exception:
         db.rollback()
+    return {"message": "All operators deleted successfully."}
+
 @app.post("/api/operators/bulk_import")
 def bulk_import_operators(data: dict, db: Session = Depends(get_db)):
     operators = data.get("operators") or []
@@ -2080,25 +2189,36 @@ def bulk_import_operators(data: dict, db: Session = Depends(get_db)):
         dept = (op.get("department") or op.get("dept") or "").strip()
         desig = (op.get("designation") or op.get("role") or "Operator").strip()
         if name:
+            saved = False
             try:
-                op_obj = models.Operator(name=name, dept=dept, designation=desig)
-                db.add(op_obj)
+                db.execute(text("INSERT INTO operators (name, dept, department, designation) VALUES (:name, :dept, :dept, :desig)"), {"name": name, "dept": dept, "desig": desig})
                 db.commit()
                 count += 1
+                saved = True
             except Exception:
                 db.rollback()
                 try:
                     db.execute(text("INSERT INTO operators (name, dept, designation) VALUES (:name, :dept, :desig)"), {"name": name, "dept": dept, "desig": desig})
                     db.commit()
                     count += 1
+                    saved = True
                 except Exception:
                     db.rollback()
                     try:
                         db.execute(text("INSERT INTO operators (name, department, designation) VALUES (:name, :dept, :desig)"), {"name": name, "dept": dept, "desig": desig})
                         db.commit()
                         count += 1
+                        saved = True
                     except Exception:
                         db.rollback()
+            if not saved:
+                try:
+                    op_obj = models.Operator(name=name, dept=dept, designation=desig)
+                    db.add(op_obj)
+                    db.commit()
+                    count += 1
+                except Exception:
+                    db.rollback()
     return {"message": f"Successfully imported {count} operators!", "imported_count": count}
 
 # --- Part Master API ---

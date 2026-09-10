@@ -1840,7 +1840,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             operators.forEach((o, idx) => {
                 const tr = document.createElement('tr');
-                const deptVal = o.department || o.dept || '';
+                const deptVal = o.dept || o.department || '';
                 tr.innerHTML = `
                     <td>${idx + 1}</td>
                     <td>${escapeHtml(deptVal)}</td>
@@ -1879,36 +1879,74 @@ document.addEventListener('DOMContentLoaded', () => {
     operatorForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('operatorId').value;
-        const deptVal = document.getElementById('operatorDepartment') ? document.getElementById('operatorDepartment').value : '';
+        const deptVal = document.getElementById('operatorDepartment') ? document.getElementById('operatorDepartment').value.trim() : '';
+        const nameVal = document.getElementById('operatorName') ? document.getElementById('operatorName').value.trim() : '';
+        const desigVal = document.getElementById('operatorDesignation') ? document.getElementById('operatorDesignation').value.trim() : 'Operator';
         const data = {
-            name: document.getElementById('operatorName').value,
+            name: nameVal,
             dept: deptVal,
             department: deptVal,
-            designation: document.getElementById('operatorDesignation').value || 'Operator'
+            designation: desigVal || 'Operator'
         };
         const url = id ? `/api/operators/${id}` : '/api/operators';
-        await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-        closeOperatorModal(); fetchOperators();
+        try {
+            const res = await fetch(url, { 
+                method: id ? 'PUT' : 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(data) 
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                alert('Error saving operator: ' + (err.detail || res.statusText || 'Unknown error'));
+                return;
+            }
+            if (typeof cachedHrShiftOperators !== 'undefined') cachedHrShiftOperators = [];
+            if (typeof cachedOperatorsForAtt !== 'undefined') cachedOperatorsForAtt = [];
+            closeOperatorModal(); 
+            await fetchOperators();
+        } catch (err) {
+            console.error(err);
+            alert('Failed to save operator: ' + err.message);
+        }
     });
 
     window.deleteOperator = async (id) => {
         if (!checkAdminAccess()) return;
         if (confirm('Delete this operator?')) {
-            await fetch(`/api/operators/${id}`, { method: 'DELETE' });
-            fetchOperators();
+            try {
+                const res = await fetch(`/api/operators/${id}`, { method: 'DELETE' });
+                if (!res.ok) {
+                    alert('Failed to delete operator.');
+                    return;
+                }
+                if (typeof cachedHrShiftOperators !== 'undefined') cachedHrShiftOperators = [];
+                if (typeof cachedOperatorsForAtt !== 'undefined') cachedOperatorsForAtt = [];
+                await fetchOperators();
+            } catch (err) {
+                console.error(err);
+                alert('Error deleting operator.');
+            }
         }
     };
     window.editOperator = async (id) => {
-        const res = await fetch('/api/operators'); const data = await res.json();
-        const o = data.find(x => x.id === id);
-        if (o) {
-            document.getElementById('operatorId').value = o.id; 
-            document.getElementById('operatorName').value = o.name || '';
-            const deptEl = document.getElementById('operatorDepartment');
-            if (deptEl) deptEl.value = o.department || o.dept || '';
-            const desigEl = document.getElementById('operatorDesignation');
-            if (desigEl) desigEl.value = o.designation || 'Operator';
-            openOperatorModal(true);
+        try {
+            const res = await fetch('/api/operators'); 
+            const data = await res.json();
+            const o = data.find(x => x.id == id);
+            if (o) {
+                document.getElementById('operatorId').value = o.id; 
+                document.getElementById('operatorName').value = o.name || '';
+                const deptEl = document.getElementById('operatorDepartment');
+                if (deptEl) deptEl.value = o.dept || o.department || '';
+                const desigEl = document.getElementById('operatorDesignation');
+                if (desigEl) desigEl.value = o.designation || 'Operator';
+                openOperatorModal(true);
+            } else {
+                alert('Operator record not found.');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Could not load operator details.');
         }
     };
 
