@@ -1415,14 +1415,14 @@
 
                     <!-- Week Picker and Navigation Controls -->
                     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                        <button id="hrShiftPrevWeekBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-weight: 600;" title="Previous Week">
+                        <button type="button" id="hrShiftPrevWeekBtn" onclick="window.navigateHrShiftWeek(-7)" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-weight: 600;" title="Previous Week">
                             ◀ Prev
                         </button>
-                        <input type="date" id="hrShiftWeekDatePicker" style="padding: 0.4rem 0.6rem; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; font-family: inherit; font-size: 0.88rem;">
-                        <button id="hrShiftNextWeekBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-weight: 600;" title="Next Week">
+                        <input type="date" id="hrShiftWeekDatePicker" onchange="window.handleHrShiftDatePickerChange(this.value)" style="padding: 0.4rem 0.6rem; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; font-family: inherit; font-size: 0.88rem;">
+                        <button type="button" id="hrShiftNextWeekBtn" onclick="window.navigateHrShiftWeek(7)" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-weight: 600;" title="Next Week">
                             Next ▶
                         </button>
-                        <button id="hrShiftCurrentWeekBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" title="Jump to Current Week">
+                        <button type="button" id="hrShiftCurrentWeekBtn" onclick="window.navigateHrShiftCurrentWeek()" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" title="Jump to Current Week">
                             This Week
                         </button>
                     </div>
@@ -1431,30 +1431,30 @@
                 <!-- Action Toolbar & Buttons -->
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 10px; background: #f8fafc; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid #e2e8f0;">
                     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                        <button id="addHrShiftAllocationBtn" class="btn btn-primary" style="font-weight: 600; padding: 0.4rem 0.9rem; display: inline-flex; align-items: center; gap: 6px; background-color: #0284c7; border-color: #0284c7;">
-                            <i class="fas fa-plus"></i> + Add Allocation
+                        <button type="button" id="addHrShiftAllocationBtn" onclick="window.openAddHrShiftModal()" class="btn btn-primary" style="font-weight: 600; padding: 0.4rem 0.9rem; display: inline-flex; align-items: center; gap: 6px; background-color: #0284c7; border-color: #0284c7;">
+                            <i class="fas fa-plus"></i> Add Allocation
                         </button>
-                        <button id="rotateHrShiftBtn" class="btn btn-outline" style="border-color: #16a34a; color: #16a34a; font-weight: 600; padding: 0.4rem 0.9rem; display: inline-flex; align-items: center; gap: 6px;" title="Rotate shifts from previous week: First->Third, Second->First, Third->Second while preserving machine allocations">
+                        <button type="button" id="rotateHrShiftBtn" onclick="window.handleRotateHrShiftClick()" class="btn btn-outline" style="border-color: #16a34a; color: #16a34a; font-weight: 600; padding: 0.4rem 0.9rem; display: inline-flex; align-items: center; gap: 6px;" title="Rotate shifts from previous week: First->Third, Second->First, Third->Second while preserving machine allocations">
                             <i class="fas fa-sync-alt"></i> 🔄 Rotate from Prev Week
                         </button>
-                        <button id="copyHrShiftBtn" class="btn btn-outline" style="border-color: #6366f1; color: #6366f1; font-weight: 600; padding: 0.4rem 0.8rem;" title="Copy previous week directly without rotating">
+                        <button type="button" id="copyHrShiftBtn" onclick="window.handleCopyHrShiftClick()" class="btn btn-outline" style="border-color: #6366f1; color: #6366f1; font-weight: 600; padding: 0.4rem 0.8rem;" title="Copy previous week directly without rotating">
                             <i class="fas fa-copy"></i> 📋 Copy Prev Week
                         </button>
-                        <button id="loadFromOpMasterShiftBtn" class="btn btn-outline" style="border-color: #0284c7; color: #0284c7; font-weight: 600; padding: 0.4rem 0.8rem;" title="Load all employees from Operator Master">
+                        <button type="button" id="loadFromOpMasterShiftBtn" onclick="window.handleLoadFromOpMasterShiftClick()" class="btn btn-outline" style="border-color: #0284c7; color: #0284c7; font-weight: 600; padding: 0.4rem 0.8rem;" title="Load all employees from Operator Master">
                             <i class="fas fa-users"></i> 👥 From Op Master
                         </button>
-                        <button id="clearHrShiftWeekBtn" class="btn btn-outline" style="border-color: #ef4444; color: #ef4444; font-weight: 600; padding: 0.4rem 0.7rem;" title="Clear this week's assignments">
+                        <button type="button" id="clearHrShiftWeekBtn" onclick="window.handleClearHrShiftWeekClick()" class="btn btn-outline" style="border-color: #ef4444; color: #ef4444; font-weight: 600; padding: 0.4rem 0.7rem;" title="Clear this week's assignments">
                             <i class="fas fa-trash-alt"></i> Clear Week
                         </button>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                        <button id="exportHrShiftExcelBtn" class="btn btn-outline" style="border-color: #16a34a; color: #16a34a; font-weight: 600; padding: 0.4rem 0.8rem; display: inline-flex; align-items: center; gap: 6px;">
+                        <button type="button" id="exportHrShiftExcelBtn" onclick="window.exportHrShiftToExcel()" class="btn btn-outline" style="border-color: #16a34a; color: #16a34a; font-weight: 600; padding: 0.4rem 0.8rem; display: inline-flex; align-items: center; gap: 6px;">
                             <i class="fas fa-file-excel"></i> Export Excel
                         </button>
-                        <button id="openHrShiftWhatsappModalBtn" class="btn btn-outline" style="border-color: #25D366; color: #15803d; font-weight: 600; padding: 0.4rem 0.8rem; display: inline-flex; align-items: center; gap: 6px;">
+                        <button type="button" id="openHrShiftWhatsappModalBtn" onclick="window.generateHrShiftWhatsappSummary()" class="btn btn-outline" style="border-color: #25D366; color: #15803d; font-weight: 600; padding: 0.4rem 0.8rem; display: inline-flex; align-items: center; gap: 6px;">
                             <i class="fab fa-whatsapp"></i> WhatsApp Summary
                         </button>
-                        <button id="printHrShiftListBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                        <button type="button" id="printHrShiftListBtn" onclick="window.printHrShiftSheet()" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
                             <i class="fas fa-print"></i> Print Sheet
                         </button>
                     </div>
@@ -5085,6 +5085,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10082"></script>
+    <script src="/static/app.js?v=10083"></script>
 </body>
 </html>

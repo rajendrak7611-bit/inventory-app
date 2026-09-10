@@ -2809,11 +2809,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateHrShiftWeekDisplay() {
-        const weekDisplay = document.getElementById('hrShiftWeekDisplay');
-        const weekPicker = document.getElementById('hrShiftWeekPicker');
         if (!hrShiftCurrentWeekMonday) {
             hrShiftCurrentWeekMonday = getHrMondayStr();
         }
+        const weekDisplay = document.getElementById('hrShiftWeekBadge');
+        const weekPicker = document.getElementById('hrShiftWeekDatePicker');
         if (weekPicker) {
             weekPicker.value = hrShiftCurrentWeekMonday;
         }
@@ -2822,6 +2822,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const weekNum = getISOWeekNumber(hrShiftCurrentWeekMonday);
             weekDisplay.textContent = `${formatHrDateDisplay(hrShiftCurrentWeekMonday)} – ${formatHrDateDisplay(sundayStr)} (Week ${weekNum})`;
         }
+    }
+
+    function getHrShiftSelectedCategory() {
+        return document.querySelector('input[name="hrShiftCategoryRadio"]:checked')?.value || 'Machine';
+    }
+
+    function setHrShiftSelectedCategory(cat) {
+        if (cat === 'Service') {
+            const el = document.getElementById('hrShiftCatService');
+            if (el) el.checked = true;
+        } else {
+            const el = document.getElementById('hrShiftCatMachine');
+            if (el) el.checked = true;
+        }
+        const isMach = (cat === 'Machine');
+        const mcContainer = document.getElementById('hrShiftMachineFieldsContainer');
+        const mc1 = document.getElementById('hrShiftMachine1');
+        if (mcContainer) mcContainer.style.display = isMach ? 'block' : 'none';
+        if (mc1) mc1.required = isMach;
     }
 
     async function loadHrShiftMetadata() {
@@ -2870,7 +2889,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) { console.error('Error loading depts for shift list:', e); }
         }
         const deptSelect = document.getElementById('hrShiftDept');
-        const filterDeptSelect = document.getElementById('hrShiftFilterDept');
+        const filterDeptSelect = document.getElementById('hrShiftDeptFilter');
         const deptsList = Array.isArray(cachedHrShiftDepts) && cachedHrShiftDepts.length > 0 
             ? cachedHrShiftDepts.map(d => typeof d === 'string' ? d : (d.name || d.dept_name || '')).filter(Boolean)
             : ['Production', 'Tool Room', 'Quality', 'Maintenance', 'Store', 'Admin'];
@@ -2881,7 +2900,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (filterDeptSelect) {
             const currentFilter = filterDeptSelect.value;
-            filterDeptSelect.innerHTML = `<option value="">All Departments</option>` + 
+            filterDeptSelect.innerHTML = `<option value="">-- All Depts --</option>` + 
                 deptsList.map(d => `<option value="${d}">${d}</option>`).join('');
             if (currentFilter) filterDeptSelect.value = currentFilter;
         }
@@ -2926,9 +2945,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderHrShiftTables() {
-        const filterDept = document.getElementById('hrShiftFilterDept')?.value || '';
-        const filterShift = document.getElementById('hrShiftFilterShift')?.value || '';
-        const filterCategory = document.getElementById('hrShiftFilterCategory')?.value || '';
+        const filterDept = document.getElementById('hrShiftDeptFilter')?.value || '';
+        const filterShift = document.getElementById('hrShiftShiftFilter')?.value || '';
+        const filterCategory = document.getElementById('hrShiftCategoryFilter')?.value || '';
         const searchInput = (document.getElementById('hrShiftSearchInput')?.value || '').toLowerCase().trim();
 
         // Update KPIs based on raw list
@@ -2943,11 +2962,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const countGenA = hrShiftRawList.filter(x => x.shift === 'Gen Shift A').length;
         const countGenB = hrShiftRawList.filter(x => x.shift === 'Gen Shift B').length;
 
-        const elTotal = document.getElementById('hrShiftTotalStaff');
-        const elMach = document.getElementById('hrShiftTotalMachine');
-        const elDual = document.getElementById('hrShiftTotalDual');
-        const elServ = document.getElementById('hrShiftTotalService');
-        const elDist = document.getElementById('hrShiftDistribution');
+        const elTotal = document.getElementById('kpiHrShiftTotal');
+        const elMach = document.getElementById('kpiHrShiftMachCount');
+        const elDual = document.getElementById('kpiHrShiftDualMcCount');
+        const elServ = document.getElementById('kpiHrShiftServiceCount');
+        const elDist = document.getElementById('kpiHrShiftBreakdown');
 
         if (elTotal) elTotal.textContent = totalStaff;
         if (elMach) elMach.textContent = totalMachine;
@@ -2978,22 +2997,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const machineList = filtered.filter(x => x.category === 'Machine');
         const serviceList = filtered.filter(x => x.category === 'Service');
 
-        // Toggle card visibility
-        const machineCard = document.getElementById('hrShiftMachineCard');
-        const serviceCard = document.getElementById('hrShiftServiceCard');
+        // Toggle card/section visibility
+        const machineCard = document.getElementById('hrShiftMachineSection');
+        const serviceCard = document.getElementById('hrShiftServiceSection');
         if (machineCard) machineCard.style.display = (filterCategory === 'Service') ? 'none' : 'block';
         if (serviceCard) serviceCard.style.display = (filterCategory === 'Machine') ? 'none' : 'block';
 
-        const machineCountEl = document.getElementById('hrShiftMachineCount');
-        const serviceCountEl = document.getElementById('hrShiftServiceCount');
-        if (machineCountEl) machineCountEl.textContent = `${machineList.length} Operators`;
-        if (serviceCountEl) serviceCountEl.textContent = `${serviceList.length} Staff`;
+        const machineCountEl = document.getElementById('hrShiftMachBadge');
+        const serviceCountEl = document.getElementById('hrShiftServBadge');
+        if (machineCountEl) machineCountEl.textContent = `${machineList.length}`;
+        if (serviceCountEl) serviceCountEl.textContent = `${serviceList.length}`;
 
-        // Render Machine Operators Table
+        // Render Machine Operators Table (8 columns)
         const machineBody = document.getElementById('hrShiftMachineBody');
         if (machineBody) {
             if (machineList.length === 0) {
-                machineBody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 2rem;">No machine operator allocations for this week. Use "+ Add Allocation", "🔄 Rotate Prev", or "👥 From Op Master".</td></tr>`;
+                machineBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #94a3b8; padding: 2rem;">No machine operator allocations for this week. Click "+ Add Allocation", "🔄 Rotate Prev", or "👥 From Op Master".</td></tr>`;
             } else {
                 machineBody.innerHTML = machineList.map((item, idx) => {
                     const isDual = !!item.machine_2;
@@ -3002,13 +3021,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     return `
                         <tr data-id="${item.id}" style="border-bottom: 1px solid #f1f5f9; transition: background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
                             <td style="padding: 7px 10px; text-align: center; color: #64748b; font-weight: 500;">${idx + 1}</td>
-                            <td style="padding: 7px 10px; font-weight: 600; color: #0f172a;">
-                                <a href="javascript:void(0)" onclick="openEditHrShiftModal(${item.id})" style="color: #0284c7; text-decoration: none;">${item.emp_name}</a>
-                            </td>
                             <td style="padding: 7px 10px; color: #475569;">${item.dept || '-'}</td>
-                            <td style="padding: 7px 10px; color: #475569;">${item.designation || 'Operator'}</td>
-                            <td style="padding: 7px 10px; text-align: center;">${getShiftBadgeHtml(item.shift)}</td>
-                            <td style="padding: 7px 10px; font-size: 0.8rem; color: #64748b; text-align: center;">${item.shift_timings || HR_SHIFT_TIMINGS_CLIENT[item.shift] || ''}</td>
+                            <td style="padding: 7px 10px; font-weight: 600; color: #0f172a;">
+                                <a href="javascript:void(0)" onclick="window.openEditHrShiftModal(${item.id})" style="color: #0284c7; text-decoration: none;">${item.emp_name}</a>
+                                ${item.designation && item.designation.toLowerCase() !== 'operator' ? `<div style="font-size: 0.75rem; color: #64748b; font-weight: normal;">${item.designation}</div>` : ''}
+                            </td>
+                            <td style="padding: 7px 10px; text-align: left;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    ${getShiftBadgeHtml(item.shift)}
+                                    <span style="font-size: 0.8rem; color: #64748b;">${item.shift_timings || HR_SHIFT_TIMINGS_CLIENT[item.shift] || ''}</span>
+                                </div>
+                            </td>
                             <td style="padding: 7px 10px;">
                                 <span style="background: #e0f2fe; color: #0369a1; font-weight: 600; padding: 2px 8px; border-radius: 4px; font-size: 0.82rem; border: 1px solid #bae6fd;">
                                     ${item.machine_1 || '-'}
@@ -3024,14 +3047,15 @@ document.addEventListener('DOMContentLoaded', () => {
                                     </div>
                                 ` : `<span style="color: #cbd5e1;">-</span>`}
                             </td>
+                            <td style="padding: 7px 10px; color: #475569; font-size: 0.85rem;">${item.notes || '-'}</td>
                             <td style="padding: 7px 10px; text-align: center; white-space: nowrap;">
-                                <button type="button" onclick="quickRotateHrShift(${item.id})" class="btn" title="${rotateTip}" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #0284c7; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; margin-right: 4px;">
+                                <button type="button" onclick="window.quickRotateHrShift(${item.id})" class="btn" title="${rotateTip}" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #0284c7; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; margin-right: 4px;">
                                     <i class="fas fa-sync-alt"></i>
                                 </button>
-                                <button type="button" onclick="openEditHrShiftModal(${item.id})" class="btn" title="Edit Allocation" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; margin-right: 4px;">
+                                <button type="button" onclick="window.openEditHrShiftModal(${item.id})" class="btn" title="Edit Allocation" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; margin-right: 4px;">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <button type="button" onclick="deleteHrShiftAllocation(${item.id})" class="btn" title="Delete Allocation" style="background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer;">
+                                <button type="button" onclick="window.deleteHrShiftAllocation(${item.id})" class="btn" title="Delete Allocation" style="background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer;">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </td>
@@ -3041,11 +3065,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Render Service Staff Table
+        // Render Service Staff Table (7 columns)
         const serviceBody = document.getElementById('hrShiftServiceBody');
         if (serviceBody) {
             if (serviceList.length === 0) {
-                serviceBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #94a3b8; padding: 2rem;">No service staff allocations for this week. Use "+ Add Allocation" or "👥 From Op Master".</td></tr>`;
+                serviceBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #94a3b8; padding: 2rem;">No service staff allocations for this week. Click "+ Add Allocation" or "👥 From Op Master".</td></tr>`;
             } else {
                 serviceBody.innerHTML = serviceList.map((item, idx) => {
                     const nextRotatedShift = HR_SHIFT_ROTATION_CLIENT[item.shift] || item.shift;
@@ -3053,22 +3077,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     return `
                         <tr data-id="${item.id}" style="border-bottom: 1px solid #f1f5f9; transition: background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
                             <td style="padding: 7px 10px; text-align: center; color: #64748b; font-weight: 500;">${idx + 1}</td>
-                            <td style="padding: 7px 10px; font-weight: 600; color: #0f172a;">
-                                <a href="javascript:void(0)" onclick="openEditHrShiftModal(${item.id})" style="color: #0284c7; text-decoration: none;">${item.emp_name}</a>
-                            </td>
                             <td style="padding: 7px 10px; color: #475569;">${item.dept || '-'}</td>
+                            <td style="padding: 7px 10px; font-weight: 600; color: #0f172a;">
+                                <a href="javascript:void(0)" onclick="window.openEditHrShiftModal(${item.id})" style="color: #0284c7; text-decoration: none;">${item.emp_name}</a>
+                            </td>
                             <td style="padding: 7px 10px; color: #475569;">${item.designation || 'Staff'}</td>
-                            <td style="padding: 7px 10px; text-align: center;">${getShiftBadgeHtml(item.shift)}</td>
-                            <td style="padding: 7px 10px; font-size: 0.8rem; color: #64748b; text-align: center;">${item.shift_timings || HR_SHIFT_TIMINGS_CLIENT[item.shift] || ''}</td>
+                            <td style="padding: 7px 10px; text-align: left;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    ${getShiftBadgeHtml(item.shift)}
+                                    <span style="font-size: 0.8rem; color: #64748b;">${item.shift_timings || HR_SHIFT_TIMINGS_CLIENT[item.shift] || ''}</span>
+                                </div>
+                            </td>
                             <td style="padding: 7px 10px; color: #475569; font-size: 0.85rem;">${item.notes || '-'}</td>
                             <td style="padding: 7px 10px; text-align: center; white-space: nowrap;">
-                                <button type="button" onclick="quickRotateHrShift(${item.id})" class="btn" title="${rotateTip}" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #0284c7; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; margin-right: 4px;">
+                                <button type="button" onclick="window.quickRotateHrShift(${item.id})" class="btn" title="${rotateTip}" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #0284c7; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; margin-right: 4px;">
                                     <i class="fas fa-sync-alt"></i>
                                 </button>
-                                <button type="button" onclick="openEditHrShiftModal(${item.id})" class="btn" title="Edit Allocation" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; margin-right: 4px;">
+                                <button type="button" onclick="window.openEditHrShiftModal(${item.id})" class="btn" title="Edit Allocation" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; margin-right: 4px;">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <button type="button" onclick="deleteHrShiftAllocation(${item.id})" class="btn" title="Delete Allocation" style="background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer;">
+                                <button type="button" onclick="window.deleteHrShiftAllocation(${item.id})" class="btn" title="Delete Allocation" style="background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer;">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </td>
@@ -3084,17 +3112,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const modal = document.getElementById('hrShiftModal');
         const form = document.getElementById('hrShiftForm');
         const title = document.getElementById('hrShiftModalTitle');
-        const idInput = document.getElementById('hrShiftEntryId');
-        const catSelect = document.getElementById('hrShiftCategory');
-        const mcContainer = document.getElementById('hrShiftMachineFieldsContainer');
-        const mc1 = document.getElementById('hrShiftMachine1');
+        const idInput = document.getElementById('hrShiftEditId');
 
         if (form) form.reset();
         if (idInput) idInput.value = '';
         if (title) title.textContent = 'Add Shift Allocation';
-        if (catSelect) catSelect.value = 'Machine';
-        if (mcContainer) mcContainer.style.display = 'block';
-        if (mc1) mc1.required = true;
+        setHrShiftSelectedCategory('Machine');
         if (modal) modal.classList.add('show');
     };
 
@@ -3104,8 +3127,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const modal = document.getElementById('hrShiftModal');
         const title = document.getElementById('hrShiftModalTitle');
-        const idInput = document.getElementById('hrShiftEntryId');
-        const catSelect = document.getElementById('hrShiftCategory');
+        const idInput = document.getElementById('hrShiftEditId');
         const empInput = document.getElementById('hrShiftEmpName');
         const deptSelect = document.getElementById('hrShiftDept');
         const desigInput = document.getElementById('hrShiftDesignation');
@@ -3113,11 +3135,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const mc1Select = document.getElementById('hrShiftMachine1');
         const mc2Select = document.getElementById('hrShiftMachine2');
         const notesInput = document.getElementById('hrShiftNotes');
-        const mcContainer = document.getElementById('hrShiftMachineFieldsContainer');
 
         if (title) title.textContent = 'Edit Shift Allocation';
         if (idInput) idInput.value = item.id;
-        if (catSelect) catSelect.value = item.category || 'Machine';
+        setHrShiftSelectedCategory(item.category || 'Machine');
         if (empInput) empInput.value = item.emp_name || '';
         if (deptSelect) deptSelect.value = item.dept || '';
         if (desigInput) desigInput.value = item.designation || '';
@@ -3125,10 +3146,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (mc1Select) mc1Select.value = item.machine_1 || '';
         if (mc2Select) mc2Select.value = item.machine_2 || '';
         if (notesInput) notesInput.value = item.notes || '';
-
-        const isMachine = item.category === 'Machine';
-        if (mcContainer) mcContainer.style.display = isMachine ? 'block' : 'none';
-        if (mc1Select) mc1Select.required = isMachine;
 
         if (modal) modal.classList.add('show');
     };
@@ -3198,8 +3215,127 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // Navigation methods
+    window.navigateHrShiftWeek = function(deltaDays) {
+        if (!hrShiftCurrentWeekMonday) hrShiftCurrentWeekMonday = getHrMondayStr();
+        hrShiftCurrentWeekMonday = addDaysToDateStr(hrShiftCurrentWeekMonday, deltaDays);
+        fetchHrShiftList();
+    };
+
+    window.navigateHrShiftCurrentWeek = function() {
+        hrShiftCurrentWeekMonday = getHrMondayStr();
+        fetchHrShiftList();
+    };
+
+    window.handleHrShiftDatePickerChange = function(val) {
+        if (val) {
+            hrShiftCurrentWeekMonday = getHrMondayStr(val);
+            const picker = document.getElementById('hrShiftWeekDatePicker');
+            if (picker) picker.value = hrShiftCurrentWeekMonday;
+            fetchHrShiftList();
+        }
+    };
+
+    // Toolbar Batch Actions
+    window.handleRotateHrShiftClick = async function() {
+        if (!hrShiftCurrentWeekMonday) hrShiftCurrentWeekMonday = getHrMondayStr();
+        const sundayStr = addDaysToDateStr(hrShiftCurrentWeekMonday, 6);
+        const msg = `Auto-rotate shift allocations from previous week into current week (${formatHrDateDisplay(hrShiftCurrentWeekMonday)} – ${formatHrDateDisplay(sundayStr)})?\n\nRotation rules:\n• First Shift (7-3) ➔ Third Shift (11-7)\n• Second Shift (3-11) ➔ First Shift (7-3)\n• Third Shift (11-7) ➔ Second Shift (3-11)\n• General Shifts stay as-is\n• Machine allocations are preserved\n\n(Existing allocations for this week will be replaced)`;
+        if (!confirm(msg)) return;
+
+        try {
+            const res = await fetch('/api/hr/shift-list/rotate-prev', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target_week_start_date: hrShiftCurrentWeekMonday })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                alert(data.message || 'Shifts rotated successfully!');
+                fetchHrShiftList();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(`Failed to rotate: ${err.detail || 'Server error'}`);
+            }
+        } catch (e) {
+            console.error('Rotate prev week error:', e);
+            alert('Error rotating from previous week.');
+        }
+    };
+
+    window.handleCopyHrShiftClick = async function() {
+        if (!hrShiftCurrentWeekMonday) hrShiftCurrentWeekMonday = getHrMondayStr();
+        const msg = `Copy exact shift and machine allocations from previous week to this week?\n\n(Existing allocations for this week will be replaced)`;
+        if (!confirm(msg)) return;
+
+        try {
+            const res = await fetch('/api/hr/shift-list/copy-prev', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target_week_start_date: hrShiftCurrentWeekMonday })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                alert(data.message || 'Shifts copied successfully!');
+                fetchHrShiftList();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(`Failed to copy: ${err.detail || 'Server error'}`);
+            }
+        } catch (e) {
+            console.error('Copy prev week error:', e);
+            alert('Error copying from previous week.');
+        }
+    };
+
+    window.handleLoadFromOpMasterShiftClick = async function() {
+        if (!hrShiftCurrentWeekMonday) hrShiftCurrentWeekMonday = getHrMondayStr();
+        const msg = `Load shift roster from Operator Master for this week?\n\n• Operators will be assigned to Category "Machine" (First Shift)\n• Non-operators will be assigned to Category "Service" (Gen Shift A)\n\n(Existing allocations for this week will be replaced)`;
+        if (!confirm(msg)) return;
+
+        try {
+            const res = await fetch('/api/hr/shift-list/load-from-master', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ week_start_date: hrShiftCurrentWeekMonday })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                alert(data.message || 'Roster loaded from Operator Master!');
+                fetchHrShiftList();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(`Failed to load from master: ${err.detail || 'Server error'}`);
+            }
+        } catch (e) {
+            console.error('Load from master error:', e);
+            alert('Error loading from Operator Master.');
+        }
+    };
+
+    window.handleClearHrShiftWeekClick = async function() {
+        if (!hrShiftCurrentWeekMonday) hrShiftCurrentWeekMonday = getHrMondayStr();
+        const sundayStr = addDaysToDateStr(hrShiftCurrentWeekMonday, 6);
+        if (!confirm(`Are you sure you want to clear ALL allocations for week ${formatHrDateDisplay(hrShiftCurrentWeekMonday)} – ${formatHrDateDisplay(sundayStr)}?`)) return;
+
+        try {
+            const res = await fetch(`/api/hr/shift-list/clear-week?week_start_date=${encodeURIComponent(hrShiftCurrentWeekMonday)}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) {
+                fetchHrShiftList();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(`Failed to clear week: ${err.detail || 'Server error'}`);
+            }
+        } catch (e) {
+            console.error('Clear week error:', e);
+            alert('Error clearing week.');
+        }
+    };
+
     // Excel Export
-    function exportHrShiftToExcel() {
+    window.exportHrShiftToExcel = function() {
         if (!hrShiftRawList || hrShiftRawList.length === 0) {
             alert('No shift allocations available for this week to export.');
             return;
@@ -3209,14 +3345,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 1. Machine Operators Sheet
         const machineRows = [
-            ['SL NO', 'OPERATOR NAME', 'DEPARTMENT', 'DESIGNATION', 'SHIFT', 'TIMINGS', 'PRIMARY MACHINE', 'SECONDARY MACHINE', 'DUAL M/C', 'REMARKS']
+            ['SL NO', 'DEPARTMENT', 'OPERATOR NAME', 'DESIGNATION', 'SHIFT', 'TIMINGS', 'PRIMARY MACHINE', 'SECONDARY MACHINE', 'DUAL M/C', 'REMARKS']
         ];
         const machineList = hrShiftRawList.filter(x => x.category === 'Machine');
         machineList.forEach((item, idx) => {
             machineRows.push([
                 idx + 1,
-                item.emp_name || '',
                 item.dept || '',
+                item.emp_name || '',
                 item.designation || 'Operator',
                 item.shift || '',
                 item.shift_timings || HR_SHIFT_TIMINGS_CLIENT[item.shift] || '',
@@ -3231,14 +3367,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 2. Service Staff Sheet
         const serviceRows = [
-            ['SL NO', 'STAFF NAME', 'DEPARTMENT', 'DESIGNATION', 'SHIFT', 'TIMINGS', 'SERVICE AREA / REMARKS']
+            ['SL NO', 'DEPARTMENT', 'STAFF NAME', 'DESIGNATION', 'SHIFT', 'TIMINGS', 'SERVICE AREA / REMARKS']
         ];
         const serviceList = hrShiftRawList.filter(x => x.category === 'Service');
         serviceList.forEach((item, idx) => {
             serviceRows.push([
                 idx + 1,
-                item.emp_name || '',
                 item.dept || '',
+                item.emp_name || '',
                 item.designation || 'Staff',
                 item.shift || '',
                 item.shift_timings || HR_SHIFT_TIMINGS_CLIENT[item.shift] || '',
@@ -3251,10 +3387,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const sundayStr = addDaysToDateStr(hrShiftCurrentWeekMonday, 6);
         const fileName = `Weekly_Shift_List_${hrShiftCurrentWeekMonday}_to_${sundayStr}.xlsx`;
         XLSX.writeFile(wb, fileName);
-    }
+    };
 
     // WhatsApp Summary Generator
-    function generateHrShiftWhatsappSummary() {
+    window.generateHrShiftWhatsappSummary = function() {
         if (!hrShiftRawList || hrShiftRawList.length === 0) {
             alert('No shift allocations to summarize.');
             return;
@@ -3314,164 +3450,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if (txtArea) txtArea.value = msg;
         if (copiedMsg) copiedMsg.style.display = 'none';
         if (modal) modal.classList.add('show');
-    }
+    };
 
     // Print Sheet
-    function printHrShiftSheet() {
+    window.printHrShiftSheet = function() {
         window.print();
-    }
+    };
 
     // Initialize all event listeners for HR Shift List
     function setupHrShiftEventListeners() {
         if (hrShiftInitialized) return;
         hrShiftInitialized = true;
 
-        // Week Navigation
-        const weekPicker = document.getElementById('hrShiftWeekPicker');
-        if (weekPicker) {
-            weekPicker.addEventListener('change', () => {
-                if (weekPicker.value) {
-                    hrShiftCurrentWeekMonday = getHrMondayStr(weekPicker.value);
-                    weekPicker.value = hrShiftCurrentWeekMonday;
-                    fetchHrShiftList();
-                }
-            });
-        }
-
-        document.getElementById('prevHrShiftWeekBtn')?.addEventListener('click', () => {
-            hrShiftCurrentWeekMonday = addDaysToDateStr(hrShiftCurrentWeekMonday, -7);
-            fetchHrShiftList();
-        });
-
-        document.getElementById('nextHrShiftWeekBtn')?.addEventListener('click', () => {
-            hrShiftCurrentWeekMonday = addDaysToDateStr(hrShiftCurrentWeekMonday, 7);
-            fetchHrShiftList();
-        });
-
-        document.getElementById('currentHrShiftWeekBtn')?.addEventListener('click', () => {
-            hrShiftCurrentWeekMonday = getHrMondayStr();
-            fetchHrShiftList();
-        });
-
         // Filter events
-        document.getElementById('hrShiftFilterDept')?.addEventListener('change', renderHrShiftTables);
-        document.getElementById('hrShiftFilterShift')?.addEventListener('change', renderHrShiftTables);
-        document.getElementById('hrShiftFilterCategory')?.addEventListener('change', renderHrShiftTables);
+        document.getElementById('hrShiftDeptFilter')?.addEventListener('change', renderHrShiftTables);
+        document.getElementById('hrShiftShiftFilter')?.addEventListener('change', renderHrShiftTables);
+        document.getElementById('hrShiftCategoryFilter')?.addEventListener('change', renderHrShiftTables);
         document.getElementById('hrShiftSearchInput')?.addEventListener('input', renderHrShiftTables);
-
-        // Action Buttons
-        document.getElementById('addHrShiftBtn')?.addEventListener('click', () => {
-            window.openAddHrShiftModal();
-        });
-
-        document.getElementById('rotateHrShiftBtn')?.addEventListener('click', async () => {
-            const sundayStr = addDaysToDateStr(hrShiftCurrentWeekMonday, 6);
-            const msg = `Auto-rotate shift allocations from previous week into current week (${formatHrDateDisplay(hrShiftCurrentWeekMonday)} – ${formatHrDateDisplay(sundayStr)})?\n\nRotation rules:\n• First Shift (7-3) ➔ Third Shift (11-7)\n• Second Shift (3-11) ➔ First Shift (7-3)\n• Third Shift (11-7) ➔ Second Shift (3-11)\n• General Shifts stay as-is\n• Machine allocations are preserved\n\n(Existing allocations for this week will be replaced)`;
-            if (!confirm(msg)) return;
-
-            try {
-                const res = await fetch('/api/hr/shift-list/rotate-prev', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target_week_start_date: hrShiftCurrentWeekMonday })
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    alert(data.message || 'Shifts rotated successfully!');
-                    fetchHrShiftList();
-                } else {
-                    const err = await res.json().catch(() => ({}));
-                    alert(`Failed to rotate: ${err.detail || 'Server error'}`);
-                }
-            } catch (e) {
-                console.error('Rotate prev week error:', e);
-                alert('Error rotating from previous week.');
-            }
-        });
-
-        document.getElementById('copyHrShiftBtn')?.addEventListener('click', async () => {
-            const msg = `Copy exact shift and machine allocations from previous week to this week?\n\n(Existing allocations for this week will be replaced)`;
-            if (!confirm(msg)) return;
-
-            try {
-                const res = await fetch('/api/hr/shift-list/copy-prev', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target_week_start_date: hrShiftCurrentWeekMonday })
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    alert(data.message || 'Shifts copied successfully!');
-                    fetchHrShiftList();
-                } else {
-                    const err = await res.json().catch(() => ({}));
-                    alert(`Failed to copy: ${err.detail || 'Server error'}`);
-                }
-            } catch (e) {
-                console.error('Copy prev week error:', e);
-                alert('Error copying from previous week.');
-            }
-        });
-
-        document.getElementById('loadFromOpMasterShiftBtn')?.addEventListener('click', async () => {
-            const msg = `Load shift roster from Operator Master for this week?\n\n• Operators will be assigned to Category "Machine" (First Shift)\n• Non-operators will be assigned to Category "Service" (Gen Shift A)\n\n(Existing allocations for this week will be replaced)`;
-            if (!confirm(msg)) return;
-
-            try {
-                const res = await fetch('/api/hr/shift-list/load-from-master', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ week_start_date: hrShiftCurrentWeekMonday })
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    alert(data.message || 'Roster loaded from Operator Master!');
-                    fetchHrShiftList();
-                } else {
-                    const err = await res.json().catch(() => ({}));
-                    alert(`Failed to load from master: ${err.detail || 'Server error'}`);
-                }
-            } catch (e) {
-                console.error('Load from master error:', e);
-                alert('Error loading from Operator Master.');
-            }
-        });
-
-        document.getElementById('clearHrShiftWeekBtn')?.addEventListener('click', async () => {
-            const sundayStr = addDaysToDateStr(hrShiftCurrentWeekMonday, 6);
-            if (!confirm(`Are you sure you want to clear ALL allocations for week ${formatHrDateDisplay(hrShiftCurrentWeekMonday)} – ${formatHrDateDisplay(sundayStr)}?`)) return;
-
-            try {
-                const res = await fetch(`/api/hr/shift-list/clear-week?week_start_date=${encodeURIComponent(hrShiftCurrentWeekMonday)}`, {
-                    method: 'DELETE'
-                });
-                if (res.ok) {
-                    fetchHrShiftList();
-                } else {
-                    const err = await res.json().catch(() => ({}));
-                    alert(`Failed to clear week: ${err.detail || 'Server error'}`);
-                }
-            } catch (e) {
-                console.error('Clear week error:', e);
-                alert('Error clearing week.');
-            }
-        });
-
-        document.getElementById('exportHrShiftExcelBtn')?.addEventListener('click', exportHrShiftToExcel);
-        document.getElementById('whatsappHrShiftBtn')?.addEventListener('click', generateHrShiftWhatsappSummary);
-        document.getElementById('printHrShiftBtn')?.addEventListener('click', printHrShiftSheet);
 
         // Modal Controls
         document.getElementById('closeHrShiftModalBtn')?.addEventListener('click', window.closeHrShiftModal);
         document.getElementById('cancelHrShiftModalBtn')?.addEventListener('click', window.closeHrShiftModal);
 
         // Category change in modal: toggle machine allocation container
-        document.getElementById('hrShiftCategory')?.addEventListener('change', (e) => {
-            const isMach = e.target.value === 'Machine';
-            const mcContainer = document.getElementById('hrShiftMachineFieldsContainer');
-            const mc1 = document.getElementById('hrShiftMachine1');
-            if (mcContainer) mcContainer.style.display = isMach ? 'block' : 'none';
-            if (mc1) mc1.required = isMach;
+        document.querySelectorAll('input[name="hrShiftCategoryRadio"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                setHrShiftSelectedCategory(e.target.value);
+            });
         });
 
         // Auto-fill dept & designation when choosing employee from datalist
@@ -3482,29 +3487,21 @@ document.addEventListener('DOMContentLoaded', () => {
             if (matched) {
                 const deptEl = document.getElementById('hrShiftDept');
                 const desigEl = document.getElementById('hrShiftDesignation');
-                const catEl = document.getElementById('hrShiftCategory');
-                const mcContainer = document.getElementById('hrShiftMachineFieldsContainer');
-                const mc1 = document.getElementById('hrShiftMachine1');
-
                 if (deptEl && matched.dept) deptEl.value = matched.dept;
                 if (desigEl && matched.designation) desigEl.value = matched.designation;
 
                 // If designation implies non-machine, auto switch to Service
                 const desigLower = (matched.designation || '').toLowerCase();
                 const isOp = desigLower.includes('operator') || !matched.designation;
-                if (catEl) {
-                    catEl.value = isOp ? 'Machine' : 'Service';
-                    if (mcContainer) mcContainer.style.display = isOp ? 'block' : 'none';
-                    if (mc1) mc1.required = isOp;
-                }
+                setHrShiftSelectedCategory(isOp ? 'Machine' : 'Service');
             }
         });
 
         // Form Submit
         document.getElementById('hrShiftForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const idVal = document.getElementById('hrShiftEntryId')?.value;
-            const catVal = document.getElementById('hrShiftCategory')?.value || 'Machine';
+            const idVal = document.getElementById('hrShiftEditId')?.value;
+            const catVal = getHrShiftSelectedCategory();
             const empVal = document.getElementById('hrShiftEmpName')?.value.trim();
             const deptVal = document.getElementById('hrShiftDept')?.value;
             const desigVal = document.getElementById('hrShiftDesignation')?.value.trim();
@@ -3592,6 +3589,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadHrShiftMetadata();
         await fetchHrShiftList();
     }
+    window.initHrShiftList = initHrShiftList;
 
     // Initial fetch
     fetchProducts();
