@@ -3334,57 +3334,336 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Excel Export
+    // Excel Export - Custom Multi-Sheet Roster (WIPRO, BC, Gear & Spider)
     window.exportHrShiftToExcel = function() {
         if (!hrShiftRawList || hrShiftRawList.length === 0) {
             alert('No shift allocations available for this week to export.');
             return;
         }
 
-        const wb = XLSX.utils.book_new();
+        function normalizeDept(d) {
+            if (!d) return '';
+            const s = d.trim().toUpperCase();
+            if (s === 'BC' || s.includes('CLAMP')) return 'BC';
+            if (s.includes('WIPRO')) return 'WIPRO';
+            if (s.includes('SPIDER')) return 'SPIDER';
+            if (s.includes('GEAR')) return 'GEAR';
+            return s;
+        }
 
-        // 1. Machine Operators Sheet
-        const machineRows = [
-            ['SL NO', 'DEPARTMENT', 'OPERATOR NAME', 'DESIGNATION', 'SHIFT', 'TIMINGS', 'PRIMARY MACHINE', 'SECONDARY MACHINE', 'DUAL M/C', 'REMARKS']
-        ];
-        const machineList = hrShiftRawList.filter(x => x.category === 'Machine');
-        machineList.forEach((item, idx) => {
-            machineRows.push([
-                idx + 1,
-                item.dept || '',
-                item.emp_name || '',
-                item.designation || 'Operator',
-                item.shift || '',
-                item.shift_timings || HR_SHIFT_TIMINGS_CLIENT[item.shift] || '',
-                item.machine_1 || '',
-                item.machine_2 || '',
-                item.machine_2 ? 'YES' : 'NO',
-                item.notes || ''
-            ]);
-        });
-        const wsMachine = XLSX.utils.aoa_to_sheet(machineRows);
-        XLSX.utils.book_append_sheet(wb, wsMachine, 'Machine Operators');
+        function isGenShift(shift) {
+            if (!shift) return false;
+            const s = shift.toLowerCase();
+            return s.includes('gen') || s === 'general';
+        }
 
-        // 2. Service Staff Sheet
-        const serviceRows = [
-            ['SL NO', 'DEPARTMENT', 'STAFF NAME', 'DESIGNATION', 'SHIFT', 'TIMINGS', 'SERVICE AREA / REMARKS']
-        ];
-        const serviceList = hrShiftRawList.filter(x => x.category === 'Service');
-        serviceList.forEach((item, idx) => {
-            serviceRows.push([
-                idx + 1,
-                item.dept || '',
-                item.emp_name || '',
-                item.designation || 'Staff',
-                item.shift || '',
-                item.shift_timings || HR_SHIFT_TIMINGS_CLIENT[item.shift] || '',
-                item.notes || ''
-            ]);
-        });
-        const wsService = XLSX.utils.aoa_to_sheet(serviceRows);
-        XLSX.utils.book_append_sheet(wb, wsService, 'Service Staff');
+        function formatDmy(dateStr) {
+            if (!dateStr) return '';
+            const parts = dateStr.split('-').map(Number);
+            const dd = String(parts[2]).padStart(2, '0');
+            const mm = String(parts[1]).padStart(2, '0');
+            const yyyy = parts[0];
+            return `${dd}-${mm}-${yyyy}`;
+        }
 
         const sundayStr = addDaysToDateStr(hrShiftCurrentWeekMonday, 6);
+        const fromDateStr = formatDmy(hrShiftCurrentWeekMonday);
+        const toDateStr = formatDmy(sundayStr);
+
+        function buildSectionData(deptTitle, deptRecords, fromStr, toStr, includeCompanyHeader = true) {
+            const aoa = [];
+            const merges = [];
+
+            // Header
+            if (includeCompanyHeader) {
+                const r0 = aoa.length;
+                aoa.push(['GRS ENGINEERING P LTD', '', '', '', '']);
+                merges.push({ s: { r: r0, c: 0 }, e: { r: r0, c: 4 } });
+
+                const r1 = aoa.length;
+                aoa.push([deptTitle.toUpperCase(), '', '', '', '']);
+                merges.push({ s: { r: r1, c: 0 }, e: { r: r1, c: 4 } });
+
+                aoa.push(['', 'Shift List', `From: ${fromStr}`, '', `To: ${toStr}`]);
+            } else {
+                const rSec = aoa.length;
+                aoa.push([deptTitle.toUpperCase(), '', '', '', '']);
+                merges.push({ s: { r: rSec, c: 0 }, e: { r: rSec, c: 4 } });
+            }
+
+            // Column Headers
+            aoa.push(['Gen shift', 'Machine', 'First Shift', 'Second shift', 'Third Shift']);
+
+            // 1. General Shift staff list (single column on extreme left)
+            const genStaffList = deptRecords
+                .filter(r => isGenShift(r.shift))
+                .map(r => r.emp_name ? r.emp_name.trim() : '');
+
+            let genStaffIdx = 0;
+
+            // 2. Machine list & ordering for dual machine adjacency
+            const dualPairs = [];
+            deptRecords.forEach(r => {
+                if (r.category === 'Machine' && r.machine_1 && r.machine_2) {
+                    dualPairs.push([r.machine_1.trim(), r.machine_2.trim()]);
+                }
+            });
+
+            const orderedMachines = [];
+            const addedMachines = new Set();
+
+            dualPairs.forEach(([m1, m2]) => {
+                if (!addedMachines.has(m1) && !addedMachines.has(m2)) {
+                    orderedMachines.push(m1);
+                    orderedMachines.push(m2);
+                    addedMachines.add(m1);
+                    addedMachines.add(m2);
+                } else if (!addedMachines.has(m1)) {
+                    orderedMachines.push(m1);
+                    addedMachines.add(m1);
+                } else if (!addedMachines.has(m2)) {
+                    orderedMachines.push(m2);
+                    addedMachines.add(m2);
+                }
+            });
+
+            const allDeptMachines = [];
+            deptRecords.forEach(r => {
+                if (r.category === 'Machine') {
+                    if (r.machine_1) allDeptMachines.push(r.machine_1.trim());
+                    if (r.machine_2) allDeptMachines.push(r.machine_2.trim());
+                }
+            });
+            allDeptMachines.sort();
+            allDeptMachines.forEach(m => {
+                if (m && !addedMachines.has(m)) {
+                    orderedMachines.push(m);
+                    addedMachines.add(m);
+                }
+            });
+
+            // Lookup helper for machine operators
+            function getOperator(m, shift) {
+                const match = deptRecords.find(r => 
+                    r.category === 'Machine' && 
+                    r.shift === shift && 
+                    ((r.machine_1 && r.machine_1.trim() === m) || (r.machine_2 && r.machine_2.trim() === m))
+                );
+                return match && match.emp_name ? match.emp_name.trim() : '';
+            }
+
+            const startMachineRow = aoa.length;
+
+            // Push machine rows
+            orderedMachines.forEach(m => {
+                const genStaff = genStaffIdx < genStaffList.length ? genStaffList[genStaffIdx++] : '';
+                const opFirst = getOperator(m, 'First');
+                const opSecond = getOperator(m, 'Second');
+                const opThird = getOperator(m, 'Third');
+                aoa.push([genStaff, m, opFirst, opSecond, opThird]);
+            });
+
+            // Merge dual machine operator rows across machines for each shift column (cols 2, 3, 4)
+            for (let c = 2; c <= 4; c++) {
+                let r = startMachineRow;
+                while (r < startMachineRow + orderedMachines.length) {
+                    const val = aoa[r][c];
+                    if (val && val.trim() !== '') {
+                        let rEnd = r;
+                        while (rEnd + 1 < startMachineRow + orderedMachines.length && aoa[rEnd + 1][c] === val) {
+                            rEnd++;
+                        }
+                        if (rEnd > r) {
+                            merges.push({ s: { r: r, c: c }, e: { r: rEnd, c: c } });
+                            r = rEnd + 1;
+                            continue;
+                        }
+                    }
+                    r++;
+                }
+            }
+
+            // 3. Service Staff Rows (Setters in 2 rows, Helpers in 1 row, Tool Crib in 1 row)
+            const serviceRecords = deptRecords.filter(r => r.category === 'Service' && !isGenShift(r.shift));
+
+            function getStaffByRole(roleKeyword) {
+                const byShift = { 'First': [], 'Second': [], 'Third': [] };
+                serviceRecords.forEach(r => {
+                    const desig = (r.designation || '').toUpperCase();
+                    const notes = (r.notes || '').toUpperCase();
+                    if (desig.includes(roleKeyword) || notes.includes(roleKeyword)) {
+                        if (byShift[r.shift] && r.emp_name) {
+                            byShift[r.shift].push(r.emp_name.trim());
+                        }
+                    }
+                });
+                return byShift;
+            }
+
+            const setters = getStaffByRole('SETTER');
+            const helpers = getStaffByRole('HELPER');
+            const toolCrib = getStaffByRole('CRIB');
+
+            // Setters in 2 rows
+            const s1Gen = genStaffIdx < genStaffList.length ? genStaffList[genStaffIdx++] : '';
+            aoa.push([
+                s1Gen,
+                'Setter 1',
+                setters['First'][0] || '',
+                setters['Second'][0] || '',
+                setters['Third'][0] || ''
+            ]);
+
+            const s2Gen = genStaffIdx < genStaffList.length ? genStaffList[genStaffIdx++] : '';
+            aoa.push([
+                s2Gen,
+                'Setter 2',
+                setters['First'][1] || '',
+                setters['Second'][1] || '',
+                setters['Third'][1] || ''
+            ]);
+
+            // Helpers in 1 row
+            const hGen = genStaffIdx < genStaffList.length ? genStaffList[genStaffIdx++] : '';
+            aoa.push([
+                hGen,
+                'Helpers',
+                helpers['First'].join(', '),
+                helpers['Second'].join(', '),
+                helpers['Third'].join(', ')
+            ]);
+
+            // Tool Crib in 1 row
+            const tcGen = genStaffIdx < genStaffList.length ? genStaffList[genStaffIdx++] : '';
+            aoa.push([
+                tcGen,
+                'Tool Crib',
+                toolCrib['First'].join(', '),
+                toolCrib['Second'].join(', '),
+                toolCrib['Third'].join(', ')
+            ]);
+
+            // Other service staff (Deburring, Inspection, Maintenance, etc.)
+            const handledKeywords = ['SETTER', 'HELPER', 'CRIB'];
+            const otherService = {};
+            serviceRecords.forEach(r => {
+                const desig = (r.designation || '').toUpperCase();
+                const notes = (r.notes || '').toUpperCase();
+                const isHandled = handledKeywords.some(k => desig.includes(k) || notes.includes(k));
+                if (!isHandled && r.emp_name) {
+                    const role = r.notes || r.designation || 'Other Service';
+                    if (!otherService[role]) {
+                        otherService[role] = { 'First': [], 'Second': [], 'Third': [] };
+                    }
+                    if (otherService[role][r.shift]) {
+                        otherService[role][r.shift].push(r.emp_name.trim());
+                    }
+                }
+            });
+
+            Object.keys(otherService).forEach(role => {
+                const oGen = genStaffIdx < genStaffList.length ? genStaffList[genStaffIdx++] : '';
+                aoa.push([
+                    oGen,
+                    role,
+                    (otherService[role]['First'] || []).join(', '),
+                    (otherService[role]['Second'] || []).join(', '),
+                    (otherService[role]['Third'] || []).join(', ')
+                ]);
+            });
+
+            // Any remaining General Shift staff
+            while (genStaffIdx < genStaffList.length) {
+                aoa.push([genStaffList[genStaffIdx++], '', '', '', '']);
+            }
+
+            return { aoa, merges };
+        }
+
+        function buildCombinedSheetData(deptSections, fromStr, toStr) {
+            const aoa = [];
+            const merges = [];
+
+            // Global Top Header
+            const r0 = aoa.length;
+            aoa.push(['GRS ENGINEERING P LTD', '', '', '', '']);
+            merges.push({ s: { r: r0, c: 0 }, e: { r: r0, c: 4 } });
+
+            const r1 = aoa.length;
+            aoa.push(['GEAR & SPIDER', '', '', '', '']);
+            merges.push({ s: { r: r1, c: 0 }, e: { r: r1, c: 4 } });
+
+            aoa.push(['', 'Shift List', `From: ${fromStr}`, '', `To: ${toStr}`]);
+
+            deptSections.forEach((sec, idx) => {
+                if (idx > 0) {
+                    // Blank spacer row between sections
+                    aoa.push(['', '', '', '', '']);
+                }
+
+                const secRes = buildSectionData(sec.deptTitle, sec.deptRecords, fromStr, toStr, false);
+                const startRowOffset = aoa.length;
+
+                secRes.aoa.forEach(r => aoa.push(r));
+
+                secRes.merges.forEach(m => {
+                    merges.push({
+                        s: { r: m.s.r + startRowOffset, c: m.s.c },
+                        e: { r: m.e.r + startRowOffset, c: m.e.c }
+                    });
+                });
+            });
+
+            return { aoa, merges };
+        }
+
+        const wb = XLSX.utils.book_new();
+        const colWidths = [
+            { wch: 22 }, // Gen shift
+            { wch: 18 }, // Machine
+            { wch: 24 }, // First Shift
+            { wch: 24 }, // Second shift
+            { wch: 24 }  // Third Shift
+        ];
+
+        // 1. SHEET 1: WIPRO
+        const wiproRecords = hrShiftRawList.filter(r => normalizeDept(r.dept) === 'WIPRO');
+        const wiproData = buildSectionData('WIPRO', wiproRecords, fromDateStr, toDateStr, true);
+        const wsWipro = XLSX.utils.aoa_to_sheet(wiproData.aoa);
+        wsWipro['!merges'] = wiproData.merges;
+        wsWipro['!cols'] = colWidths;
+        XLSX.utils.book_append_sheet(wb, wsWipro, 'WIPRO');
+
+        // 2. SHEET 2: BC (Bottom Clamp)
+        const bcRecords = hrShiftRawList.filter(r => normalizeDept(r.dept) === 'BC');
+        const bcData = buildSectionData('BOTTOM CLAMP', bcRecords, fromDateStr, toDateStr, true);
+        const wsBc = XLSX.utils.aoa_to_sheet(bcData.aoa);
+        wsBc['!merges'] = bcData.merges;
+        wsBc['!cols'] = colWidths;
+        XLSX.utils.book_append_sheet(wb, wsBc, 'BC');
+
+        // 3. SHEET 3: Gear and Spider
+        const spiderRecords = hrShiftRawList.filter(r => normalizeDept(r.dept) === 'SPIDER');
+        const gearRecords = hrShiftRawList.filter(r => normalizeDept(r.dept) === 'GEAR');
+        const gearSpiderData = buildCombinedSheetData([
+            { deptTitle: 'SPIDER', deptRecords: spiderRecords },
+            { deptTitle: 'GEAR', deptRecords: gearRecords }
+        ], fromDateStr, toDateStr);
+        const wsGearSpider = XLSX.utils.aoa_to_sheet(gearSpiderData.aoa);
+        wsGearSpider['!merges'] = gearSpiderData.merges;
+        wsGearSpider['!cols'] = colWidths;
+        XLSX.utils.book_append_sheet(wb, wsGearSpider, 'Gear & Spider');
+
+        // 4. Optional SHEET: Other Departments (if any records exist outside WIPRO, BC, SPIDER, GEAR)
+        const otherRecords = hrShiftRawList.filter(r => !['WIPRO', 'BC', 'SPIDER', 'GEAR'].includes(normalizeDept(r.dept)));
+        if (otherRecords.length > 0) {
+            const otherData = buildSectionData('OTHER DEPARTMENTS', otherRecords, fromDateStr, toDateStr, true);
+            const wsOther = XLSX.utils.aoa_to_sheet(otherData.aoa);
+            wsOther['!merges'] = otherData.merges;
+            wsOther['!cols'] = colWidths;
+            XLSX.utils.book_append_sheet(wb, wsOther, 'Other Depts');
+        }
+
         const fileName = `Weekly_Shift_List_${hrShiftCurrentWeekMonday}_to_${sundayStr}.xlsx`;
         XLSX.writeFile(wb, fileName);
     };
