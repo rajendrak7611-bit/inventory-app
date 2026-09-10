@@ -378,4 +378,21 @@ class SetterLog(Base):
     remarks = Column(Text, nullable=True)
     created_at = Column(DateTime, default=get_now_ist)
 
+class HrShiftAssignment(Base):
+    __tablename__ = "hr_shift_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    week_start_date = Column(String, index=True, nullable=False) # e.g. "2026-09-07" (Monday)
+    category = Column(String, default="Machine") # "Machine" or "Service"
+    emp_name = Column(String, index=True, nullable=False)
+    dept = Column(String, index=True, nullable=True)
+    designation = Column(String, nullable=True)
+    shift = Column(String, index=True, nullable=False) # "First", "Second", "Third", "Gen Shift A", "Gen Shift B"
+    shift_timings = Column(String, nullable=True) # "7.00 to 3.00", "3.00 to 11.00", "11.00 to 7.00", "8.00 to 4.30", "9.30 to 6.00"
+    machine_1 = Column(String, nullable=True)
+    machine_2 = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=get_now_ist)
+
+
 

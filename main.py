@@ -8183,6 +8183,279 @@ async def restore_db_backup(file: UploadFile = File(...), db: Session = Depends(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# --- HR WEEKLY SHIFT LIST ENDPOINTS ---
+HR_SHIFT_TIMINGS = {
+    "First": "7.00 to 3.00",
+    "Second": "3.00 to 11.00",
+    "Third": "11.00 to 7.00",
+    "Gen Shift A": "8.00 to 4.30",
+    "Gen Shift B": "9.30 to 6.00"
+}
+
+HR_SHIFT_ROTATION = {
+    "First": "Third",
+    "Second": "First",
+    "Third": "Second",
+    "Gen Shift A": "Gen Shift A",
+    "Gen Shift B": "Gen Shift B"
+}
+
+def ensure_hr_shift_table(db: Session):
+    try:
+        models.HrShiftAssignment.__table__.create(bind=db.get_bind(), checkfirst=True)
+    except Exception:
+        pass
+
+@app.get("/api/hr/shift-list")
+def get_hr_shift_list(week_start_date: str, dept: Optional[str] = None, shift: Optional[str] = None, db: Session = Depends(get_db)):
+    ensure_hr_shift_table(db)
+    try:
+        q = db.query(models.HrShiftAssignment).filter(models.HrShiftAssignment.week_start_date == week_start_date)
+        if dept and not dept.startswith("--") and dept.upper() != "ALL":
+            q = q.filter(models.HrShiftAssignment.dept == dept)
+        if shift and not shift.startswith("--") and shift.upper() != "ALL":
+            q = q.filter(models.HrShiftAssignment.shift == shift)
+        
+        rows = q.order_by(models.HrShiftAssignment.dept.asc(), models.HrShiftAssignment.shift.asc(), models.HrShiftAssignment.emp_name.asc()).all()
+        return [
+            {
+                "id": r.id,
+                "week_start_date": r.week_start_date,
+                "category": r.category or "Machine",
+                "emp_name": r.emp_name,
+                "dept": r.dept or "",
+                "designation": r.designation or "Operator",
+                "shift": r.shift,
+                "shift_timings": r.shift_timings or HR_SHIFT_TIMINGS.get(r.shift, ""),
+                "machine_1": r.machine_1 or "",
+                "machine_2": r.machine_2 or "",
+                "notes": r.notes or ""
+            } for r in rows
+        ]
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/hr/shift-list")
+def save_hr_shift_assignment(data: dict, db: Session = Depends(get_db)):
+    ensure_hr_shift_table(db)
+    try:
+        item_id = data.get("id")
+        shift_name = data.get("shift") or "First"
+        timings = data.get("shift_timings") or HR_SHIFT_TIMINGS.get(shift_name, "")
+        
+        if item_id:
+            rec = db.query(models.HrShiftAssignment).filter(models.HrShiftAssignment.id == int(item_id)).first()
+            if not rec:
+                raise HTTPException(status_code=404, detail="Shift assignment not found")
+            rec.week_start_date = data.get("week_start_date", rec.week_start_date)
+            rec.category = data.get("category", rec.category)
+            rec.emp_name = data.get("emp_name", rec.emp_name)
+            rec.dept = data.get("dept", rec.dept)
+            rec.designation = data.get("designation", rec.designation)
+            rec.shift = shift_name
+            rec.shift_timings = timings
+            rec.machine_1 = data.get("machine_1", "")
+            rec.machine_2 = data.get("machine_2", "")
+            rec.notes = data.get("notes", "")
+        else:
+            rec = models.HrShiftAssignment(
+                week_start_date=data.get("week_start_date"),
+                category=data.get("category", "Machine"),
+                emp_name=data.get("emp_name"),
+                dept=data.get("dept", ""),
+                designation=data.get("designation", "Operator"),
+                shift=shift_name,
+                shift_timings=timings,
+                machine_1=data.get("machine_1", ""),
+                machine_2=data.get("machine_2", ""),
+                notes=data.get("notes", "")
+            )
+            db.add(rec)
+        db.commit()
+        db.refresh(rec)
+        return {"status": "success", "id": rec.id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/hr/shift-list/bulk-save")
+def bulk_save_hr_shift_list(payload: dict, db: Session = Depends(get_db)):
+    ensure_hr_shift_table(db)
+    try:
+        week_start_date = payload.get("week_start_date")
+        if not week_start_date:
+            raise HTTPException(status_code=400, detail="week_start_date is required")
+        
+        assignments = payload.get("assignments", [])
+        
+        # Clear existing for this week
+        db.query(models.HrShiftAssignment).filter(models.HrShiftAssignment.week_start_date == week_start_date).delete()
+        
+        for a in assignments:
+            shift_name = a.get("shift") or "First"
+            timings = a.get("shift_timings") or HR_SHIFT_TIMINGS.get(shift_name, "")
+            rec = models.HrShiftAssignment(
+                week_start_date=week_start_date,
+                category=a.get("category", "Machine"),
+                emp_name=a.get("emp_name", ""),
+                dept=a.get("dept", ""),
+                designation=a.get("designation", "Operator"),
+                shift=shift_name,
+                shift_timings=timings,
+                machine_1=a.get("machine_1", ""),
+                machine_2=a.get("machine_2", ""),
+                notes=a.get("notes", "")
+            )
+            db.add(rec)
+        db.commit()
+        return {"status": "success", "saved_count": len(assignments)}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/hr/shift-list/rotate-prev")
+def rotate_hr_shift_list_from_prev(target_week: str, source_week: str, db: Session = Depends(get_db)):
+    ensure_hr_shift_table(db)
+    try:
+        prev_rows = db.query(models.HrShiftAssignment).filter(models.HrShiftAssignment.week_start_date == source_week).all()
+        if not prev_rows:
+            raise HTTPException(status_code=404, detail=f"No shift assignments found for source week {source_week}")
+        
+        # Clear existing target week records
+        db.query(models.HrShiftAssignment).filter(models.HrShiftAssignment.week_start_date == target_week).delete()
+        
+        rotated_count = 0
+        for r in prev_rows:
+            old_shift = r.shift
+            new_shift = HR_SHIFT_ROTATION.get(old_shift, old_shift)
+            new_timings = HR_SHIFT_TIMINGS.get(new_shift, r.shift_timings)
+            
+            new_rec = models.HrShiftAssignment(
+                week_start_date=target_week,
+                category=r.category,
+                emp_name=r.emp_name,
+                dept=r.dept,
+                designation=r.designation,
+                shift=new_shift,
+                shift_timings=new_timings,
+                machine_1=r.machine_1,
+                machine_2=r.machine_2,
+                notes=r.notes
+            )
+            db.add(new_rec)
+            rotated_count += 1
+            
+        db.commit()
+        return {"status": "success", "message": f"Successfully rotated {rotated_count} assignments from {source_week} to {target_week}", "count": rotated_count}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/hr/shift-list/copy-prev")
+def copy_hr_shift_list_from_prev(target_week: str, source_week: str, db: Session = Depends(get_db)):
+    ensure_hr_shift_table(db)
+    try:
+        prev_rows = db.query(models.HrShiftAssignment).filter(models.HrShiftAssignment.week_start_date == source_week).all()
+        if not prev_rows:
+            raise HTTPException(status_code=404, detail=f"No shift assignments found for source week {source_week}")
+        
+        db.query(models.HrShiftAssignment).filter(models.HrShiftAssignment.week_start_date == target_week).delete()
+        
+        copied_count = 0
+        for r in prev_rows:
+            new_rec = models.HrShiftAssignment(
+                week_start_date=target_week,
+                category=r.category,
+                emp_name=r.emp_name,
+                dept=r.dept,
+                designation=r.designation,
+                shift=r.shift,
+                shift_timings=r.shift_timings,
+                machine_1=r.machine_1,
+                machine_2=r.machine_2,
+                notes=r.notes
+            )
+            db.add(new_rec)
+            copied_count += 1
+            
+        db.commit()
+        return {"status": "success", "message": f"Successfully copied {copied_count} assignments from {source_week} to {target_week}", "count": copied_count}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/hr/shift-list/load-from-master")
+def load_hr_shift_from_master(week_start_date: str, db: Session = Depends(get_db)):
+    ensure_hr_shift_table(db)
+    try:
+        ops = db.query(models.Operator).order_by(models.Operator.dept.asc(), models.Operator.name.asc()).all()
+        if not ops:
+            return {"status": "success", "count": 0, "message": "No operators found in Operator Master"}
+        
+        existing = {r.emp_name.strip().upper() for r in db.query(models.HrShiftAssignment).filter(models.HrShiftAssignment.week_start_date == week_start_date).all()}
+        
+        added = 0
+        for o in ops:
+            name = (o.name or "").strip()
+            if not name or name.upper() in existing:
+                continue
+            
+            desig = (o.designation or "Operator").strip()
+            dept = (o.dept or "").strip()
+            
+            is_operator = (desig.lower() == "operator")
+            category = "Machine" if is_operator else "Service"
+            shift = "First" if is_operator else "Gen Shift A"
+            timings = HR_SHIFT_TIMINGS.get(shift, "")
+            
+            rec = models.HrShiftAssignment(
+                week_start_date=week_start_date,
+                category=category,
+                emp_name=name,
+                dept=dept,
+                designation=desig,
+                shift=shift,
+                shift_timings=timings,
+                machine_1="",
+                machine_2="",
+                notes=""
+            )
+            db.add(rec)
+            existing.add(name.upper())
+            added += 1
+            
+        db.commit()
+        return {"status": "success", "count": added, "message": f"Loaded {added} employees from Operator Master"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/hr/shift-list/clear-week")
+def clear_hr_shift_week(week_start_date: str, db: Session = Depends(get_db)):
+    ensure_hr_shift_table(db)
+    try:
+        cnt = db.query(models.HrShiftAssignment).filter(models.HrShiftAssignment.week_start_date == week_start_date).delete()
+        db.commit()
+        return {"status": "success", "cleared_count": cnt}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/hr/shift-list/{item_id}")
+def delete_hr_shift_assignment(item_id: int, db: Session = Depends(get_db)):
+    ensure_hr_shift_table(db)
+    try:
+        rec = db.query(models.HrShiftAssignment).filter(models.HrShiftAssignment.id == item_id).first()
+        if not rec:
+            raise HTTPException(status_code=404, detail="Not found")
+        db.delete(rec)
+        db.commit()
+        return {"status": "success", "deleted_id": item_id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 # --- Serve Static Files ---
 @app.middleware("http")
 async def add_no_cache_headers(request, call_next):

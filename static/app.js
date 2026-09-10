@@ -469,7 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'insertConsumptionSection', 'insertStockSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'dbBackupSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'resourceReqdSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection', 'bcStatusSection', 'wiproStatusSection',
-            'inspectionSection', 'lineInspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'serviceSettersSection', 'hrSection', 'attendanceSection', 'rfqSection', 'quoteSection'
+            'inspectionSection', 'lineInspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'serviceSettersSection', 'hrSection', 'attendanceSection', 'hrShiftListSection', 'rfqSection', 'quoteSection'
         ];
         sections.forEach(id => {
             const el = document.getElementById(id);
@@ -861,6 +861,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (attSec) attSec.style.display = 'block';
             addBtn.style.display = 'none';
             initAttendance();
+        }},
+        'sidebarHrShiftList': { tab: 'hr_shift_list', action: () => {
+            const shiftSec = document.getElementById('hrShiftListSection');
+            if (shiftSec) shiftSec.style.display = 'block';
+            addBtn.style.display = 'none';
+            initHrShiftList();
         }},
         'sidebarBdSlip': { tab: 'bdslip', action: () => {
             const bdSec = document.getElementById('bdSlipSection');
@@ -2727,6 +2733,865 @@ document.addEventListener('DOMContentLoaded', () => {
         XLSX.utils.book_append_sheet(wb, ws, "Attendance");
         XLSX.writeFile(wb, `Attendance_${monthVal || 'Report'}.xlsx`);
     });
+
+    // ==========================================
+    // --- HR WEEKLY SHIFT LIST MANAGEMENT ---
+    // ==========================================
+    const HR_SHIFT_TIMINGS_CLIENT = {
+        'First': '7.00 to 3.00',
+        'Second': '3.00 to 11.00',
+        'Third': '11.00 to 7.00',
+        'Gen Shift A': '8.00 to 4.30',
+        'Gen Shift B': '9.30 to 6.00'
+    };
+
+    const HR_SHIFT_ROTATION_CLIENT = {
+        'First': 'Third',
+        'Second': 'First',
+        'Third': 'Second',
+        'Gen Shift A': 'Gen Shift A',
+        'Gen Shift B': 'Gen Shift B'
+    };
+
+    let hrShiftCurrentWeekMonday = '';
+    let hrShiftRawList = [];
+    let cachedHrShiftOperators = [];
+    let cachedHrShiftMachines = [];
+    let cachedHrShiftDepts = [];
+    let hrShiftInitialized = false;
+
+    function getHrMondayStr(dateObjOrStr) {
+        let dt;
+        if (!dateObjOrStr) {
+            dt = new Date();
+        } else if (typeof dateObjOrStr === 'string' && dateObjOrStr.includes('-')) {
+            const parts = dateObjOrStr.split('-').map(Number);
+            dt = new Date(parts[0], parts[1] - 1, parts[2]);
+        } else {
+            dt = new Date(dateObjOrStr);
+        }
+        const day = dt.getDay(); // 0: Sun, 1: Mon, ...
+        const diff = dt.getDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(dt.getFullYear(), dt.getMonth(), diff);
+        const yyyy = monday.getFullYear();
+        const mm = String(monday.getMonth() + 1).padStart(2, '0');
+        const dd = String(monday.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function addDaysToDateStr(dateStr, days) {
+        const parts = dateStr.split('-').map(Number);
+        const dt = new Date(parts[0], parts[1] - 1, parts[2] + days);
+        const yyyy = dt.getFullYear();
+        const mm = String(dt.getMonth() + 1).padStart(2, '0');
+        const dd = String(dt.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function formatHrDateDisplay(dateStr) {
+        if (!dateStr) return '';
+        const parts = dateStr.split('-').map(Number);
+        const dt = new Date(parts[0], parts[1] - 1, parts[2]);
+        return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    function getISOWeekNumber(dateStr) {
+        const parts = dateStr.split('-').map(Number);
+        const target = new Date(parts[0], parts[1] - 1, parts[2]);
+        const dayNr = (target.getDay() + 6) % 7;
+        target.setDate(target.getDate() - dayNr + 3);
+        const firstThursday = target.valueOf();
+        target.setMonth(0, 1);
+        if (target.getDay() !== 4) {
+            target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+        }
+        return 1 + Math.ceil((firstThursday - target) / 604800000);
+    }
+
+    function updateHrShiftWeekDisplay() {
+        const weekDisplay = document.getElementById('hrShiftWeekDisplay');
+        const weekPicker = document.getElementById('hrShiftWeekPicker');
+        if (!hrShiftCurrentWeekMonday) {
+            hrShiftCurrentWeekMonday = getHrMondayStr();
+        }
+        if (weekPicker) {
+            weekPicker.value = hrShiftCurrentWeekMonday;
+        }
+        if (weekDisplay) {
+            const sundayStr = addDaysToDateStr(hrShiftCurrentWeekMonday, 6);
+            const weekNum = getISOWeekNumber(hrShiftCurrentWeekMonday);
+            weekDisplay.textContent = `${formatHrDateDisplay(hrShiftCurrentWeekMonday)} – ${formatHrDateDisplay(sundayStr)} (Week ${weekNum})`;
+        }
+    }
+
+    async function loadHrShiftMetadata() {
+        // Load Operators
+        if (cachedHrShiftOperators.length === 0) {
+            try {
+                const res = await fetch('/api/operators');
+                if (res.ok) cachedHrShiftOperators = await res.json();
+            } catch (e) { console.error('Error loading operators for shift list:', e); }
+        }
+        const datalist = document.getElementById('hrShiftOperatorDatalist');
+        if (datalist && Array.isArray(cachedHrShiftOperators)) {
+            datalist.innerHTML = cachedHrShiftOperators
+                .filter(op => op && op.name)
+                .map(op => `<option value="${op.name}">${op.dept ? op.dept + ' - ' : ''}${op.designation || 'Operator'}</option>`)
+                .join('');
+        }
+
+        // Load Machines
+        if (cachedHrShiftMachines.length === 0) {
+            try {
+                const res = await fetch('/api/machines');
+                if (res.ok) cachedHrShiftMachines = await res.json();
+            } catch (e) { console.error('Error loading machines for shift list:', e); }
+        }
+        const m1Select = document.getElementById('hrShiftMachine1');
+        const m2Select = document.getElementById('hrShiftMachine2');
+        if (m1Select && m2Select && Array.isArray(cachedHrShiftMachines)) {
+            const machineOptionsHtml = cachedHrShiftMachines
+                .map(m => {
+                    const mName = typeof m === 'string' ? m : (m.name || m.machine_name || '');
+                    return mName ? `<option value="${mName}">${mName}</option>` : '';
+                })
+                .filter(Boolean)
+                .join('');
+            
+            m1Select.innerHTML = `<option value="">-- Select Machine --</option>` + machineOptionsHtml;
+            m2Select.innerHTML = `<option value="">-- None (Single M/C) --</option>` + machineOptionsHtml;
+        }
+
+        // Load Departments
+        if (cachedHrShiftDepts.length === 0) {
+            try {
+                const res = await fetch('/api/departments');
+                if (res.ok) cachedHrShiftDepts = await res.json();
+            } catch (e) { console.error('Error loading depts for shift list:', e); }
+        }
+        const deptSelect = document.getElementById('hrShiftDept');
+        const filterDeptSelect = document.getElementById('hrShiftFilterDept');
+        const deptsList = Array.isArray(cachedHrShiftDepts) && cachedHrShiftDepts.length > 0 
+            ? cachedHrShiftDepts.map(d => typeof d === 'string' ? d : (d.name || d.dept_name || '')).filter(Boolean)
+            : ['Production', 'Tool Room', 'Quality', 'Maintenance', 'Store', 'Admin'];
+
+        if (deptSelect) {
+            deptSelect.innerHTML = `<option value="">-- Select Dept --</option>` + 
+                deptsList.map(d => `<option value="${d}">${d}</option>`).join('');
+        }
+        if (filterDeptSelect) {
+            const currentFilter = filterDeptSelect.value;
+            filterDeptSelect.innerHTML = `<option value="">All Departments</option>` + 
+                deptsList.map(d => `<option value="${d}">${d}</option>`).join('');
+            if (currentFilter) filterDeptSelect.value = currentFilter;
+        }
+    }
+
+    async function fetchHrShiftList() {
+        if (!hrShiftCurrentWeekMonday) {
+            hrShiftCurrentWeekMonday = getHrMondayStr();
+        }
+        updateHrShiftWeekDisplay();
+
+        try {
+            const url = `/api/hr/shift-list?week_start_date=${encodeURIComponent(hrShiftCurrentWeekMonday)}`;
+            const res = await fetch(url);
+            if (res.ok) {
+                hrShiftRawList = await res.json();
+            } else {
+                hrShiftRawList = [];
+            }
+        } catch (e) {
+            console.error('Failed to fetch HR shift list:', e);
+            hrShiftRawList = [];
+        }
+
+        renderHrShiftTables();
+    }
+
+    function getShiftBadgeHtml(shift) {
+        let bg = '#64748b', fg = '#fff', label = shift;
+        if (shift === 'First') {
+            bg = '#0284c7'; fg = '#fff'; label = '1st Shift';
+        } else if (shift === 'Second') {
+            bg = '#d97706'; fg = '#fff'; label = '2nd Shift';
+        } else if (shift === 'Third') {
+            bg = '#7c3aed'; fg = '#fff'; label = '3rd Shift';
+        } else if (shift === 'Gen Shift A') {
+            bg = '#059669'; fg = '#fff'; label = 'Gen Shift A';
+        } else if (shift === 'Gen Shift B') {
+            bg = '#0d9488'; fg = '#fff'; label = 'Gen Shift B';
+        }
+        return `<span style="background: ${bg}; color: ${fg}; font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 9999px; display: inline-block; white-space: nowrap;">${label}</span>`;
+    }
+
+    function renderHrShiftTables() {
+        const filterDept = document.getElementById('hrShiftFilterDept')?.value || '';
+        const filterShift = document.getElementById('hrShiftFilterShift')?.value || '';
+        const filterCategory = document.getElementById('hrShiftFilterCategory')?.value || '';
+        const searchInput = (document.getElementById('hrShiftSearchInput')?.value || '').toLowerCase().trim();
+
+        // Update KPIs based on raw list
+        const totalStaff = hrShiftRawList.length;
+        const totalMachine = hrShiftRawList.filter(x => x.category === 'Machine').length;
+        const totalDual = hrShiftRawList.filter(x => x.category === 'Machine' && x.machine_2).length;
+        const totalService = hrShiftRawList.filter(x => x.category === 'Service').length;
+
+        const countFirst = hrShiftRawList.filter(x => x.shift === 'First').length;
+        const countSec = hrShiftRawList.filter(x => x.shift === 'Second').length;
+        const countThird = hrShiftRawList.filter(x => x.shift === 'Third').length;
+        const countGenA = hrShiftRawList.filter(x => x.shift === 'Gen Shift A').length;
+        const countGenB = hrShiftRawList.filter(x => x.shift === 'Gen Shift B').length;
+
+        const elTotal = document.getElementById('hrShiftTotalStaff');
+        const elMach = document.getElementById('hrShiftTotalMachine');
+        const elDual = document.getElementById('hrShiftTotalDual');
+        const elServ = document.getElementById('hrShiftTotalService');
+        const elDist = document.getElementById('hrShiftDistribution');
+
+        if (elTotal) elTotal.textContent = totalStaff;
+        if (elMach) elMach.textContent = totalMachine;
+        if (elDual) elDual.textContent = totalDual;
+        if (elServ) elServ.textContent = totalService;
+        if (elDist) {
+            elDist.innerHTML = `
+                <span style="color: #0284c7; font-weight: 600;">1st:</span> ${countFirst} &nbsp;|&nbsp; 
+                <span style="color: #d97706; font-weight: 600;">2nd:</span> ${countSec} &nbsp;|&nbsp; 
+                <span style="color: #7c3aed; font-weight: 600;">3rd:</span> ${countThird} &nbsp;|&nbsp; 
+                <span style="color: #059669; font-weight: 600;">GA:</span> ${countGenA} &nbsp;|&nbsp; 
+                <span style="color: #0d9488; font-weight: 600;">GB:</span> ${countGenB}
+            `;
+        }
+
+        // Apply filters
+        let filtered = hrShiftRawList.filter(item => {
+            if (filterDept && item.dept !== filterDept) return false;
+            if (filterShift && item.shift !== filterShift) return false;
+            if (filterCategory && item.category !== filterCategory) return false;
+            if (searchInput) {
+                const combined = `${item.emp_name} ${item.dept} ${item.designation} ${item.shift} ${item.machine_1 || ''} ${item.machine_2 || ''} ${item.notes || ''}`.toLowerCase();
+                if (!combined.includes(searchInput)) return false;
+            }
+            return true;
+        });
+
+        const machineList = filtered.filter(x => x.category === 'Machine');
+        const serviceList = filtered.filter(x => x.category === 'Service');
+
+        // Toggle card visibility
+        const machineCard = document.getElementById('hrShiftMachineCard');
+        const serviceCard = document.getElementById('hrShiftServiceCard');
+        if (machineCard) machineCard.style.display = (filterCategory === 'Service') ? 'none' : 'block';
+        if (serviceCard) serviceCard.style.display = (filterCategory === 'Machine') ? 'none' : 'block';
+
+        const machineCountEl = document.getElementById('hrShiftMachineCount');
+        const serviceCountEl = document.getElementById('hrShiftServiceCount');
+        if (machineCountEl) machineCountEl.textContent = `${machineList.length} Operators`;
+        if (serviceCountEl) serviceCountEl.textContent = `${serviceList.length} Staff`;
+
+        // Render Machine Operators Table
+        const machineBody = document.getElementById('hrShiftMachineBody');
+        if (machineBody) {
+            if (machineList.length === 0) {
+                machineBody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #94a3b8; padding: 2rem;">No machine operator allocations for this week. Use "+ Add Allocation", "🔄 Rotate Prev", or "👥 From Op Master".</td></tr>`;
+            } else {
+                machineBody.innerHTML = machineList.map((item, idx) => {
+                    const isDual = !!item.machine_2;
+                    const nextRotatedShift = HR_SHIFT_ROTATION_CLIENT[item.shift] || item.shift;
+                    const rotateTip = `Rotate to ${nextRotatedShift}`;
+                    return `
+                        <tr data-id="${item.id}" style="border-bottom: 1px solid #f1f5f9; transition: background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                            <td style="padding: 7px 10px; text-align: center; color: #64748b; font-weight: 500;">${idx + 1}</td>
+                            <td style="padding: 7px 10px; font-weight: 600; color: #0f172a;">
+                                <a href="javascript:void(0)" onclick="openEditHrShiftModal(${item.id})" style="color: #0284c7; text-decoration: none;">${item.emp_name}</a>
+                            </td>
+                            <td style="padding: 7px 10px; color: #475569;">${item.dept || '-'}</td>
+                            <td style="padding: 7px 10px; color: #475569;">${item.designation || 'Operator'}</td>
+                            <td style="padding: 7px 10px; text-align: center;">${getShiftBadgeHtml(item.shift)}</td>
+                            <td style="padding: 7px 10px; font-size: 0.8rem; color: #64748b; text-align: center;">${item.shift_timings || HR_SHIFT_TIMINGS_CLIENT[item.shift] || ''}</td>
+                            <td style="padding: 7px 10px;">
+                                <span style="background: #e0f2fe; color: #0369a1; font-weight: 600; padding: 2px 8px; border-radius: 4px; font-size: 0.82rem; border: 1px solid #bae6fd;">
+                                    ${item.machine_1 || '-'}
+                                </span>
+                            </td>
+                            <td style="padding: 7px 10px;">
+                                ${isDual ? `
+                                    <div style="display: inline-flex; align-items: center; gap: 4px;">
+                                        <span style="background: #f3e8ff; color: #7e22ce; font-weight: 600; padding: 2px 8px; border-radius: 4px; font-size: 0.82rem; border: 1px solid #e9d5ff;">
+                                            ${item.machine_2}
+                                        </span>
+                                        <span style="background: #a855f7; color: #fff; font-size: 0.65rem; padding: 1px 5px; border-radius: 4px; font-weight: 700;">DUAL</span>
+                                    </div>
+                                ` : `<span style="color: #cbd5e1;">-</span>`}
+                            </td>
+                            <td style="padding: 7px 10px; text-align: center; white-space: nowrap;">
+                                <button type="button" onclick="quickRotateHrShift(${item.id})" class="btn" title="${rotateTip}" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #0284c7; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; margin-right: 4px;">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                                <button type="button" onclick="openEditHrShiftModal(${item.id})" class="btn" title="Edit Allocation" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; margin-right: 4px;">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="button" onclick="deleteHrShiftAllocation(${item.id})" class="btn" title="Delete Allocation" style="background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer;">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+
+        // Render Service Staff Table
+        const serviceBody = document.getElementById('hrShiftServiceBody');
+        if (serviceBody) {
+            if (serviceList.length === 0) {
+                serviceBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #94a3b8; padding: 2rem;">No service staff allocations for this week. Use "+ Add Allocation" or "👥 From Op Master".</td></tr>`;
+            } else {
+                serviceBody.innerHTML = serviceList.map((item, idx) => {
+                    const nextRotatedShift = HR_SHIFT_ROTATION_CLIENT[item.shift] || item.shift;
+                    const rotateTip = `Rotate to ${nextRotatedShift}`;
+                    return `
+                        <tr data-id="${item.id}" style="border-bottom: 1px solid #f1f5f9; transition: background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                            <td style="padding: 7px 10px; text-align: center; color: #64748b; font-weight: 500;">${idx + 1}</td>
+                            <td style="padding: 7px 10px; font-weight: 600; color: #0f172a;">
+                                <a href="javascript:void(0)" onclick="openEditHrShiftModal(${item.id})" style="color: #0284c7; text-decoration: none;">${item.emp_name}</a>
+                            </td>
+                            <td style="padding: 7px 10px; color: #475569;">${item.dept || '-'}</td>
+                            <td style="padding: 7px 10px; color: #475569;">${item.designation || 'Staff'}</td>
+                            <td style="padding: 7px 10px; text-align: center;">${getShiftBadgeHtml(item.shift)}</td>
+                            <td style="padding: 7px 10px; font-size: 0.8rem; color: #64748b; text-align: center;">${item.shift_timings || HR_SHIFT_TIMINGS_CLIENT[item.shift] || ''}</td>
+                            <td style="padding: 7px 10px; color: #475569; font-size: 0.85rem;">${item.notes || '-'}</td>
+                            <td style="padding: 7px 10px; text-align: center; white-space: nowrap;">
+                                <button type="button" onclick="quickRotateHrShift(${item.id})" class="btn" title="${rotateTip}" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #0284c7; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; margin-right: 4px;">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                                <button type="button" onclick="openEditHrShiftModal(${item.id})" class="btn" title="Edit Allocation" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer; margin-right: 4px;">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="button" onclick="deleteHrShiftAllocation(${item.id})" class="btn" title="Delete Allocation" style="background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 3px 7px; border-radius: 4px; font-size: 0.78rem; cursor: pointer;">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+    }
+
+    // Window-scoped modal & quick actions
+    window.openAddHrShiftModal = function() {
+        const modal = document.getElementById('hrShiftModal');
+        const form = document.getElementById('hrShiftForm');
+        const title = document.getElementById('hrShiftModalTitle');
+        const idInput = document.getElementById('hrShiftEntryId');
+        const catSelect = document.getElementById('hrShiftCategory');
+        const mcContainer = document.getElementById('hrShiftMachineFieldsContainer');
+        const mc1 = document.getElementById('hrShiftMachine1');
+
+        if (form) form.reset();
+        if (idInput) idInput.value = '';
+        if (title) title.textContent = 'Add Shift Allocation';
+        if (catSelect) catSelect.value = 'Machine';
+        if (mcContainer) mcContainer.style.display = 'block';
+        if (mc1) mc1.required = true;
+        if (modal) modal.classList.add('show');
+    };
+
+    window.openEditHrShiftModal = function(id) {
+        const item = hrShiftRawList.find(x => x.id === id);
+        if (!item) return;
+
+        const modal = document.getElementById('hrShiftModal');
+        const title = document.getElementById('hrShiftModalTitle');
+        const idInput = document.getElementById('hrShiftEntryId');
+        const catSelect = document.getElementById('hrShiftCategory');
+        const empInput = document.getElementById('hrShiftEmpName');
+        const deptSelect = document.getElementById('hrShiftDept');
+        const desigInput = document.getElementById('hrShiftDesignation');
+        const shiftSelect = document.getElementById('hrShiftSelect');
+        const mc1Select = document.getElementById('hrShiftMachine1');
+        const mc2Select = document.getElementById('hrShiftMachine2');
+        const notesInput = document.getElementById('hrShiftNotes');
+        const mcContainer = document.getElementById('hrShiftMachineFieldsContainer');
+
+        if (title) title.textContent = 'Edit Shift Allocation';
+        if (idInput) idInput.value = item.id;
+        if (catSelect) catSelect.value = item.category || 'Machine';
+        if (empInput) empInput.value = item.emp_name || '';
+        if (deptSelect) deptSelect.value = item.dept || '';
+        if (desigInput) desigInput.value = item.designation || '';
+        if (shiftSelect) shiftSelect.value = item.shift || 'First';
+        if (mc1Select) mc1Select.value = item.machine_1 || '';
+        if (mc2Select) mc2Select.value = item.machine_2 || '';
+        if (notesInput) notesInput.value = item.notes || '';
+
+        const isMachine = item.category === 'Machine';
+        if (mcContainer) mcContainer.style.display = isMachine ? 'block' : 'none';
+        if (mc1Select) mc1Select.required = isMachine;
+
+        if (modal) modal.classList.add('show');
+    };
+
+    window.closeHrShiftModal = function() {
+        const modal = document.getElementById('hrShiftModal');
+        if (modal) modal.classList.remove('show');
+    };
+
+    window.deleteHrShiftAllocation = async function(id) {
+        const item = hrShiftRawList.find(x => x.id === id);
+        const name = item ? item.emp_name : 'this entry';
+        if (!confirm(`Delete shift allocation for "${name}"?`)) return;
+
+        try {
+            const res = await fetch(`/api/hr/shift-list/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                fetchHrShiftList();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(`Error deleting entry: ${err.detail || 'Server error'}`);
+            }
+        } catch (e) {
+            console.error('Delete shift allocation error:', e);
+            alert('Failed to delete allocation.');
+        }
+    };
+
+    window.quickRotateHrShift = async function(id) {
+        const item = hrShiftRawList.find(x => x.id === id);
+        if (!item) return;
+
+        const nextShift = HR_SHIFT_ROTATION_CLIENT[item.shift] || item.shift;
+        if (nextShift === item.shift) {
+            alert(`Shift "${item.shift}" remains the same on weekly rotation.`);
+            return;
+        }
+
+        try {
+            const payload = {
+                id: item.id,
+                week_start_date: item.week_start_date,
+                category: item.category,
+                emp_name: item.emp_name,
+                dept: item.dept,
+                designation: item.designation,
+                shift: nextShift,
+                shift_timings: HR_SHIFT_TIMINGS_CLIENT[nextShift] || '',
+                machine_1: item.machine_1,
+                machine_2: item.machine_2,
+                notes: item.notes
+            };
+            const res = await fetch('/api/hr/shift-list', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                fetchHrShiftList();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(`Failed to rotate shift: ${err.detail || 'Server error'}`);
+            }
+        } catch (e) {
+            console.error('Quick rotate error:', e);
+            alert('Failed to rotate shift.');
+        }
+    };
+
+    // Excel Export
+    function exportHrShiftToExcel() {
+        if (!hrShiftRawList || hrShiftRawList.length === 0) {
+            alert('No shift allocations available for this week to export.');
+            return;
+        }
+
+        const wb = XLSX.utils.book_new();
+
+        // 1. Machine Operators Sheet
+        const machineRows = [
+            ['SL NO', 'OPERATOR NAME', 'DEPARTMENT', 'DESIGNATION', 'SHIFT', 'TIMINGS', 'PRIMARY MACHINE', 'SECONDARY MACHINE', 'DUAL M/C', 'REMARKS']
+        ];
+        const machineList = hrShiftRawList.filter(x => x.category === 'Machine');
+        machineList.forEach((item, idx) => {
+            machineRows.push([
+                idx + 1,
+                item.emp_name || '',
+                item.dept || '',
+                item.designation || 'Operator',
+                item.shift || '',
+                item.shift_timings || HR_SHIFT_TIMINGS_CLIENT[item.shift] || '',
+                item.machine_1 || '',
+                item.machine_2 || '',
+                item.machine_2 ? 'YES' : 'NO',
+                item.notes || ''
+            ]);
+        });
+        const wsMachine = XLSX.utils.aoa_to_sheet(machineRows);
+        XLSX.utils.book_append_sheet(wb, wsMachine, 'Machine Operators');
+
+        // 2. Service Staff Sheet
+        const serviceRows = [
+            ['SL NO', 'STAFF NAME', 'DEPARTMENT', 'DESIGNATION', 'SHIFT', 'TIMINGS', 'SERVICE AREA / REMARKS']
+        ];
+        const serviceList = hrShiftRawList.filter(x => x.category === 'Service');
+        serviceList.forEach((item, idx) => {
+            serviceRows.push([
+                idx + 1,
+                item.emp_name || '',
+                item.dept || '',
+                item.designation || 'Staff',
+                item.shift || '',
+                item.shift_timings || HR_SHIFT_TIMINGS_CLIENT[item.shift] || '',
+                item.notes || ''
+            ]);
+        });
+        const wsService = XLSX.utils.aoa_to_sheet(serviceRows);
+        XLSX.utils.book_append_sheet(wb, wsService, 'Service Staff');
+
+        const sundayStr = addDaysToDateStr(hrShiftCurrentWeekMonday, 6);
+        const fileName = `Weekly_Shift_List_${hrShiftCurrentWeekMonday}_to_${sundayStr}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+    }
+
+    // WhatsApp Summary Generator
+    function generateHrShiftWhatsappSummary() {
+        if (!hrShiftRawList || hrShiftRawList.length === 0) {
+            alert('No shift allocations to summarize.');
+            return;
+        }
+
+        const sundayStr = addDaysToDateStr(hrShiftCurrentWeekMonday, 6);
+        const periodStr = `${formatHrDateDisplay(hrShiftCurrentWeekMonday)} to ${formatHrDateDisplay(sundayStr)}`;
+
+        const shiftOrder = [
+            { key: 'First', label: '1. FIRST SHIFT', time: '7.00 to 3.00', icon: '🔵' },
+            { key: 'Second', label: '2. SECOND SHIFT', time: '3.00 to 11.00', icon: '🟠' },
+            { key: 'Third', label: '3. THIRD SHIFT', time: '11.00 to 7.00', icon: '🟣' },
+            { key: 'Gen Shift A', label: '4. GENERAL SHIFT A', time: '8.00 to 4.30', icon: '🟢' },
+            { key: 'Gen Shift B', label: '5. GENERAL SHIFT B', time: '9.30 to 6.00', icon: '🟢' }
+        ];
+
+        let msg = `📋 *WEEKLY SHIFT ROSTER*\n📅 *Period:* ${periodStr}\n\n`;
+
+        shiftOrder.forEach(sh => {
+            const mList = hrShiftRawList.filter(x => x.shift === sh.key && x.category === 'Machine');
+            const sList = hrShiftRawList.filter(x => x.shift === sh.key && x.category === 'Service');
+
+            if (mList.length === 0 && sList.length === 0) return;
+
+            msg += `${sh.icon} *${sh.label} (${sh.time})*\n`;
+            msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+
+            if (mList.length > 0) {
+                msg += `*Machine Operators (${mList.length}):*\n`;
+                mList.forEach((op, i) => {
+                    let mc = op.machine_1 || '';
+                    if (op.machine_2) mc += ` + ${op.machine_2} [DUAL]`;
+                    msg += `  ${i + 1}. ${op.emp_name} → ${mc}\n`;
+                });
+            }
+
+            if (sList.length > 0) {
+                if (mList.length > 0) msg += `\n`;
+                msg += `*Service Staff (${sList.length}):*\n`;
+                sList.forEach((st, i) => {
+                    const area = st.notes ? ` (${st.notes})` : (st.designation ? ` (${st.designation})` : '');
+                    msg += `  ${i + 1}. ${st.emp_name}${area}\n`;
+                });
+            }
+
+            msg += `\n`;
+        });
+
+        const totalStaff = hrShiftRawList.length;
+        const totalMach = hrShiftRawList.filter(x => x.category === 'Machine').length;
+        const totalDual = hrShiftRawList.filter(x => x.category === 'Machine' && x.machine_2).length;
+        msg += `📊 *Summary:* Total Staff: ${totalStaff} | Machine Operators: ${totalMach} (${totalDual} Dual M/C)\n`;
+
+        const txtArea = document.getElementById('hrShiftWhatsappText');
+        const modal = document.getElementById('hrShiftWhatsappModal');
+        const copiedMsg = document.getElementById('hrShiftCopiedMsg');
+        if (txtArea) txtArea.value = msg;
+        if (copiedMsg) copiedMsg.style.display = 'none';
+        if (modal) modal.classList.add('show');
+    }
+
+    // Print Sheet
+    function printHrShiftSheet() {
+        window.print();
+    }
+
+    // Initialize all event listeners for HR Shift List
+    function setupHrShiftEventListeners() {
+        if (hrShiftInitialized) return;
+        hrShiftInitialized = true;
+
+        // Week Navigation
+        const weekPicker = document.getElementById('hrShiftWeekPicker');
+        if (weekPicker) {
+            weekPicker.addEventListener('change', () => {
+                if (weekPicker.value) {
+                    hrShiftCurrentWeekMonday = getHrMondayStr(weekPicker.value);
+                    weekPicker.value = hrShiftCurrentWeekMonday;
+                    fetchHrShiftList();
+                }
+            });
+        }
+
+        document.getElementById('prevHrShiftWeekBtn')?.addEventListener('click', () => {
+            hrShiftCurrentWeekMonday = addDaysToDateStr(hrShiftCurrentWeekMonday, -7);
+            fetchHrShiftList();
+        });
+
+        document.getElementById('nextHrShiftWeekBtn')?.addEventListener('click', () => {
+            hrShiftCurrentWeekMonday = addDaysToDateStr(hrShiftCurrentWeekMonday, 7);
+            fetchHrShiftList();
+        });
+
+        document.getElementById('currentHrShiftWeekBtn')?.addEventListener('click', () => {
+            hrShiftCurrentWeekMonday = getHrMondayStr();
+            fetchHrShiftList();
+        });
+
+        // Filter events
+        document.getElementById('hrShiftFilterDept')?.addEventListener('change', renderHrShiftTables);
+        document.getElementById('hrShiftFilterShift')?.addEventListener('change', renderHrShiftTables);
+        document.getElementById('hrShiftFilterCategory')?.addEventListener('change', renderHrShiftTables);
+        document.getElementById('hrShiftSearchInput')?.addEventListener('input', renderHrShiftTables);
+
+        // Action Buttons
+        document.getElementById('addHrShiftBtn')?.addEventListener('click', () => {
+            window.openAddHrShiftModal();
+        });
+
+        document.getElementById('rotateHrShiftBtn')?.addEventListener('click', async () => {
+            const sundayStr = addDaysToDateStr(hrShiftCurrentWeekMonday, 6);
+            const msg = `Auto-rotate shift allocations from previous week into current week (${formatHrDateDisplay(hrShiftCurrentWeekMonday)} – ${formatHrDateDisplay(sundayStr)})?\n\nRotation rules:\n• First Shift (7-3) ➔ Third Shift (11-7)\n• Second Shift (3-11) ➔ First Shift (7-3)\n• Third Shift (11-7) ➔ Second Shift (3-11)\n• General Shifts stay as-is\n• Machine allocations are preserved\n\n(Existing allocations for this week will be replaced)`;
+            if (!confirm(msg)) return;
+
+            try {
+                const res = await fetch('/api/hr/shift-list/rotate-prev', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target_week_start_date: hrShiftCurrentWeekMonday })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(data.message || 'Shifts rotated successfully!');
+                    fetchHrShiftList();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert(`Failed to rotate: ${err.detail || 'Server error'}`);
+                }
+            } catch (e) {
+                console.error('Rotate prev week error:', e);
+                alert('Error rotating from previous week.');
+            }
+        });
+
+        document.getElementById('copyHrShiftBtn')?.addEventListener('click', async () => {
+            const msg = `Copy exact shift and machine allocations from previous week to this week?\n\n(Existing allocations for this week will be replaced)`;
+            if (!confirm(msg)) return;
+
+            try {
+                const res = await fetch('/api/hr/shift-list/copy-prev', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target_week_start_date: hrShiftCurrentWeekMonday })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(data.message || 'Shifts copied successfully!');
+                    fetchHrShiftList();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert(`Failed to copy: ${err.detail || 'Server error'}`);
+                }
+            } catch (e) {
+                console.error('Copy prev week error:', e);
+                alert('Error copying from previous week.');
+            }
+        });
+
+        document.getElementById('loadFromOpMasterShiftBtn')?.addEventListener('click', async () => {
+            const msg = `Load shift roster from Operator Master for this week?\n\n• Operators will be assigned to Category "Machine" (First Shift)\n• Non-operators will be assigned to Category "Service" (Gen Shift A)\n\n(Existing allocations for this week will be replaced)`;
+            if (!confirm(msg)) return;
+
+            try {
+                const res = await fetch('/api/hr/shift-list/load-from-master', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ week_start_date: hrShiftCurrentWeekMonday })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(data.message || 'Roster loaded from Operator Master!');
+                    fetchHrShiftList();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert(`Failed to load from master: ${err.detail || 'Server error'}`);
+                }
+            } catch (e) {
+                console.error('Load from master error:', e);
+                alert('Error loading from Operator Master.');
+            }
+        });
+
+        document.getElementById('clearHrShiftWeekBtn')?.addEventListener('click', async () => {
+            const sundayStr = addDaysToDateStr(hrShiftCurrentWeekMonday, 6);
+            if (!confirm(`Are you sure you want to clear ALL allocations for week ${formatHrDateDisplay(hrShiftCurrentWeekMonday)} – ${formatHrDateDisplay(sundayStr)}?`)) return;
+
+            try {
+                const res = await fetch(`/api/hr/shift-list/clear-week?week_start_date=${encodeURIComponent(hrShiftCurrentWeekMonday)}`, {
+                    method: 'DELETE'
+                });
+                if (res.ok) {
+                    fetchHrShiftList();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert(`Failed to clear week: ${err.detail || 'Server error'}`);
+                }
+            } catch (e) {
+                console.error('Clear week error:', e);
+                alert('Error clearing week.');
+            }
+        });
+
+        document.getElementById('exportHrShiftExcelBtn')?.addEventListener('click', exportHrShiftToExcel);
+        document.getElementById('whatsappHrShiftBtn')?.addEventListener('click', generateHrShiftWhatsappSummary);
+        document.getElementById('printHrShiftBtn')?.addEventListener('click', printHrShiftSheet);
+
+        // Modal Controls
+        document.getElementById('closeHrShiftModalBtn')?.addEventListener('click', window.closeHrShiftModal);
+        document.getElementById('cancelHrShiftModalBtn')?.addEventListener('click', window.closeHrShiftModal);
+
+        // Category change in modal: toggle machine allocation container
+        document.getElementById('hrShiftCategory')?.addEventListener('change', (e) => {
+            const isMach = e.target.value === 'Machine';
+            const mcContainer = document.getElementById('hrShiftMachineFieldsContainer');
+            const mc1 = document.getElementById('hrShiftMachine1');
+            if (mcContainer) mcContainer.style.display = isMach ? 'block' : 'none';
+            if (mc1) mc1.required = isMach;
+        });
+
+        // Auto-fill dept & designation when choosing employee from datalist
+        document.getElementById('hrShiftEmpName')?.addEventListener('input', (e) => {
+            const val = e.target.value.trim().toLowerCase();
+            if (!val) return;
+            const matched = cachedHrShiftOperators.find(op => (op.name || '').toLowerCase() === val);
+            if (matched) {
+                const deptEl = document.getElementById('hrShiftDept');
+                const desigEl = document.getElementById('hrShiftDesignation');
+                const catEl = document.getElementById('hrShiftCategory');
+                const mcContainer = document.getElementById('hrShiftMachineFieldsContainer');
+                const mc1 = document.getElementById('hrShiftMachine1');
+
+                if (deptEl && matched.dept) deptEl.value = matched.dept;
+                if (desigEl && matched.designation) desigEl.value = matched.designation;
+
+                // If designation implies non-machine, auto switch to Service
+                const desigLower = (matched.designation || '').toLowerCase();
+                const isOp = desigLower.includes('operator') || !matched.designation;
+                if (catEl) {
+                    catEl.value = isOp ? 'Machine' : 'Service';
+                    if (mcContainer) mcContainer.style.display = isOp ? 'block' : 'none';
+                    if (mc1) mc1.required = isOp;
+                }
+            }
+        });
+
+        // Form Submit
+        document.getElementById('hrShiftForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const idVal = document.getElementById('hrShiftEntryId')?.value;
+            const catVal = document.getElementById('hrShiftCategory')?.value || 'Machine';
+            const empVal = document.getElementById('hrShiftEmpName')?.value.trim();
+            const deptVal = document.getElementById('hrShiftDept')?.value;
+            const desigVal = document.getElementById('hrShiftDesignation')?.value.trim();
+            const shiftVal = document.getElementById('hrShiftSelect')?.value;
+            const mc1Val = document.getElementById('hrShiftMachine1')?.value;
+            const mc2Val = document.getElementById('hrShiftMachine2')?.value;
+            const notesVal = document.getElementById('hrShiftNotes')?.value.trim();
+
+            if (!empVal) {
+                alert('Please enter Employee Name.');
+                return;
+            }
+            if (catVal === 'Machine' && !mc1Val) {
+                alert('Please select Primary Machine for Machine Operator.');
+                return;
+            }
+
+            const payload = {
+                id: idVal ? parseInt(idVal, 10) : null,
+                week_start_date: hrShiftCurrentWeekMonday,
+                category: catVal,
+                emp_name: empVal,
+                dept: deptVal || '',
+                designation: desigVal || (catVal === 'Machine' ? 'Operator' : 'Staff'),
+                shift: shiftVal,
+                shift_timings: HR_SHIFT_TIMINGS_CLIENT[shiftVal] || '',
+                machine_1: catVal === 'Machine' ? mc1Val : null,
+                machine_2: catVal === 'Machine' && mc2Val ? mc2Val : null,
+                notes: notesVal || ''
+            };
+
+            try {
+                const res = await fetch('/api/hr/shift-list', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    window.closeHrShiftModal();
+                    fetchHrShiftList();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    alert(`Failed to save: ${err.detail || 'Server error'}`);
+                }
+            } catch (err) {
+                console.error('Save shift allocation error:', err);
+                alert('Error saving shift allocation.');
+            }
+        });
+
+        // WhatsApp Modal Controls
+        document.getElementById('closeHrShiftWhatsappModalBtn')?.addEventListener('click', () => {
+            document.getElementById('hrShiftWhatsappModal')?.classList.remove('show');
+        });
+
+        document.getElementById('copyHrShiftWhatsappTextBtn')?.addEventListener('click', () => {
+            const txt = document.getElementById('hrShiftWhatsappText');
+            if (txt) {
+                txt.select();
+                navigator.clipboard.writeText(txt.value).then(() => {
+                    const copied = document.getElementById('hrShiftCopiedMsg');
+                    if (copied) {
+                        copied.style.display = 'inline-block';
+                        setTimeout(() => { copied.style.display = 'none'; }, 3000);
+                    }
+                }).catch(() => {
+                    document.execCommand('copy');
+                });
+            }
+        });
+
+        document.getElementById('openHrShiftWhatsappAppBtn')?.addEventListener('click', () => {
+            const txt = document.getElementById('hrShiftWhatsappText')?.value;
+            if (!txt) return;
+            const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(txt)}`;
+            window.open(url, '_blank');
+        });
+    }
+
+    async function initHrShiftList() {
+        if (!hrShiftCurrentWeekMonday) {
+            hrShiftCurrentWeekMonday = getHrMondayStr();
+        }
+        setupHrShiftEventListeners();
+        await loadHrShiftMetadata();
+        await fetchHrShiftList();
+    }
 
     // Initial fetch
     fetchProducts();

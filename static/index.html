@@ -130,6 +130,7 @@
             </div>
             <div class="sub-group" id="submenuHr" style="display: none;">
                 <button class="sub-tab" id="sidebarAttendance" data-screen="attendance">Attendance</button>
+                <button class="sub-tab" id="sidebarHrShiftList" data-screen="hr_shift_list">Shift List</button>
             </div>
         </nav>
     </div>
@@ -1391,6 +1392,311 @@
                             <!-- Rows dynamically populated -->
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- HR Shift List Section -->
+            <div class="table-container" id="hrShiftListSection" style="display: none; padding: 1.5rem; color: var(--text-main);">
+                <!-- Header with Week Selector & Action Buttons -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-calendar-week" style="color: #0284c7;"></i> Weekly Shift List
+                            </h2>
+                            <span id="hrShiftWeekBadge" style="background: #e0f2fe; color: #0369a1; padding: 4px 12px; border-radius: 6px; font-weight: 700; font-size: 0.88rem; border: 1px solid #bae6fd;">
+                                Week ...
+                            </span>
+                        </div>
+                        <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 0.85rem;">
+                            Prepare weekly shift list with machine allocations & weekly rotation (<span style="color: #0284c7; font-weight: 600;">First ➔ Third ➔ Second ➔ First</span>).
+                        </p>
+                    </div>
+
+                    <!-- Week Picker and Navigation Controls -->
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <button id="hrShiftPrevWeekBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-weight: 600;" title="Previous Week">
+                            ◀ Prev
+                        </button>
+                        <input type="date" id="hrShiftWeekDatePicker" style="padding: 0.4rem 0.6rem; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; font-family: inherit; font-size: 0.88rem;">
+                        <button id="hrShiftNextWeekBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-weight: 600;" title="Next Week">
+                            Next ▶
+                        </button>
+                        <button id="hrShiftCurrentWeekBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" title="Jump to Current Week">
+                            This Week
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Action Toolbar & Buttons -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 10px; background: #f8fafc; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid #e2e8f0;">
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <button id="addHrShiftAllocationBtn" class="btn btn-primary" style="font-weight: 600; padding: 0.4rem 0.9rem; display: inline-flex; align-items: center; gap: 6px; background-color: #0284c7; border-color: #0284c7;">
+                            <i class="fas fa-plus"></i> + Add Allocation
+                        </button>
+                        <button id="rotateHrShiftBtn" class="btn btn-outline" style="border-color: #16a34a; color: #16a34a; font-weight: 600; padding: 0.4rem 0.9rem; display: inline-flex; align-items: center; gap: 6px;" title="Rotate shifts from previous week: First->Third, Second->First, Third->Second while preserving machine allocations">
+                            <i class="fas fa-sync-alt"></i> 🔄 Rotate from Prev Week
+                        </button>
+                        <button id="copyHrShiftBtn" class="btn btn-outline" style="border-color: #6366f1; color: #6366f1; font-weight: 600; padding: 0.4rem 0.8rem;" title="Copy previous week directly without rotating">
+                            <i class="fas fa-copy"></i> 📋 Copy Prev Week
+                        </button>
+                        <button id="loadFromOpMasterShiftBtn" class="btn btn-outline" style="border-color: #0284c7; color: #0284c7; font-weight: 600; padding: 0.4rem 0.8rem;" title="Load all employees from Operator Master">
+                            <i class="fas fa-users"></i> 👥 From Op Master
+                        </button>
+                        <button id="clearHrShiftWeekBtn" class="btn btn-outline" style="border-color: #ef4444; color: #ef4444; font-weight: 600; padding: 0.4rem 0.7rem;" title="Clear this week's assignments">
+                            <i class="fas fa-trash-alt"></i> Clear Week
+                        </button>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <button id="exportHrShiftExcelBtn" class="btn btn-outline" style="border-color: #16a34a; color: #16a34a; font-weight: 600; padding: 0.4rem 0.8rem; display: inline-flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-file-excel"></i> Export Excel
+                        </button>
+                        <button id="openHrShiftWhatsappModalBtn" class="btn btn-outline" style="border-color: #25D366; color: #15803d; font-weight: 600; padding: 0.4rem 0.8rem; display: inline-flex; align-items: center; gap: 6px;">
+                            <i class="fab fa-whatsapp"></i> WhatsApp Summary
+                        </button>
+                        <button id="printHrShiftListBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                            <i class="fas fa-print"></i> Print Sheet
+                        </button>
+                    </div>
+                </div>
+
+                <!-- KPI & Summary Metrics Bar -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 1.25rem;">
+                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                        <span style="font-size: 0.75rem; color: #64748b; text-transform: uppercase; font-weight: 600;">Total Staff</span>
+                        <div id="kpiHrShiftTotal" style="font-size: 1.35rem; font-weight: 700; color: #0f172a;">0</div>
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                        <span style="font-size: 0.75rem; color: #64748b; text-transform: uppercase; font-weight: 600;">Machine Operators</span>
+                        <div id="kpiHrShiftMachCount" style="font-size: 1.35rem; font-weight: 700; color: #0284c7;">0</div>
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                        <span style="font-size: 0.75rem; color: #64748b; text-transform: uppercase; font-weight: 600;">Dual M/C Operators</span>
+                        <div id="kpiHrShiftDualMcCount" style="font-size: 1.35rem; font-weight: 700; color: #8b5cf6;">0</div>
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                        <span style="font-size: 0.75rem; color: #64748b; text-transform: uppercase; font-weight: 600;">Service Staff</span>
+                        <div id="kpiHrShiftServiceCount" style="font-size: 1.35rem; font-weight: 700; color: #10b981;">0</div>
+                    </div>
+                    <div style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; text-align: center;">
+                        <span style="font-size: 0.75rem; color: #475569; text-transform: uppercase; font-weight: 600;">Shift Distribution</span>
+                        <div id="kpiHrShiftBreakdown" style="font-size: 0.78rem; font-weight: 600; color: #334155; margin-top: 4px; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;">
+                            <span style="color: #0369a1;">I: 0</span> | <span style="color: #b45309;">II: 0</span> | <span style="color: #4338ca;">III: 0</span> | <span style="color: #047857;">Gen: 0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filter Controls: Dept, Shift, Category, Search -->
+                <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; background: #ffffff; padding: 10px 14px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <label for="hrShiftDeptFilter" style="font-size: 0.82rem; font-weight: 600; color: #475569;">Dept:</label>
+                        <select id="hrShiftDeptFilter" style="padding: 0.35rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; background: #fff;">
+                            <option value="">-- All Depts --</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <label for="hrShiftShiftFilter" style="font-size: 0.82rem; font-weight: 600; color: #475569;">Shift:</label>
+                        <select id="hrShiftShiftFilter" style="padding: 0.35rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; background: #fff;">
+                            <option value="">-- All Shifts --</option>
+                            <option value="First">First (7.00 to 3.00)</option>
+                            <option value="Second">Second (3.00 to 11.00)</option>
+                            <option value="Third">Third (11.00 to 7.00)</option>
+                            <option value="Gen Shift A">Gen Shift A (8.00 to 4.30)</option>
+                            <option value="Gen Shift B">Gen Shift B (9.30 to 6.00)</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <label for="hrShiftCategoryFilter" style="font-size: 0.82rem; font-weight: 600; color: #475569;">Category:</label>
+                        <select id="hrShiftCategoryFilter" style="padding: 0.35rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; background: #fff;">
+                            <option value="">-- Both Categories --</option>
+                            <option value="Machine">1. Machine Operators (With M/C)</option>
+                            <option value="Service">2. Service Staff (No M/C)</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1; min-width: 200px;">
+                        <input type="text" id="hrShiftSearchInput" placeholder="Search Operator, Machine, or Designation..." style="width: 100%; padding: 0.35rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem;">
+                    </div>
+                </div>
+
+                <!-- CATEGORY 1: MACHINE OPERATORS TABLE -->
+                <div id="hrShiftMachineSection" style="margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 2px solid #0284c7; padding-bottom: 6px;">
+                        <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: #0369a1; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-cogs"></i> Category 1: Machine Operators (With Machine Allocation)
+                            <span id="hrShiftMachBadge" style="background: #e0f2fe; color: #0284c7; font-size: 0.8rem; padding: 2px 8px; border-radius: 12px; font-weight: 600;">0</span>
+                        </h3>
+                        <span style="font-size: 0.78rem; color: #64748b;">Operators running 1 or 2 machines across First, Second, and Third shifts</span>
+                    </div>
+                    <div style="overflow-x: auto; border: 1px solid #cbd5e1; border-radius: 8px;">
+                        <table class="styled-table" id="hrShiftMachineTable" style="margin: 0; width: 100%; font-size: 0.85rem;">
+                            <thead>
+                                <tr style="background: #f1f5f9; text-align: left;">
+                                    <th style="width: 50px;">#</th>
+                                    <th style="width: 90px;">Dept</th>
+                                    <th>Operator Name</th>
+                                    <th style="width: 190px;">Shift & Timings</th>
+                                    <th>Primary Machine</th>
+                                    <th>Secondary Machine (Dual M/C)</th>
+                                    <th>Notes / Remarks</th>
+                                    <th style="width: 140px; text-align: center;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="hrShiftMachineBody">
+                                <tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Loading machine operator shift allocations...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- CATEGORY 2: SERVICE STAFF TABLE -->
+                <div id="hrShiftServiceSection" style="margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 2px solid #10b981; padding-bottom: 6px;">
+                        <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: #047857; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-user-cog"></i> Category 2: Service Staff (No Machine Assigned)
+                            <span id="hrShiftServBadge" style="background: #dcfce7; color: #15803d; font-size: 0.8rem; padding: 2px 8px; border-radius: 12px; font-weight: 600;">0</span>
+                        </h3>
+                        <span style="font-size: 0.78rem; color: #64748b;">Setters, Deburring, Inspection, Maintenance, Helpers & Admin staff</span>
+                    </div>
+                    <div style="overflow-x: auto; border: 1px solid #cbd5e1; border-radius: 8px;">
+                        <table class="styled-table" id="hrShiftServiceTable" style="margin: 0; width: 100%; font-size: 0.85rem;">
+                            <thead>
+                                <tr style="background: #f1f5f9; text-align: left;">
+                                    <th style="width: 50px;">#</th>
+                                    <th style="width: 90px;">Dept</th>
+                                    <th>Employee Name</th>
+                                    <th>Designation</th>
+                                    <th style="width: 190px;">Shift & Timings</th>
+                                    <th>Service Area / Notes</th>
+                                    <th style="width: 140px; text-align: center;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="hrShiftServiceBody">
+                                <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Loading service staff shift allocations...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal for HR Shift Allocation (Add/Edit) -->
+            <div class="modal" id="hrShiftModal">
+                <div class="modal-content" style="max-width: 540px; border-radius: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.75rem; margin-bottom: 1rem;">
+                        <h2 id="hrShiftModalTitle" style="margin: 0; font-size: 1.2rem; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-edit" style="color: #0284c7;"></i> Add Shift Allocation
+                        </h2>
+                        <button type="button" class="close-btn" id="closeHrShiftModalBtn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+                    </div>
+                    <form id="hrShiftForm">
+                        <input type="hidden" id="hrShiftEditId" value="">
+
+                        <!-- Category Selector -->
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label style="font-weight: 600; font-size: 0.85rem; display: block; margin-bottom: 6px;">Staff Category *</label>
+                            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500;">
+                                    <input type="radio" name="hrShiftCategoryRadio" value="Machine" checked id="hrShiftCatMachine">
+                                    <span>⚙️ Machine Operator (With Machine)</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500;">
+                                    <input type="radio" name="hrShiftCategoryRadio" value="Service" id="hrShiftCatService">
+                                    <span>🛠️ Service Staff (No Machine)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Employee Name & Dept -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label for="hrShiftEmpName" style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Employee / Operator *</label>
+                                <input type="text" id="hrShiftEmpName" list="hrShiftOperatorDatalist" required placeholder="Type or pick name..." style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;">
+                                <datalist id="hrShiftOperatorDatalist"></datalist>
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label for="hrShiftDept" style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Department</label>
+                                <select id="hrShiftDept" style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #fff;">
+                                    <option value="">-- Select Dept --</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Designation & Shift Selection -->
+                        <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 12px; margin-bottom: 12px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label for="hrShiftDesignation" style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Designation</label>
+                                <input type="text" id="hrShiftDesignation" placeholder="Operator, Setter, etc." style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;">
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label for="hrShiftSelect" style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Shift & Timings *</label>
+                                <select id="hrShiftSelect" required style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #fff;">
+                                    <option value="First">First (7.00 to 3.00)</option>
+                                    <option value="Second">Second (3.00 to 11.00)</option>
+                                    <option value="Third">Third (11.00 to 7.00)</option>
+                                    <option value="Gen Shift A">Gen Shift A (8.00 to 4.30)</option>
+                                    <option value="Gen Shift B">Gen Shift B (9.30 to 6.00)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Machine Allocation Fields (for Machine Category) -->
+                        <div id="hrShiftMachineFieldsContainer" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
+                            <div style="font-size: 0.82rem; font-weight: 600; color: #0284c7; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+                                <span><i class="fas fa-desktop"></i> Machine Allocation</span>
+                                <span style="font-weight: normal; color: #64748b; font-size: 0.75rem;">Support 1 or 2 machines</span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                <div class="form-group" style="margin: 0;">
+                                    <label for="hrShiftMachine1" style="font-size: 0.78rem; font-weight: 600; display: block; margin-bottom: 2px;">Primary Machine *</label>
+                                    <select id="hrShiftMachine1" style="width: 100%; padding: 0.4rem 0.55rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; background: #fff;">
+                                        <option value="">-- Select Machine --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label for="hrShiftMachine2" style="font-size: 0.78rem; font-weight: 600; display: block; margin-bottom: 2px;">Secondary Machine (Dual M/C)</label>
+                                    <select id="hrShiftMachine2" style="width: 100%; padding: 0.4rem 0.55rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; background: #fff;">
+                                        <option value="">-- None (Single M/C) --</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Notes / Service Area -->
+                        <div class="form-group" style="margin-bottom: 16px;">
+                            <label for="hrShiftNotes" style="font-size: 0.82rem; font-weight: 600; display: block; margin-bottom: 4px;">Notes / Service Area / Remarks</label>
+                            <input type="text" id="hrShiftNotes" placeholder="e.g. Deburring, Setter Line 1, MFE, Inspection..." style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;">
+                        </div>
+
+                        <div style="display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid #e2e8f0; padding-top: 12px;">
+                            <button type="button" id="cancelHrShiftModalBtn" class="btn btn-secondary" style="padding: 0.45rem 1rem;">Cancel</button>
+                            <button type="submit" id="saveHrShiftAllocationBtn" class="btn btn-primary" style="padding: 0.45rem 1.2rem; background: #0284c7; border-color: #0284c7;">
+                                <i class="fas fa-check"></i> Save Allocation
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- WhatsApp Text Summary Modal -->
+            <div class="modal" id="hrShiftWhatsappModal">
+                <div class="modal-content" style="max-width: 580px; border-radius: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.75rem; margin-bottom: 1rem;">
+                        <h2 style="margin: 0; font-size: 1.2rem; color: #15803d; display: flex; align-items: center; gap: 8px;">
+                            <i class="fab fa-whatsapp" style="color: #25D366;"></i> WhatsApp Weekly Shift Summary
+                        </h2>
+                        <button type="button" class="close-btn" id="closeHrShiftWhatsappModalBtn" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+                    </div>
+                    <textarea id="hrShiftWhatsappText" rows="14" readonly style="width: 100%; font-family: monospace; font-size: 0.85rem; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc; line-height: 1.4; resize: vertical; margin-bottom: 12px;"></textarea>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span id="hrShiftCopiedMsg" style="display: none; color: #16a34a; font-weight: 600; font-size: 0.85rem;"><i class="fas fa-check-circle"></i> Copied to clipboard!</span>
+                        <div style="margin-left: auto; display: flex; gap: 8px;">
+                            <button type="button" id="copyHrShiftWhatsappTextBtn" class="btn btn-outline" style="padding: 0.45rem 1rem;">
+                                <i class="fas fa-copy"></i> Copy Text
+                            </button>
+                            <button type="button" id="openHrShiftWhatsappAppBtn" class="btn btn-primary" style="background: #25D366; border-color: #25D366; padding: 0.45rem 1rem; font-weight: 600;">
+                                <i class="fab fa-whatsapp"></i> Open WhatsApp
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -4779,6 +5085,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10081"></script>
+    <script src="/static/app.js?v=10082"></script>
 </body>
 </html>
