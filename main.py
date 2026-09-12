@@ -8600,6 +8600,15 @@ def get_shift_status_monday_str(date_str: str) -> str:
             continue
     return date_str
 
+def canonical_mc_key(name: str) -> str:
+    if not name:
+        return ""
+    k = name.strip().upper()
+    k = re.sub(r'\bHASS\b', 'HAAS', k)
+    k = k.replace('HASS-', 'HAAS-').replace('HASS ', 'HAAS ')
+    k = re.sub(r'[\s\-_]+', '', k)
+    return k
+
 @app.get("/api/shift-status/populate")
 def populate_shift_status(date: str, dept: str, shift: str, db: Session = Depends(get_db)):
     ensure_hr_shift_table(db)
@@ -8634,6 +8643,15 @@ def populate_shift_status(date: str, dept: str, shift: str, db: Session = Depend
             except Exception as e_fb:
                 db.rollback()
 
+        # Build master machine lookup map for canonical resolution (e.g. HASS-1 -> HAAS-1)
+        master_key_to_name = {canonical_mc_key(m): m for m in dept_machines}
+
+        def resolve_mc(name: str) -> str:
+            if not name:
+                return ""
+            c_k = canonical_mc_key(name)
+            return master_key_to_name.get(c_k, name.strip())
+
         # 2. Fetch shift allocations from hr_shift_assignments for week_monday, dept_clean, shift_clean
         allocations = []
         try:
@@ -8654,28 +8672,59 @@ def populate_shift_status(date: str, dept: str, shift: str, db: Session = Depend
             db.rollback()
             print(f"Error fetching allocations: {e_alloc}")
 
-        # Build machine -> list of operator info
-        mc_assigned_map = {}
+        # 3. Combine dual machines and build station allocations
+        covered_keys = set()
+        stations = []
+
         for a in allocations:
             op_name = (a.emp_name or "").strip()
             if not op_name:
                 continue
-            m1 = (a.machine_1 or "").strip()
-            m2 = (a.machine_2 or "").strip()
-            if m1:
-                if m1 not in mc_assigned_map:
-                    mc_assigned_map[m1] = []
-                mc_assigned_map[m1].append({"operator": op_name, "is_dual": bool(m2), "other_machine": m2})
-                if m1 not in dept_machines:
-                    dept_machines.append(m1)
-            if m2:
-                if m2 not in mc_assigned_map:
-                    mc_assigned_map[m2] = []
-                mc_assigned_map[m2].append({"operator": op_name, "is_dual": True, "other_machine": m1})
-                if m2 not in dept_machines:
-                    dept_machines.append(m2)
+            m1_raw = (a.machine_1 or "").strip()
+            m2_raw = (a.machine_2 or "").strip()
+            m1 = resolve_mc(m1_raw) if m1_raw else ""
+            m2 = resolve_mc(m2_raw) if m2_raw else ""
 
-        # 3. Check if an existing log exists for date_clean, dept_clean, shift_clean
+            if not m1 and not m2:
+                continue
+
+            # If m1 and m2 resolved to the same machine, avoid duplicate
+            if m1 and m2 and canonical_mc_key(m1) == canonical_mc_key(m2):
+                m2 = ""
+
+            is_dual = bool(m1 and m2)
+            if m1:
+                covered_keys.add(canonical_mc_key(m1))
+            if m2:
+                covered_keys.add(canonical_mc_key(m2))
+
+            if is_dual:
+                unit_name = f"{m1} & {m2}"
+                covered_mcs = [m1, m2]
+            else:
+                unit_name = m1 or m2
+                covered_mcs = [unit_name]
+
+            stations.append({
+                "unit_name": unit_name,
+                "machines_covered": covered_mcs,
+                "is_dual": is_dual,
+                "assigned_operator": op_name,
+                "is_allocated": True
+            })
+
+        # Add unallocated machines from department master (not covered by any shift allocation)
+        for m in dept_machines:
+            if canonical_mc_key(m) not in covered_keys:
+                stations.append({
+                    "unit_name": m,
+                    "machines_covered": [m],
+                    "is_dual": False,
+                    "assigned_operator": "",
+                    "is_allocated": False
+                })
+
+        # 4. Check if an existing log exists for date_clean, dept_clean, shift_clean
         existing_log = None
         try:
             existing_log = db.query(models.ShiftStatusLog).filter(
@@ -8691,38 +8740,50 @@ def populate_shift_status(date: str, dept: str, shift: str, db: Session = Depend
             try:
                 detail_items = json.loads(existing_log.details)
                 for item in detail_items:
-                    mc_name = item.get("machine") or item.get("machine_name")
+                    mc_name = item.get("machine") or item.get("machine_name") or item.get("unit_name")
                     if mc_name:
-                        existing_details_map[mc_name] = item
+                        existing_details_map[canonical_mc_key(mc_name)] = item
             except Exception:
                 pass
 
-        # 4. Construct machine list with assigned operators and status
+        # 5. Construct final result machine/station list
         result_machines = []
-        for m_name in dept_machines:
-            assigned_list = mc_assigned_map.get(m_name, [])
-            assigned_op_names = ", ".join([x["operator"] for x in assigned_list]) if assigned_list else ""
-            is_dual = any(x.get("is_dual") for x in assigned_list)
-            other_mcs = ", ".join([x["other_machine"] for x in assigned_list if x.get("other_machine")])
+        for s in stations:
+            u_key = canonical_mc_key(s["unit_name"])
+            existing_info = existing_details_map.get(u_key)
+            if not existing_info and s["is_dual"]:
+                for mc in s["machines_covered"]:
+                    if canonical_mc_key(mc) in existing_details_map:
+                        existing_info = existing_details_map[canonical_mc_key(mc)]
+                        break
 
-            existing_info = existing_details_map.get(m_name)
             if existing_info:
                 status = existing_info.get("status", "Available")
-                actual_op = existing_info.get("actual_operator") or existing_info.get("operator") or assigned_op_names
+                actual_op = existing_info.get("actual_operator") or existing_info.get("operator") or s["assigned_operator"]
                 remarks = existing_info.get("remarks") or ""
+                absent_type = existing_info.get("absent_type") or ("Absenteeism" if s["is_allocated"] and status != "Available" else ("Unallocated" if not s["is_allocated"] else ""))
             else:
-                status = "Available" if assigned_op_names else "Not Available"
-                actual_op = assigned_op_names
-                remarks = "No operator assigned in Shift List" if not assigned_op_names else ("Dual M/C with " + other_mcs if is_dual else "")
+                if s["is_allocated"]:
+                    status = "Available"  # Matched with shift list - Shift Engineer certifies
+                    actual_op = s["assigned_operator"]
+                    remarks = "Dual M/C" if s["is_dual"] else ""
+                    absent_type = ""
+                else:
+                    status = "Not Available"
+                    actual_op = ""
+                    remarks = "Unallocated in Shift List"
+                    absent_type = "Unallocated"
 
             result_machines.append({
-                "machine": m_name,
-                "assigned_operator": assigned_op_names,
-                "is_dual": is_dual,
-                "other_machine": other_mcs,
+                "machine": s["unit_name"],
+                "machines_covered": s["machines_covered"],
+                "is_dual": s["is_dual"],
+                "assigned_operator": s["assigned_operator"],
                 "actual_operator": actual_op,
-                "status": status, # "Available" or "Not Available"
-                "remarks": remarks
+                "status": status,  # "Available" or "Not Available"
+                "remarks": remarks,
+                "is_allocated": s["is_allocated"],
+                "absent_type": absent_type
             })
 
         return {
@@ -8733,6 +8794,7 @@ def populate_shift_status(date: str, dept: str, shift: str, db: Session = Depend
             "week_monday": week_monday,
             "has_existing_log": bool(existing_log),
             "existing_log_id": existing_log.id if existing_log else None,
+            "existing_logged_by": existing_log.logged_by if existing_log else "",
             "existing_summary": existing_log.not_available_summary if existing_log else "",
             "machines": result_machines
         }

@@ -19840,6 +19840,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 logBadge.style.display = data.has_existing_log ? 'inline-block' : 'none';
             }
 
+            const engInput = document.getElementById('shiftStatusEngineer');
+            if (engInput) {
+                if (data.existing_logged_by) {
+                    engInput.value = data.existing_logged_by;
+                } else if (!engInput.value) {
+                    engInput.value = (typeof currentUser !== 'undefined' && currentUser && currentUser.username) ? currentUser.username : '';
+                }
+            }
+
             renderShiftStatusTable(data.machines || []);
         } catch (err) {
             console.error('Error populating shift status:', err);
@@ -19864,19 +19873,42 @@ document.addEventListener('DOMContentLoaded', () => {
             const tr = document.createElement('tr');
             tr.style.borderBottom = '1px solid #e2e8f0';
             tr.setAttribute('data-machine', m.machine);
+            tr.setAttribute('data-is-allocated', m.is_allocated ? '1' : '0');
+            tr.setAttribute('data-is-dual', m.is_dual ? '1' : '0');
+            tr.setAttribute('data-covered-count', (m.machines_covered || []).length || 1);
 
             const isAvail = (m.status || '').toLowerCase() === 'available';
-            const statusBg = isAvail ? '#dcfce7' : '#fee2e2';
-            const statusColor = isAvail ? '#166534' : '#991b1b';
-            const statusBorder = isAvail ? '#86efac' : '#fca5a5';
-            const statusIcon = isAvail ? 'fa-check-circle' : 'fa-times-circle';
-            const statusText = isAvail ? 'Available' : 'Not Available';
+            const isAllocated = !!m.is_allocated;
+
+            let statusBg, statusColor, statusBorder, statusIcon, statusText;
+            if (isAvail) {
+                statusBg = '#dcfce7';
+                statusColor = '#166534';
+                statusBorder = '#86efac';
+                statusIcon = 'fa-check-circle';
+                statusText = 'Available';
+            } else if (isAllocated) {
+                statusBg = '#fee2e2';
+                statusColor = '#991b1b';
+                statusBorder = '#fca5a5';
+                statusIcon = 'fa-user-slash';
+                statusText = 'Not Available (Absent)';
+            } else {
+                statusBg = '#fef3c7';
+                statusColor = '#92400e';
+                statusBorder = '#fcd34d';
+                statusIcon = 'fa-times-circle';
+                statusText = 'Unallocated';
+            }
 
             let assignedDisplay = escapeHtml(m.assigned_operator || '');
             if (!m.assigned_operator) {
-                assignedDisplay = '<span style="color: #94a3b8; font-style: italic;">(Unassigned in Shift List)</span>';
-            } else if (m.is_dual) {
-                assignedDisplay += ` <span style="background: #e0e7ff; color: #3730a3; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; font-weight: 600;">Dual: ${escapeHtml(m.other_machine || '')}</span>`;
+                assignedDisplay = '<span style="color: #94a3b8; font-style: italic;">(Unallocated in Shift List)</span>';
+            }
+
+            let machineBadge = '';
+            if (m.is_dual) {
+                machineBadge = ` <span style="background: #e0e7ff; color: #3730a3; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; font-weight: 700; white-space: nowrap;"><i class="fas fa-layer-group"></i> Dual M/C</span>`;
             }
 
             tr.innerHTML = `
@@ -19884,8 +19916,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td style="padding: 10px 8px; font-weight: 700; color: #1e293b;">
                     <i class="fas fa-microchip" style="color: #0284c7; margin-right: 5px; font-size: 0.85rem;"></i>
                     ${escapeHtml(m.machine)}
+                    ${machineBadge}
                 </td>
-                <td style="padding: 10px 8px; color: #334155; font-weight: 500;">
+                <td style="padding: 10px 8px; color: #334155; font-weight: 600;">
                     ${assignedDisplay}
                 </td>
                 <td style="padding: 8px 8px; text-align: center;">
@@ -19913,6 +19946,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const labelSpan = b.querySelector('.status-label');
                 const icon = b.querySelector('i');
                 const tr = b.closest('tr');
+                const isAllocated = tr?.getAttribute('data-is-allocated') === '1';
                 const remarksInput = tr?.querySelector('.shift-status-remarks');
 
                 const isNowAvail = hiddenInput.value !== 'Available';
@@ -19928,13 +19962,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 } else {
                     hiddenInput.value = 'Not Available';
-                    b.style.background = '#fee2e2';
-                    b.style.color = '#991b1b';
-                    b.style.borderColor = '#fca5a5';
-                    labelSpan.textContent = 'Not Available';
-                    icon.className = 'fas fa-times-circle';
-                    if (remarksInput && !remarksInput.value.trim()) {
-                        remarksInput.value = 'Absent';
+                    if (isAllocated) {
+                        b.style.background = '#fee2e2';
+                        b.style.color = '#991b1b';
+                        b.style.borderColor = '#fca5a5';
+                        labelSpan.textContent = 'Not Available (Absent)';
+                        icon.className = 'fas fa-user-slash';
+                        if (remarksInput && !remarksInput.value.trim()) {
+                            remarksInput.value = 'Absent';
+                        }
+                    } else {
+                        b.style.background = '#fef3c7';
+                        b.style.color = '#92400e';
+                        b.style.borderColor = '#fcd34d';
+                        labelSpan.textContent = 'Unallocated';
+                        icon.className = 'fas fa-times-circle';
+                        if (remarksInput && !remarksInput.value.trim()) {
+                            remarksInput.value = 'Unallocated in Shift List';
+                        }
                     }
                 }
                 recalculateShiftStatusSummary();
@@ -19951,13 +19996,41 @@ document.addEventListener('DOMContentLoaded', () => {
             const hidden = tr.querySelector('.shift-status-value');
             const label = btn?.querySelector('.status-label');
             const icon = btn?.querySelector('i');
+            const isAllocated = tr.getAttribute('data-is-allocated') === '1';
+            const remarksInput = tr.querySelector('.shift-status-remarks');
+
             if (btn && hidden) {
                 hidden.value = isAvailable ? 'Available' : 'Not Available';
-                btn.style.background = isAvailable ? '#dcfce7' : '#fee2e2';
-                btn.style.color = isAvailable ? '#166534' : '#991b1b';
-                btn.style.borderColor = isAvailable ? '#86efac' : '#fca5a5';
-                if (label) label.textContent = isAvailable ? 'Available' : 'Not Available';
-                if (icon) icon.className = isAvailable ? 'fas fa-check-circle' : 'fas fa-times-circle';
+                if (isAvailable) {
+                    btn.style.background = '#dcfce7';
+                    btn.style.color = '#166534';
+                    btn.style.borderColor = '#86efac';
+                    if (label) label.textContent = 'Available';
+                    if (icon) icon.className = 'fas fa-check-circle';
+                    if (remarksInput && remarksInput.value.toLowerCase().includes('absent')) {
+                        remarksInput.value = '';
+                    }
+                } else {
+                    if (isAllocated) {
+                        btn.style.background = '#fee2e2';
+                        btn.style.color = '#991b1b';
+                        btn.style.borderColor = '#fca5a5';
+                        if (label) label.textContent = 'Not Available (Absent)';
+                        if (icon) icon.className = 'fas fa-user-slash';
+                        if (remarksInput && !remarksInput.value.trim()) {
+                            remarksInput.value = 'Absent';
+                        }
+                    } else {
+                        btn.style.background = '#fef3c7';
+                        btn.style.color = '#92400e';
+                        btn.style.borderColor = '#fcd34d';
+                        if (label) label.textContent = 'Unallocated';
+                        if (icon) icon.className = 'fas fa-times-circle';
+                        if (remarksInput && !remarksInput.value.trim()) {
+                            remarksInput.value = 'Unallocated in Shift List';
+                        }
+                    }
+                }
             }
         });
         recalculateShiftStatusSummary();
@@ -19965,67 +20038,87 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function recalculateShiftStatusSummary() {
         const rows = document.querySelectorAll('#shiftStatusBody tr');
-        let total = 0;
-        let avail = 0;
-        let notAvail = 0;
-        let allocated = 0;
-        const unmannedItems = [];
+        let totalStations = 0;
+        let totalPhysical = 0;
+        let availCount = 0;
+        let absentCount = 0;
+        let unallocCount = 0;
+        const absenteeismItems = [];
+        const unallocatedItems = [];
 
         rows.forEach(tr => {
             const mc = tr.getAttribute('data-machine');
             if (!mc) return;
-            total++;
+            totalStations++;
+            const covered = parseInt(tr.getAttribute('data-covered-count') || '1', 10);
+            totalPhysical += covered;
 
+            const isAllocated = tr.getAttribute('data-is-allocated') === '1';
             const hidden = tr.querySelector('.shift-status-value');
             const isAvail = hidden && hidden.value === 'Available';
             const assignedOp = tr.children[2]?.textContent.trim().replace(/\s+/g, ' ') || '';
             const actualOp = tr.querySelector('.shift-status-actual-op')?.value.trim() || '';
             const remarks = tr.querySelector('.shift-status-remarks')?.value.trim() || '';
 
-            if (assignedOp && !assignedOp.includes('Unassigned')) {
-                allocated++;
-            }
-
             if (isAvail) {
-                avail++;
+                availCount++;
             } else {
-                notAvail++;
-                const opText = actualOp || (assignedOp.includes('Unassigned') ? 'No Operator Assigned' : assignedOp);
-                const reasonText = remarks ? ` (${remarks})` : '';
-                unmannedItems.push(`<strong>${escapeHtml(mc)}</strong> — ${escapeHtml(opText)}${escapeHtml(reasonText)}`);
+                if (isAllocated) {
+                    absentCount++;
+                    const opText = actualOp || assignedOp;
+                    const reasonText = remarks ? ` (${remarks})` : ' (Absent)';
+                    absenteeismItems.push(`<strong>${escapeHtml(mc)}</strong> — ${escapeHtml(opText)}${escapeHtml(reasonText)}`);
+                } else {
+                    unallocCount++;
+                    const reasonText = remarks ? ` (${remarks})` : '';
+                    unallocatedItems.push(`<strong>${escapeHtml(mc)}</strong>${escapeHtml(reasonText)}`);
+                }
             }
         });
 
         const kpiTotal = document.getElementById('kpiShiftStatusTotal');
+        const kpiPhysical = document.getElementById('kpiShiftStatusPhysicalTotal');
         const kpiAvail = document.getElementById('kpiShiftStatusAvailable');
-        const kpiNotAvail = document.getElementById('kpiShiftStatusNotAvailable');
-        const kpiAlloc = document.getElementById('kpiShiftStatusAllocated');
+        const kpiAbsent = document.getElementById('kpiShiftStatusAbsenteeism');
+        const kpiUnalloc = document.getElementById('kpiShiftStatusUnallocated');
 
-        if (kpiTotal) kpiTotal.textContent = total;
-        if (kpiAvail) kpiAvail.textContent = avail;
-        if (kpiNotAvail) kpiNotAvail.textContent = notAvail;
-        if (kpiAlloc) kpiAlloc.textContent = allocated;
+        if (kpiTotal) kpiTotal.textContent = totalStations;
+        if (kpiPhysical) kpiPhysical.textContent = `${totalPhysical} Physical M/Cs`;
+        if (kpiAvail) kpiAvail.textContent = availCount;
+        if (kpiAbsent) kpiAbsent.textContent = absentCount;
+        if (kpiUnalloc) kpiUnalloc.textContent = unallocCount;
 
-        const banner = document.getElementById('shiftStatusUnmannedBanner');
-        const listEl = document.getElementById('shiftStatusUnmannedList');
-        if (banner && listEl) {
-            if (total === 0) {
-                banner.style.display = 'none';
-            } else if (notAvail === 0) {
-                banner.style.display = 'block';
-                banner.style.background = '#f0fdf4';
-                banner.style.borderLeftColor = '#22c55e';
-                listEl.innerHTML = `<span style="color: #166534; font-weight: 600;"><i class="fas fa-check-circle" style="color: #22c55e; margin-right: 5px;"></i> All ${total} machines have operators available!</span>`;
+        // Absenteeism Banner
+        const absentBanner = document.getElementById('shiftStatusAbsenteeismBanner');
+        const absentListEl = document.getElementById('shiftStatusAbsenteeismList');
+        if (absentBanner && absentListEl) {
+            if (absentCount === 0) {
+                absentBanner.style.display = 'none';
             } else {
-                banner.style.display = 'block';
-                banner.style.background = '#fff1f2';
-                banner.style.borderLeftColor = '#ef4444';
+                absentBanner.style.display = 'block';
                 let html = `<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;">`;
-                unmannedItems.forEach(item => {
-                    html += `<div style="background: #ffffff; border: 1px solid #fca5a5; padding: 4px 8px; border-radius: 4px; font-size: 0.82rem; color: #991b1b;"><i class="fas fa-times" style="color: #dc2626; margin-right: 4px;"></i>${item}</div>`;
+                absenteeismItems.forEach(item => {
+                    html += `<div style="background: #ffffff; border: 1px solid #fca5a5; padding: 4px 8px; border-radius: 4px; font-size: 0.82rem; color: #991b1b;"><i class="fas fa-user-slash" style="color: #dc2626; margin-right: 4px;"></i>${item}</div>`;
                 });
                 html += `</div>`;
-                listEl.innerHTML = html;
+                absentListEl.innerHTML = html;
+            }
+        }
+
+        // Unallocated Banner
+        const unallocBanner = document.getElementById('shiftStatusUnallocatedBanner');
+        const unallocListEl = document.getElementById('shiftStatusUnallocatedList');
+        if (unallocBanner && unallocListEl) {
+            if (unallocCount === 0) {
+                unallocBanner.style.display = 'none';
+            } else {
+                unallocBanner.style.display = 'block';
+                let html = `<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;">`;
+                unallocatedItems.forEach(item => {
+                    html += `<div style="background: #ffffff; border: 1px solid #fde68a; padding: 4px 8px; border-radius: 4px; font-size: 0.82rem; color: #92400e;"><i class="fas fa-exclamation-circle" style="color: #d97706; margin-right: 4px;"></i>${item}</div>`;
+                });
+                html += `</div>`;
+                unallocListEl.innerHTML = html;
             }
         }
     }
@@ -20034,10 +20127,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const dateInput = document.getElementById('shiftStatusDate');
         const deptSelect = document.getElementById('shiftStatusDept');
         const shiftSelect = document.getElementById('shiftStatusShift');
+        const engInput = document.getElementById('shiftStatusEngineer');
 
         const date = dateInput ? dateInput.value : '';
         const dept = deptSelect ? deptSelect.value : '';
         const shift = shiftSelect ? shiftSelect.value : '';
+        const engineer = (engInput?.value || '').trim();
 
         if (!date || !dept || !shift) {
             alert('Please select Date, Department, and Shift.');
@@ -20046,16 +20141,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const rows = document.querySelectorAll('#shiftStatusBody tr');
         const details = [];
-        let total = 0;
+        let totalStations = 0;
         let avail = 0;
-        let notAvail = 0;
-        const unmannedSummaries = [];
+        let absentCount = 0;
+        let unallocCount = 0;
+        const summaryItems = [];
 
         rows.forEach(tr => {
             const mc = tr.getAttribute('data-machine');
             if (!mc) return;
-            total++;
+            totalStations++;
 
+            const isAllocated = tr.getAttribute('data-is-allocated') === '1';
+            const isDual = tr.getAttribute('data-is-dual') === '1';
             const status = tr.querySelector('.shift-status-value')?.value || 'Available';
             const assignedOp = tr.children[2]?.innerText.trim() || '';
             const actualOp = tr.querySelector('.shift-status-actual-op')?.value.trim() || '';
@@ -20064,35 +20162,45 @@ document.addEventListener('DOMContentLoaded', () => {
             if (status === 'Available') {
                 avail++;
             } else {
-                notAvail++;
-                const opDisplay = actualOp || (assignedOp.includes('Unassigned') ? 'No Operator' : assignedOp);
-                unmannedSummaries.push(`${mc}: ${opDisplay}${remarks ? ' (' + remarks + ')' : ''}`);
+                if (isAllocated) {
+                    absentCount++;
+                    const op = actualOp || assignedOp;
+                    summaryItems.push(`[ABSENT] ${mc}: ${op}${remarks ? ' (' + remarks + ')' : ''}`);
+                } else {
+                    unallocCount++;
+                    summaryItems.push(`[UNALLOCATED] ${mc}${remarks ? ' (' + remarks + ')' : ''}`);
+                }
             }
 
             details.push({
                 machine: mc,
+                is_dual: isDual,
+                is_allocated: isAllocated,
                 assigned_operator: assignedOp,
                 actual_operator: actualOp,
                 status: status,
-                remarks: remarks
+                remarks: remarks,
+                absent_type: status === 'Available' ? '' : (isAllocated ? 'Absenteeism' : 'Unallocated')
             });
         });
 
-        if (total === 0) {
-            alert('No machine allocations to save.');
+        if (totalStations === 0) {
+            alert('No machine stations to save.');
             return;
         }
+
+        const loggedByVal = engineer || ((typeof currentUser !== 'undefined' && currentUser && currentUser.username) ? currentUser.username : 'Shift Engineer');
 
         const payload = {
             date: date,
             dept: dept,
             shift: shift,
-            total_machines: total,
+            total_machines: totalStations,
             available_count: avail,
-            not_available_count: notAvail,
-            not_available_summary: unmannedSummaries.join(', ') || 'All machines available',
+            not_available_count: absentCount + unallocCount,
+            not_available_summary: summaryItems.join('; ') || 'All machines manned and available',
             details: details,
-            logged_by: (typeof currentUser !== 'undefined' && currentUser && currentUser.username) ? currentUser.username : 'admin'
+            logged_by: loggedByVal
         };
 
         try {
@@ -20108,7 +20216,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const data = await res.json();
-            alert('✅ Shift Status log saved successfully!');
+            alert(`✅ Shift Status certified & saved by ${loggedByVal}!`);
             const logBadge = document.getElementById('shiftStatusLogBadge');
             if (logBadge) logBadge.style.display = 'inline-block';
             loadShiftStatusHistory();
@@ -20152,7 +20260,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td style="padding: 8px 8px; font-size: 0.8rem; color: #334155; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(l.not_available_summary || '')}">
                         ${escapeHtml(l.not_available_summary || 'None')}
                     </td>
-                    <td style="padding: 8px 8px; font-size: 0.78rem; color: #64748b;">${escapeHtml(l.created_at || '')}</td>
+                    <td style="padding: 8px 8px; font-size: 0.78rem; color: #64748b;">
+                        <div><strong>${escapeHtml(l.logged_by || 'Admin')}</strong></div>
+                        <div style="font-size: 0.72rem; color: #94a3b8;">${escapeHtml(l.created_at || '')}</div>
+                    </td>
                     <td style="padding: 8px 8px; text-align: center; white-space: nowrap;">
                         <button type="button" class="btn btn-outline" style="padding: 2px 6px; font-size: 0.75rem; margin-right: 4px;" onclick="reloadShiftStatusFromLog('${escapeHtml(l.date)}', '${escapeHtml(l.dept)}', '${escapeHtml(l.shift)}')">
                             <i class="fas fa-eye"></i> View
@@ -20201,10 +20312,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const dateInput = document.getElementById('shiftStatusDate');
         const deptSelect = document.getElementById('shiftStatusDept');
         const shiftSelect = document.getElementById('shiftStatusShift');
+        const engInput = document.getElementById('shiftStatusEngineer');
 
         let date = dateInput ? dateInput.value : '';
         let dept = deptSelect ? deptSelect.value : '';
         let shift = shiftSelect ? shiftSelect.value : '';
+        let certifiedBy = (engInput?.value || '').trim() || ((typeof currentUser !== 'undefined' && currentUser && currentUser.username) ? currentUser.username : 'Shift Engineer');
 
         const shiftTimingMap = {
             'First': '7.00 to 3.00',
@@ -20214,10 +20327,12 @@ document.addEventListener('DOMContentLoaded', () => {
             'Gen Shift B': '9.30 to 6.00'
         };
 
-        let total = 0;
+        let totalStations = 0;
         let avail = 0;
-        let notAvail = 0;
-        const unmannedList = [];
+        let absentCount = 0;
+        let unallocCount = 0;
+        const absentList = [];
+        const unallocList = [];
         const mannedList = [];
 
         if (logId) {
@@ -20229,18 +20344,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     date = log.date;
                     dept = log.dept;
                     shift = log.shift;
-                    total = log.total_machines;
+                    certifiedBy = log.logged_by || certifiedBy;
+                    totalStations = log.total_machines;
                     avail = log.available_count;
-                    notAvail = log.not_available_count;
                     if (Array.isArray(log.details)) {
                         log.details.forEach(item => {
                             const isAvail = (item.status || '').toLowerCase() === 'available';
-                            const opName = item.actual_operator || item.assigned_operator || 'Unassigned';
+                            const isAlloc = item.is_allocated !== false && !item.assigned_operator?.includes('Unallocated');
+                            const opName = item.actual_operator || item.assigned_operator || '';
                             const rem = item.remarks ? ` (${item.remarks})` : '';
                             if (isAvail) {
-                                mannedList.push(`${item.machine} → ${opName}`);
+                                mannedList.push(`${item.machine} → ${opName || 'Manned'}`);
                             } else {
-                                unmannedList.push(`${item.machine} → ${opName}${rem}`);
+                                if (isAlloc && opName) {
+                                    absentCount++;
+                                    absentList.push(`${item.machine} → ${opName} [ABSENT]${rem}`);
+                                } else {
+                                    unallocCount++;
+                                    unallocList.push(`${item.machine}${rem}`);
+                                }
                             }
                         });
                     }
@@ -20253,20 +20375,27 @@ document.addEventListener('DOMContentLoaded', () => {
             rows.forEach(tr => {
                 const mc = tr.getAttribute('data-machine');
                 if (!mc) return;
-                total++;
+                totalStations++;
+                const isAllocated = tr.getAttribute('data-is-allocated') === '1';
                 const status = tr.querySelector('.shift-status-value')?.value || 'Available';
                 const assignedOp = tr.children[2]?.innerText.trim() || '';
                 const actualOp = tr.querySelector('.shift-status-actual-op')?.value.trim() || '';
                 const remarks = tr.querySelector('.shift-status-remarks')?.value.trim() || '';
-                const opDisplay = actualOp || (assignedOp.includes('Unassigned') ? 'No Operator Assigned' : assignedOp);
+                const opDisplay = actualOp || assignedOp;
 
                 if (status === 'Available') {
                     avail++;
-                    mannedList.push(`${mc} → ${opDisplay}`);
+                    mannedList.push(`${mc} → ${opDisplay || 'Manned'}`);
                 } else {
-                    notAvail++;
-                    const rem = remarks ? ` (${remarks})` : '';
-                    unmannedList.push(`${mc} → ${opDisplay}${rem}`);
+                    if (isAllocated) {
+                        absentCount++;
+                        const rem = remarks ? ` (${remarks})` : ' (Absent)';
+                        absentList.push(`${mc} → ${opDisplay} [ABSENT]${rem}`);
+                    } else {
+                        unallocCount++;
+                        const rem = remarks ? ` (${remarks})` : '';
+                        unallocList.push(`${mc}${rem}`);
+                    }
                 }
             });
         }
@@ -20279,24 +20408,37 @@ document.addEventListener('DOMContentLoaded', () => {
         msg += `📅 *Date:* ${dmyDate}\n`;
         msg += `🏢 *Dept:* ${dept}\n`;
         msg += `⏰ *Shift:* ${shift}${timingStr}\n`;
+        if (certifiedBy) msg += `👷 *Certified By:* ${certifiedBy} (Shift Engineer)\n`;
         msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
-        msg += `📊 *SUMMARY:*\n`;
-        msg += `• Total Machines: *${total}*\n`;
-        msg += `• Operators Available: *${avail}* ✅\n`;
-        msg += `• Operators NOT Available: *${notAvail}* ❌\n\n`;
+        msg += `📊 *STATION SUMMARY:*\n`;
+        msg += `• Total Stations: *${totalStations}*\n`;
+        msg += `• Operators Present / Manned: *${avail}* ✅\n`;
+        msg += `• Idle for Want of Operator (Absenteeism): *${absentCount}* 🚨\n`;
+        if (unallocCount > 0) {
+            msg += `• Unallocated Machines: *${unallocCount}* ⚪\n`;
+        }
+        msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
-        if (unmannedList.length > 0) {
-            msg += `🚨 *MACHINES WITHOUT OPERATOR (${unmannedList.length}):*\n`;
-            unmannedList.forEach((item, i) => {
+        if (absentList.length > 0) {
+            msg += `🚨 *IDLE MACHINES (WANT OF OPERATORS / ABSENTEEISM):*\n`;
+            absentList.forEach((item, i) => {
                 msg += `  ${i + 1}. ${item}\n`;
             });
             msg += `\n`;
         } else {
-            msg += `✅ *All machines have operators available!*\n\n`;
+            msg += `✅ *No idle machines due to absenteeism! All scheduled operators present.*\n\n`;
+        }
+
+        if (unallocList.length > 0) {
+            msg += `⚪ *UNALLOCATED MACHINES (In Shift List):*\n`;
+            unallocList.forEach((item, i) => {
+                msg += `  ${i + 1}. ${item}\n`;
+            });
+            msg += `\n`;
         }
 
         if (mannedList.length > 0) {
-            msg += `✅ *MANNED MACHINES (${mannedList.length}):*\n`;
+            msg += `✅ *MANNED STATIONS (${mannedList.length}):*\n`;
             mannedList.forEach((item, i) => {
                 msg += `  ${i + 1}. ${item}\n`;
             });

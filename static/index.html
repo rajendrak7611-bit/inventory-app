@@ -1145,7 +1145,7 @@
 
             <!-- Selection / Filter Card -->
             <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-items: flex-end;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; align-items: flex-end;">
                     <div>
                         <label for="shiftStatusDate" style="font-size: 0.82rem; font-weight: 600; color: #334155; margin-bottom: 4px; display: block;">
                             <i class="far fa-calendar-alt" style="color: #0284c7; margin-right: 4px;"></i> Date *
@@ -1176,18 +1176,27 @@
                             <option value="Gen Shift B">Gen Shift B (9.30 to 6.00)</option>
                         </select>
                     </div>
+                    <div>
+                        <label for="shiftStatusEngineer" style="font-size: 0.82rem; font-weight: 600; color: #334155; margin-bottom: 4px; display: block;">
+                            <i class="fas fa-user-check" style="color: #0284c7; margin-right: 4px;"></i> Shift Engineer *
+                        </label>
+                        <input type="text" id="shiftStatusEngineer" placeholder="Shift Engineer Name" style="width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 0.88rem;">
+                    </div>
                     <div style="display: flex; gap: 8px;">
                         <button type="button" id="loadShiftStatusBtn" class="btn btn-primary" style="flex: 1; padding: 0.45rem 0.8rem; font-size: 0.85rem; font-weight: 600; background: #0f172a; border-color: #0f172a; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
                             <i class="fas fa-sync-alt"></i> Fetch Allocations
                         </button>
                     </div>
                 </div>
-                <!-- Quick Mark Helpers -->
+                <!-- Quick Mark Helpers & Notes -->
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px dashed #e2e8f0; flex-wrap: wrap; gap: 8px;">
                     <div style="font-size: 0.8rem; color: #64748b;">
                         <span id="shiftStatusWeekLabel" style="font-weight: 600; color: #0284c7;">Week: -</span>
                         <span id="shiftStatusLogBadge" style="display: none; margin-left: 8px; background: #fef08a; color: #854d0e; font-size: 0.75rem; padding: 2px 7px; border-radius: 12px; font-weight: 600;">
                             <i class="fas fa-info-circle"></i> Existing Log Loaded
+                        </span>
+                        <span style="margin-left: 10px; font-style: italic; color: #475569;">
+                            <i class="fas fa-shield-alt" style="color: #10b981;"></i> To be certified by Shift Engineer at shift beginning. Dual M/Cs combined.
                         </span>
                     </div>
                     <div style="display: flex; gap: 6px;">
@@ -1203,31 +1212,46 @@
 
             <!-- KPI & Live Summary Cards -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px;">
-                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; text-align: center;">
-                    <div style="font-size: 0.75rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Total Machines</div>
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; text-align: center;">
+                    <div style="font-size: 0.72rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Total Stations</div>
                     <div id="kpiShiftStatusTotal" style="font-size: 1.6rem; font-weight: 700; color: #0284c7; margin-top: 2px;">0</div>
+                    <div id="kpiShiftStatusPhysicalTotal" style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">0 Physical M/Cs</div>
                 </div>
-                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 14px; text-align: center;">
-                    <div style="font-size: 0.75rem; font-weight: 600; color: #166534; text-transform: uppercase;">Operators Available</div>
+                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 14px; text-align: center;">
+                    <div style="font-size: 0.72rem; font-weight: 600; color: #166534; text-transform: uppercase;">Manned / Available</div>
                     <div id="kpiShiftStatusAvailable" style="font-size: 1.6rem; font-weight: 700; color: #16a34a; margin-top: 2px;">0</div>
+                    <div style="font-size: 0.72rem; color: #166534; margin-top: 2px;">Operators Present</div>
                 </div>
-                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 14px; text-align: center;">
-                    <div style="font-size: 0.75rem; font-weight: 600; color: #991b1b; text-transform: uppercase;">NOT Available / Unmanned</div>
-                    <div id="kpiShiftStatusNotAvailable" style="font-size: 1.6rem; font-weight: 700; color: #dc2626; margin-top: 2px;">0</div>
+                <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 14px; text-align: center;">
+                    <div style="font-size: 0.72rem; font-weight: 600; color: #991b1b; text-transform: uppercase;">Idle (Absenteeism)</div>
+                    <div id="kpiShiftStatusAbsenteeism" style="font-size: 1.6rem; font-weight: 700; color: #dc2626; margin-top: 2px;">0</div>
+                    <div style="font-size: 0.72rem; color: #dc2626; margin-top: 2px; font-weight: 600;">Want of Operator</div>
                 </div>
-                <div style="background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 8px; padding: 12px 14px; text-align: center;">
-                    <div style="font-size: 0.75rem; font-weight: 600; color: #6b21a8; text-transform: uppercase;">Shift List Mapped</div>
-                    <div id="kpiShiftStatusAllocated" style="font-size: 1.6rem; font-weight: 700; color: #8b5cf6; margin-top: 2px;">0</div>
+                <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 14px; text-align: center;">
+                    <div style="font-size: 0.72rem; font-weight: 600; color: #92400e; text-transform: uppercase;">Unallocated in Shift List</div>
+                    <div id="kpiShiftStatusUnallocated" style="font-size: 1.6rem; font-weight: 700; color: #d97706; margin-top: 2px;">0</div>
+                    <div style="font-size: 0.72rem; color: #92400e; margin-top: 2px;">No Operator Scheduled</div>
                 </div>
             </div>
 
-            <!-- Operator Not Available Summary Banner -->
-            <div id="shiftStatusUnmannedBanner" style="display: none; background: #fff1f2; border-left: 4px solid #ef4444; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px;">
+            <!-- Idle Machines (Absenteeism) Summary Banner -->
+            <div id="shiftStatusAbsenteeismBanner" style="display: none; background: #fff1f2; border-left: 4px solid #ef4444; border-radius: 6px; padding: 10px 14px; margin-bottom: 12px;">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                    <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
-                    <strong style="font-size: 0.88rem; color: #991b1b;">Machines Without Available Operator:</strong>
+                    <i class="fas fa-user-slash" style="color: #ef4444;"></i>
+                    <strong style="font-size: 0.88rem; color: #991b1b;">🚨 Idle Machines For Want of Operators (Absenteeism):</strong>
                 </div>
-                <div id="shiftStatusUnmannedList" style="font-size: 0.84rem; color: #7f1d1d; line-height: 1.5; padding-left: 4px;">
+                <div id="shiftStatusAbsenteeismList" style="font-size: 0.84rem; color: #7f1d1d; line-height: 1.5; padding-left: 4px;">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+
+            <!-- Unallocated Machines Banner -->
+            <div id="shiftStatusUnallocatedBanner" style="display: none; background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <i class="fas fa-exclamation-circle" style="color: #d97706;"></i>
+                    <strong style="font-size: 0.88rem; color: #92400e;">⚪ Unallocated Machines (No Operator Assigned in Shift List):</strong>
+                </div>
+                <div id="shiftStatusUnallocatedList" style="font-size: 0.84rem; color: #78350f; line-height: 1.5; padding-left: 4px;">
                     <!-- Dynamically populated -->
                 </div>
             </div>
@@ -1236,7 +1260,7 @@
             <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                 <div style="padding: 10px 14px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                     <strong style="font-size: 0.9rem; color: #1e293b;">
-                        <i class="fas fa-cogs" style="color: #0284c7; margin-right: 5px;"></i> Department Machine Allocations
+                        <i class="fas fa-cogs" style="color: #0284c7; margin-right: 5px;"></i> Department Machine Allocations (Dual M/Cs Combined)
                     </strong>
                     <span id="shiftStatusTableHint" style="font-size: 0.8rem; color: #64748b;">Click availability status to toggle Green (Available) / Red (Not Available)</span>
                 </div>
@@ -1245,9 +1269,9 @@
                         <thead>
                             <tr style="background: #f8fafc; border-bottom: 2px solid #cbd5e1; text-align: left;">
                                 <th style="padding: 8px 10px; width: 45px; text-align: center;">#</th>
-                                <th style="padding: 8px 10px; min-width: 130px;">Machine Name</th>
+                                <th style="padding: 8px 10px; min-width: 160px;">Machine / Station</th>
                                 <th style="padding: 8px 10px; min-width: 180px;">Assigned Operator (Shift List)</th>
-                                <th style="padding: 8px 10px; min-width: 160px; text-align: center;">Availability Status</th>
+                                <th style="padding: 8px 10px; min-width: 180px; text-align: center;">Certification Status</th>
                                 <th style="padding: 8px 10px; min-width: 160px;">Actual / Substitute Operator</th>
                                 <th style="padding: 8px 10px; min-width: 180px;">Remarks / Reason</th>
                             </tr>
@@ -5307,6 +5331,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10087"></script>
+    <script src="/static/app.js?v=10088"></script>
 </body>
 </html>
