@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Re
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func, text
+from sqlalchemy import func, text, or_
 from typing import List, Optional
 from pydantic import BaseModel
 import datetime
@@ -8325,7 +8325,7 @@ def ensure_hr_shift_table(db: Session):
     try:
         models.HrShiftAssignment.__table__.create(bind=db.get_bind(), checkfirst=True)
     except Exception:
-        pass
+        db.rollback()
 
 @app.get("/api/hr/shift-list")
 def get_hr_shift_list(week_start_date: str, dept: Optional[str] = None, shift: Optional[str] = None, db: Session = Depends(get_db)):
@@ -8585,16 +8585,20 @@ def ensure_shift_status_logs_table(db: Session):
     try:
         models.ShiftStatusLog.__table__.create(bind=db.get_bind(), checkfirst=True)
     except Exception:
-        pass
+        db.rollback()
 
 def get_shift_status_monday_str(date_str: str) -> str:
-    try:
-        from datetime import datetime as dt_cls, timedelta as td_cls
-        dt = dt_cls.strptime(date_str.strip(), "%Y-%m-%d").date()
-        monday = dt - td_cls(days=dt.weekday())
-        return monday.strftime("%Y-%m-%d")
-    except Exception:
-        return date_str
+    if not date_str:
+        return ""
+    from datetime import datetime as dt_cls, timedelta as td_cls
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%Y/%m/%d"):
+        try:
+            dt = dt_cls.strptime(date_str.strip(), fmt).date()
+            monday = dt - td_cls(days=dt.weekday())
+            return monday.strftime("%Y-%m-%d")
+        except Exception:
+            continue
+    return date_str
 
 @app.get("/api/shift-status/populate")
 def populate_shift_status(date: str, dept: str, shift: str, db: Session = Depends(get_db)):
@@ -8606,34 +8610,49 @@ def populate_shift_status(date: str, dept: str, shift: str, db: Session = Depend
         shift_clean = (shift or "").strip()
         week_monday = get_shift_status_monday_str(date_clean)
 
-        # 1. Fetch machines for the dept
-        mc_rows = []
-        try:
-            mc_rows = db.execute(text("""
-                SELECT id, machine_name, dept, department 
-                FROM machines 
-                WHERE UPPER(TRIM(COALESCE(dept, ''))) = :d 
-                   OR UPPER(TRIM(COALESCE(department, ''))) = :d
-                ORDER BY id ASC
-            """), {"d": dept_clean.upper()}).mappings().all()
-        except Exception:
-            try:
-                mc_rows = db.execute(text("SELECT id, machine_name FROM machines ORDER BY id ASC")).mappings().all()
-            except Exception:
-                pass
-
+        # 1. Fetch machines for the dept safely (models.Machine has 'name', 'dept', 'status')
         dept_machines = []
-        for m in mc_rows:
-            m_name = (m.get("machine_name") or "").strip()
-            if m_name and m_name not in dept_machines:
-                dept_machines.append(m_name)
+        try:
+            q_mc = db.query(models.Machine)
+            if dept_clean.upper() != "ALL":
+                q_mc = q_mc.filter(func.upper(func.trim(models.Machine.dept)) == dept_clean.upper())
+            m_rows = q_mc.order_by(models.Machine.id.asc()).all()
+            for m in m_rows:
+                m_name = (m.name or "").strip()
+                if m_name and m_name not in dept_machines:
+                    dept_machines.append(m_name)
+        except Exception as e_mc:
+            db.rollback()
+            try:
+                rows = db.execute(text("SELECT * FROM machines ORDER BY id ASC")).mappings().all()
+                for r in rows:
+                    m_name = (r.get("name") or r.get("machine_name") or "").strip()
+                    m_dept = (r.get("dept") or r.get("department") or "").strip()
+                    if m_name and (dept_clean.upper() == "ALL" or m_dept.upper() == dept_clean.upper()):
+                        if m_name not in dept_machines:
+                            dept_machines.append(m_name)
+            except Exception as e_fb:
+                db.rollback()
 
         # 2. Fetch shift allocations from hr_shift_assignments for week_monday, dept_clean, shift_clean
-        allocations = db.query(models.HrShiftAssignment).filter(
-            models.HrShiftAssignment.week_start_date == week_monday,
-            func.upper(func.trim(models.HrShiftAssignment.dept)) == dept_clean.upper(),
-            func.upper(func.trim(models.HrShiftAssignment.shift)) == shift_clean.upper()
-        ).all()
+        allocations = []
+        try:
+            q_alloc = db.query(models.HrShiftAssignment).filter(
+                models.HrShiftAssignment.week_start_date == week_monday
+            )
+            if dept_clean.upper() != "ALL":
+                q_alloc = q_alloc.filter(func.upper(func.trim(models.HrShiftAssignment.dept)) == dept_clean.upper())
+            if shift_clean.upper() != "ALL":
+                q_alloc = q_alloc.filter(
+                    or_(
+                        func.upper(func.trim(models.HrShiftAssignment.shift)) == shift_clean.upper(),
+                        func.upper(func.trim(models.HrShiftAssignment.shift)).like(f"%{shift_clean.upper()}%")
+                    )
+                )
+            allocations = q_alloc.all()
+        except Exception as e_alloc:
+            db.rollback()
+            print(f"Error fetching allocations: {e_alloc}")
 
         # Build machine -> list of operator info
         mc_assigned_map = {}
@@ -8657,11 +8676,15 @@ def populate_shift_status(date: str, dept: str, shift: str, db: Session = Depend
                     dept_machines.append(m2)
 
         # 3. Check if an existing log exists for date_clean, dept_clean, shift_clean
-        existing_log = db.query(models.ShiftStatusLog).filter(
-            models.ShiftStatusLog.date == date_clean,
-            func.upper(func.trim(models.ShiftStatusLog.dept)) == dept_clean.upper(),
-            func.upper(func.trim(models.ShiftStatusLog.shift)) == shift_clean.upper()
-        ).order_by(models.ShiftStatusLog.id.desc()).first()
+        existing_log = None
+        try:
+            existing_log = db.query(models.ShiftStatusLog).filter(
+                models.ShiftStatusLog.date == date_clean,
+                func.upper(func.trim(models.ShiftStatusLog.dept)) == dept_clean.upper(),
+                func.upper(func.trim(models.ShiftStatusLog.shift)) == shift_clean.upper()
+            ).order_by(models.ShiftStatusLog.id.desc()).first()
+        except Exception as e_log:
+            db.rollback()
 
         existing_details_map = {}
         if existing_log and existing_log.details:
