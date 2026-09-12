@@ -394,5 +394,17 @@ class HrShiftAssignment(Base):
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=get_now_ist)
 
+class ShiftStatusLog(Base):
+    __tablename__ = "shift_status_logs"
 
-
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(String, index=True, nullable=False) # e.g. "2026-09-12"
+    dept = Column(String, index=True, nullable=False) # e.g. "WIPRO"
+    shift = Column(String, index=True, nullable=False) # e.g. "First"
+    total_machines = Column(Integer, default=0)
+    available_count = Column(Integer, default=0)
+    not_available_count = Column(Integer, default=0)
+    not_available_summary = Column(Text, nullable=True)
+    details = Column(Text, nullable=True) # JSON string of all machine/operator allocations and statuses
+    logged_by = Column(String, nullable=True, default="")
+    created_at = Column(DateTime, default=get_now_ist)

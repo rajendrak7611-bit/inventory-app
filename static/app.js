@@ -191,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'reports': ['reports', 'rm_requirement', 'mc_util', 'oper_eff', 'bc_prod', 'att_vs_login'],
                     'maintenance': ['maintenance', 'bdslip', 'servicedetails'],
                     'hr': ['hr', 'attendance'],
-                    'service': ['service', 'service_setters', 'setters'],
+                    'service': ['service', 'service_setters', 'setters', 'shift_status'],
                     'inspection': ['inspection', 'line_insp']
                 };
                 const allowed = (accessibleScreens && accessibleScreens.length > 0) && (groupScreens[group] ? groupScreens[group].some(s => accessibleScreens.includes(s) || accessibleScreens.includes(group)) : false);
@@ -469,7 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'insertConsumptionSection', 'insertStockSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'dbBackupSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'resourceReqdSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection', 'bcStatusSection', 'wiproStatusSection',
-            'inspectionSection', 'lineInspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'serviceSettersSection', 'hrSection', 'attendanceSection', 'hrShiftListSection', 'rfqSection', 'quoteSection'
+            'inspectionSection', 'lineInspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'serviceSettersSection', 'shiftStatusSection', 'hrSection', 'attendanceSection', 'hrShiftListSection', 'rfqSection', 'quoteSection'
         ];
         sections.forEach(id => {
             const el = document.getElementById(id);
@@ -560,6 +560,13 @@ document.addEventListener('DOMContentLoaded', () => {
             importBtn.style.display = 'none';
             addBtn.style.display = 'none';
             initServiceSettersSection();
+        }},
+        'sidebarShiftStatus': { tab: 'shift_status', action: () => {
+            const sec = document.getElementById('shiftStatusSection');
+            if (sec) sec.style.display = 'block';
+            importBtn.style.display = 'none';
+            addBtn.style.display = 'none';
+            initShiftStatusSection();
         }},
         'sidebarRfq': { tab: 'rfq', action: () => {
             const sec = document.getElementById('rfqSection');
@@ -19686,4 +19693,629 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     }
+
+    // ==========================================
+    // --- SERVICE: SHIFT STATUS MANAGEMENT ---
+    // ==========================================
+    let shiftStatusInitialized = false;
+    let shiftStatusCurrentData = null;
+
+    async function initShiftStatusSection() {
+        const dateInput = document.getElementById('shiftStatusDate');
+        const deptSelect = document.getElementById('shiftStatusDept');
+        const shiftSelect = document.getElementById('shiftStatusShift');
+        const loadBtn = document.getElementById('loadShiftStatusBtn');
+        const markAllAvailBtn = document.getElementById('shiftStatusMarkAllAvailBtn');
+        const markAllNotAvailBtn = document.getElementById('shiftStatusMarkAllNotAvailBtn');
+        const topSaveBtn = document.getElementById('shiftStatusTopSaveBtn');
+        const bottomSaveBtn = document.getElementById('shiftStatusBottomSaveBtn');
+        const topWhatsappBtn = document.getElementById('shiftStatusTopWhatsappBtn');
+        const bottomWhatsappBtn = document.getElementById('shiftStatusBottomWhatsappBtn');
+        const historyDateFilter = document.getElementById('shiftStatusHistoryDateFilter');
+        const refreshHistoryBtn = document.getElementById('refreshShiftStatusHistoryBtn');
+
+        // Set default date if empty
+        if (dateInput && !dateInput.value) {
+            const today = new Date().toISOString().split('T')[0];
+            dateInput.value = today;
+            if (historyDateFilter && !historyDateFilter.value) historyDateFilter.value = today;
+        }
+
+        // Load Departments into dept dropdown if not yet populated
+        if (deptSelect && deptSelect.options.length <= 1) {
+            try {
+                const res = await fetch('/api/departments');
+                if (res.ok) {
+                    const depts = await res.json();
+                    deptSelect.innerHTML = '<option value="">-- Select Dept --</option>';
+                    const dNames = Array.isArray(depts) ? depts.map(d => typeof d === 'string' ? d : (d.name || d.dept || '')).filter(Boolean) : ['WIPRO', 'BC', 'GEAR', 'SPIDER'];
+                    const uniqueDepts = Array.from(new Set(dNames));
+                    uniqueDepts.forEach(d => {
+                        const opt = document.createElement('option');
+                        opt.value = d;
+                        opt.textContent = d;
+                        deptSelect.appendChild(opt);
+                    });
+                }
+            } catch (err) {
+                console.error('Error loading depts for shift status:', err);
+            }
+            if (deptSelect.options.length <= 1) {
+                ['WIPRO', 'BC', 'GEAR', 'SPIDER'].forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d;
+                    opt.textContent = d;
+                    deptSelect.appendChild(opt);
+                });
+            }
+            deptSelect.value = 'WIPRO';
+        }
+
+        if (!shiftStatusInitialized) {
+            shiftStatusInitialized = true;
+
+            dateInput?.addEventListener('change', () => fetchShiftStatusAllocations());
+            deptSelect?.addEventListener('change', () => fetchShiftStatusAllocations());
+            shiftSelect?.addEventListener('change', () => fetchShiftStatusAllocations());
+            loadBtn?.addEventListener('click', () => fetchShiftStatusAllocations());
+
+            markAllAvailBtn?.addEventListener('click', () => setAllShiftStatusAvailability(true));
+            markAllNotAvailBtn?.addEventListener('click', () => setAllShiftStatusAvailability(false));
+
+            topSaveBtn?.addEventListener('click', () => saveShiftStatusLog());
+            bottomSaveBtn?.addEventListener('click', () => saveShiftStatusLog());
+
+            topWhatsappBtn?.addEventListener('click', () => openShiftStatusWhatsappModal());
+            bottomWhatsappBtn?.addEventListener('click', () => openShiftStatusWhatsappModal());
+
+            // WhatsApp modal controls
+            document.getElementById('closeShiftStatusWhatsappModalBtn')?.addEventListener('click', () => {
+                document.getElementById('shiftStatusWhatsappModal')?.classList.remove('show');
+            });
+            document.getElementById('copyShiftStatusWhatsappTextBtn')?.addEventListener('click', () => {
+                const txt = document.getElementById('shiftStatusWhatsappText');
+                if (txt) {
+                    txt.select();
+                    navigator.clipboard.writeText(txt.value);
+                    const msg = document.getElementById('shiftStatusCopiedMsg');
+                    if (msg) {
+                        msg.style.display = 'block';
+                        setTimeout(() => { msg.style.display = 'none'; }, 3000);
+                    }
+                }
+            });
+            document.getElementById('openShiftStatusWhatsappAppBtn')?.addEventListener('click', () => {
+                const txt = document.getElementById('shiftStatusWhatsappText')?.value || '';
+                const phone = (document.getElementById('shiftStatusWhatsappPhone')?.value || '').replace(/[^0-9]/g, '');
+                let url = `https://api.whatsapp.com/send?text=${encodeURIComponent(txt)}`;
+                if (phone) url += `&phone=${phone}`;
+                window.open(url, '_blank');
+            });
+
+            historyDateFilter?.addEventListener('change', () => loadShiftStatusHistory());
+            refreshHistoryBtn?.addEventListener('click', () => loadShiftStatusHistory());
+        }
+
+        fetchShiftStatusAllocations();
+        loadShiftStatusHistory();
+    }
+
+    async function fetchShiftStatusAllocations() {
+        const dateInput = document.getElementById('shiftStatusDate');
+        const deptSelect = document.getElementById('shiftStatusDept');
+        const shiftSelect = document.getElementById('shiftStatusShift');
+        const tableBody = document.getElementById('shiftStatusBody');
+        const weekLabel = document.getElementById('shiftStatusWeekLabel');
+        const logBadge = document.getElementById('shiftStatusLogBadge');
+
+        const date = dateInput ? dateInput.value : '';
+        const dept = deptSelect ? deptSelect.value : '';
+        const shift = shiftSelect ? shiftSelect.value : '';
+
+        if (!date || !dept || !shift) {
+            if (tableBody) {
+                tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Please select Date, Department, and Shift above.</td></tr>';
+            }
+            return;
+        }
+
+        if (tableBody) {
+            tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;"><i class="fas fa-spinner fa-spin" style="margin-right: 6px;"></i> Fetching machines and shift allocations...</td></tr>';
+        }
+
+        try {
+            const url = `/api/shift-status/populate?date=${encodeURIComponent(date)}&dept=${encodeURIComponent(dept)}&shift=${encodeURIComponent(shift)}`;
+            const res = await fetch(url);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || 'Failed to populate shift status');
+            }
+            const data = await res.json();
+            shiftStatusCurrentData = data;
+
+            if (weekLabel) {
+                weekLabel.textContent = `Shift Week: ${data.week_monday || '-'}`;
+            }
+            if (logBadge) {
+                logBadge.style.display = data.has_existing_log ? 'inline-block' : 'none';
+            }
+
+            renderShiftStatusTable(data.machines || []);
+        } catch (err) {
+            console.error('Error populating shift status:', err);
+            if (tableBody) {
+                tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #ef4444; padding: 1.5rem;">Failed to load shift status: ${escapeHtml(err.message)}</td></tr>`;
+            }
+        }
+    }
+
+    function renderShiftStatusTable(machines) {
+        const tableBody = document.getElementById('shiftStatusBody');
+        if (!tableBody) return;
+        tableBody.innerHTML = '';
+
+        if (!machines || machines.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No machines found for this department.</td></tr>';
+            recalculateShiftStatusSummary();
+            return;
+        }
+
+        machines.forEach((m, idx) => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid #e2e8f0';
+            tr.setAttribute('data-machine', m.machine);
+
+            const isAvail = (m.status || '').toLowerCase() === 'available';
+            const statusBg = isAvail ? '#dcfce7' : '#fee2e2';
+            const statusColor = isAvail ? '#166534' : '#991b1b';
+            const statusBorder = isAvail ? '#86efac' : '#fca5a5';
+            const statusIcon = isAvail ? 'fa-check-circle' : 'fa-times-circle';
+            const statusText = isAvail ? 'Available' : 'Not Available';
+
+            let assignedDisplay = escapeHtml(m.assigned_operator || '');
+            if (!m.assigned_operator) {
+                assignedDisplay = '<span style="color: #94a3b8; font-style: italic;">(Unassigned in Shift List)</span>';
+            } else if (m.is_dual) {
+                assignedDisplay += ` <span style="background: #e0e7ff; color: #3730a3; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; font-weight: 600;">Dual: ${escapeHtml(m.other_machine || '')}</span>`;
+            }
+
+            tr.innerHTML = `
+                <td style="padding: 10px 8px; text-align: center; font-weight: 600; color: #64748b;">${idx + 1}</td>
+                <td style="padding: 10px 8px; font-weight: 700; color: #1e293b;">
+                    <i class="fas fa-microchip" style="color: #0284c7; margin-right: 5px; font-size: 0.85rem;"></i>
+                    ${escapeHtml(m.machine)}
+                </td>
+                <td style="padding: 10px 8px; color: #334155; font-weight: 500;">
+                    ${assignedDisplay}
+                </td>
+                <td style="padding: 8px 8px; text-align: center;">
+                    <button type="button" class="shift-status-toggle-btn" data-idx="${idx}" style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 5px 12px; font-size: 0.82rem; font-weight: 700; border-radius: 20px; border: 1.5px solid ${statusBorder}; background: ${statusBg}; color: ${statusColor}; transition: all 0.2s;">
+                        <i class="fas ${statusIcon}"></i>
+                        <span class="status-label">${statusText}</span>
+                    </button>
+                    <input type="hidden" class="shift-status-value" value="${isAvail ? 'Available' : 'Not Available'}">
+                </td>
+                <td style="padding: 8px 8px;">
+                    <input type="text" class="shift-status-actual-op" value="${escapeHtml(m.actual_operator || m.assigned_operator || '')}" placeholder="Operator name..." style="width: 100%; padding: 4px 8px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                </td>
+                <td style="padding: 8px 8px;">
+                    <input type="text" class="shift-status-remarks" value="${escapeHtml(m.remarks || '')}" placeholder="Notes / reason..." style="width: 100%; padding: 4px 8px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                </td>
+            `;
+
+            tableBody.appendChild(tr);
+        });
+
+        tableBody.querySelectorAll('.shift-status-toggle-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const b = e.currentTarget;
+                const hiddenInput = b.parentElement.querySelector('.shift-status-value');
+                const labelSpan = b.querySelector('.status-label');
+                const icon = b.querySelector('i');
+                const tr = b.closest('tr');
+                const remarksInput = tr?.querySelector('.shift-status-remarks');
+
+                const isNowAvail = hiddenInput.value !== 'Available';
+                if (isNowAvail) {
+                    hiddenInput.value = 'Available';
+                    b.style.background = '#dcfce7';
+                    b.style.color = '#166534';
+                    b.style.borderColor = '#86efac';
+                    labelSpan.textContent = 'Available';
+                    icon.className = 'fas fa-check-circle';
+                    if (remarksInput && remarksInput.value.toLowerCase().includes('absent')) {
+                        remarksInput.value = '';
+                    }
+                } else {
+                    hiddenInput.value = 'Not Available';
+                    b.style.background = '#fee2e2';
+                    b.style.color = '#991b1b';
+                    b.style.borderColor = '#fca5a5';
+                    labelSpan.textContent = 'Not Available';
+                    icon.className = 'fas fa-times-circle';
+                    if (remarksInput && !remarksInput.value.trim()) {
+                        remarksInput.value = 'Absent';
+                    }
+                }
+                recalculateShiftStatusSummary();
+            });
+        });
+
+        recalculateShiftStatusSummary();
+    }
+
+    function setAllShiftStatusAvailability(isAvailable) {
+        const rows = document.querySelectorAll('#shiftStatusBody tr');
+        rows.forEach(tr => {
+            const btn = tr.querySelector('.shift-status-toggle-btn');
+            const hidden = tr.querySelector('.shift-status-value');
+            const label = btn?.querySelector('.status-label');
+            const icon = btn?.querySelector('i');
+            if (btn && hidden) {
+                hidden.value = isAvailable ? 'Available' : 'Not Available';
+                btn.style.background = isAvailable ? '#dcfce7' : '#fee2e2';
+                btn.style.color = isAvailable ? '#166534' : '#991b1b';
+                btn.style.borderColor = isAvailable ? '#86efac' : '#fca5a5';
+                if (label) label.textContent = isAvailable ? 'Available' : 'Not Available';
+                if (icon) icon.className = isAvailable ? 'fas fa-check-circle' : 'fas fa-times-circle';
+            }
+        });
+        recalculateShiftStatusSummary();
+    }
+
+    function recalculateShiftStatusSummary() {
+        const rows = document.querySelectorAll('#shiftStatusBody tr');
+        let total = 0;
+        let avail = 0;
+        let notAvail = 0;
+        let allocated = 0;
+        const unmannedItems = [];
+
+        rows.forEach(tr => {
+            const mc = tr.getAttribute('data-machine');
+            if (!mc) return;
+            total++;
+
+            const hidden = tr.querySelector('.shift-status-value');
+            const isAvail = hidden && hidden.value === 'Available';
+            const assignedOp = tr.children[2]?.textContent.trim().replace(/\s+/g, ' ') || '';
+            const actualOp = tr.querySelector('.shift-status-actual-op')?.value.trim() || '';
+            const remarks = tr.querySelector('.shift-status-remarks')?.value.trim() || '';
+
+            if (assignedOp && !assignedOp.includes('Unassigned')) {
+                allocated++;
+            }
+
+            if (isAvail) {
+                avail++;
+            } else {
+                notAvail++;
+                const opText = actualOp || (assignedOp.includes('Unassigned') ? 'No Operator Assigned' : assignedOp);
+                const reasonText = remarks ? ` (${remarks})` : '';
+                unmannedItems.push(`<strong>${escapeHtml(mc)}</strong> — ${escapeHtml(opText)}${escapeHtml(reasonText)}`);
+            }
+        });
+
+        const kpiTotal = document.getElementById('kpiShiftStatusTotal');
+        const kpiAvail = document.getElementById('kpiShiftStatusAvailable');
+        const kpiNotAvail = document.getElementById('kpiShiftStatusNotAvailable');
+        const kpiAlloc = document.getElementById('kpiShiftStatusAllocated');
+
+        if (kpiTotal) kpiTotal.textContent = total;
+        if (kpiAvail) kpiAvail.textContent = avail;
+        if (kpiNotAvail) kpiNotAvail.textContent = notAvail;
+        if (kpiAlloc) kpiAlloc.textContent = allocated;
+
+        const banner = document.getElementById('shiftStatusUnmannedBanner');
+        const listEl = document.getElementById('shiftStatusUnmannedList');
+        if (banner && listEl) {
+            if (total === 0) {
+                banner.style.display = 'none';
+            } else if (notAvail === 0) {
+                banner.style.display = 'block';
+                banner.style.background = '#f0fdf4';
+                banner.style.borderLeftColor = '#22c55e';
+                listEl.innerHTML = `<span style="color: #166534; font-weight: 600;"><i class="fas fa-check-circle" style="color: #22c55e; margin-right: 5px;"></i> All ${total} machines have operators available!</span>`;
+            } else {
+                banner.style.display = 'block';
+                banner.style.background = '#fff1f2';
+                banner.style.borderLeftColor = '#ef4444';
+                let html = `<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;">`;
+                unmannedItems.forEach(item => {
+                    html += `<div style="background: #ffffff; border: 1px solid #fca5a5; padding: 4px 8px; border-radius: 4px; font-size: 0.82rem; color: #991b1b;"><i class="fas fa-times" style="color: #dc2626; margin-right: 4px;"></i>${item}</div>`;
+                });
+                html += `</div>`;
+                listEl.innerHTML = html;
+            }
+        }
+    }
+
+    async function saveShiftStatusLog() {
+        const dateInput = document.getElementById('shiftStatusDate');
+        const deptSelect = document.getElementById('shiftStatusDept');
+        const shiftSelect = document.getElementById('shiftStatusShift');
+
+        const date = dateInput ? dateInput.value : '';
+        const dept = deptSelect ? deptSelect.value : '';
+        const shift = shiftSelect ? shiftSelect.value : '';
+
+        if (!date || !dept || !shift) {
+            alert('Please select Date, Department, and Shift.');
+            return;
+        }
+
+        const rows = document.querySelectorAll('#shiftStatusBody tr');
+        const details = [];
+        let total = 0;
+        let avail = 0;
+        let notAvail = 0;
+        const unmannedSummaries = [];
+
+        rows.forEach(tr => {
+            const mc = tr.getAttribute('data-machine');
+            if (!mc) return;
+            total++;
+
+            const status = tr.querySelector('.shift-status-value')?.value || 'Available';
+            const assignedOp = tr.children[2]?.innerText.trim() || '';
+            const actualOp = tr.querySelector('.shift-status-actual-op')?.value.trim() || '';
+            const remarks = tr.querySelector('.shift-status-remarks')?.value.trim() || '';
+
+            if (status === 'Available') {
+                avail++;
+            } else {
+                notAvail++;
+                const opDisplay = actualOp || (assignedOp.includes('Unassigned') ? 'No Operator' : assignedOp);
+                unmannedSummaries.push(`${mc}: ${opDisplay}${remarks ? ' (' + remarks + ')' : ''}`);
+            }
+
+            details.push({
+                machine: mc,
+                assigned_operator: assignedOp,
+                actual_operator: actualOp,
+                status: status,
+                remarks: remarks
+            });
+        });
+
+        if (total === 0) {
+            alert('No machine allocations to save.');
+            return;
+        }
+
+        const payload = {
+            date: date,
+            dept: dept,
+            shift: shift,
+            total_machines: total,
+            available_count: avail,
+            not_available_count: notAvail,
+            not_available_summary: unmannedSummaries.join(', ') || 'All machines available',
+            details: details,
+            logged_by: (typeof currentUser !== 'undefined' && currentUser && currentUser.username) ? currentUser.username : 'admin'
+        };
+
+        try {
+            const res = await fetch('/api/shift-status/logs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || 'Failed to save shift status log');
+            }
+
+            const data = await res.json();
+            alert('✅ Shift Status log saved successfully!');
+            const logBadge = document.getElementById('shiftStatusLogBadge');
+            if (logBadge) logBadge.style.display = 'inline-block';
+            loadShiftStatusHistory();
+        } catch (err) {
+            console.error('Error saving shift status log:', err);
+            alert('Error saving log: ' + err.message);
+        }
+    }
+
+    async function loadShiftStatusHistory() {
+        const historyBody = document.getElementById('shiftStatusHistoryBody');
+        const dateFilter = document.getElementById('shiftStatusHistoryDateFilter')?.value || '';
+        if (!historyBody) return;
+
+        try {
+            let url = '/api/shift-status/logs';
+            if (dateFilter) url += `?date=${encodeURIComponent(dateFilter)}`;
+            const res = await fetch(url);
+            if (!res.ok) return;
+            const logs = await res.json();
+
+            historyBody.innerHTML = '';
+            if (!logs || logs.length === 0) {
+                historyBody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 1rem;">No shift status logs recorded yet.</td></tr>';
+                return;
+            }
+
+            logs.forEach(l => {
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid #e2e8f0';
+
+                const notAvailStyle = l.not_available_count > 0 ? 'background: #fee2e2; color: #991b1b; font-weight: 700;' : 'color: #64748b;';
+                tr.innerHTML = `
+                    <td style="padding: 8px 6px; text-align: center; font-weight: 600; color: #64748b;">${l.id}</td>
+                    <td style="padding: 8px 8px; font-weight: 600; color: #0f172a;">${escapeHtml(l.date)}</td>
+                    <td style="padding: 8px 8px; font-weight: 700; color: #0284c7;">${escapeHtml(l.dept)}</td>
+                    <td style="padding: 8px 8px; font-weight: 600;">${escapeHtml(l.shift)}</td>
+                    <td style="padding: 8px 8px; text-align: center; font-weight: 600;">${l.total_machines}</td>
+                    <td style="padding: 8px 8px; text-align: center; color: #16a34a; font-weight: 700;">${l.available_count}</td>
+                    <td style="padding: 8px 8px; text-align: center;"><span style="padding: 2px 7px; border-radius: 10px; font-size: 0.8rem; ${notAvailStyle}">${l.not_available_count}</span></td>
+                    <td style="padding: 8px 8px; font-size: 0.8rem; color: #334155; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(l.not_available_summary || '')}">
+                        ${escapeHtml(l.not_available_summary || 'None')}
+                    </td>
+                    <td style="padding: 8px 8px; font-size: 0.78rem; color: #64748b;">${escapeHtml(l.created_at || '')}</td>
+                    <td style="padding: 8px 8px; text-align: center; white-space: nowrap;">
+                        <button type="button" class="btn btn-outline" style="padding: 2px 6px; font-size: 0.75rem; margin-right: 4px;" onclick="reloadShiftStatusFromLog('${escapeHtml(l.date)}', '${escapeHtml(l.dept)}', '${escapeHtml(l.shift)}')">
+                            <i class="fas fa-eye"></i> View
+                        </button>
+                        <button type="button" class="btn btn-outline" style="padding: 2px 6px; font-size: 0.75rem; color: #16a34a; border-color: #16a34a; margin-right: 4px;" onclick="shareShiftStatusLogWhatsapp(${l.id})">
+                            <i class="fab fa-whatsapp"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline" style="padding: 2px 6px; font-size: 0.75rem; color: #ef4444; border-color: #ef4444;" onclick="deleteShiftStatusLog(${l.id})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                historyBody.appendChild(tr);
+            });
+        } catch (err) {
+            console.error('Error loading history logs:', err);
+        }
+    }
+
+    window.reloadShiftStatusFromLog = function(date, dept, shift) {
+        const dateInput = document.getElementById('shiftStatusDate');
+        const deptSelect = document.getElementById('shiftStatusDept');
+        const shiftSelect = document.getElementById('shiftStatusShift');
+        if (dateInput) dateInput.value = date;
+        if (deptSelect) deptSelect.value = dept;
+        if (shiftSelect) shiftSelect.value = shift;
+        fetchShiftStatusAllocations();
+        document.getElementById('shiftStatusSection')?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    window.deleteShiftStatusLog = async function(id) {
+        if (!confirm('Are you sure you want to delete this shift status log?')) return;
+        try {
+            const res = await fetch(`/api/shift-status/logs/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                loadShiftStatusHistory();
+            } else {
+                alert('Failed to delete log.');
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    window.openShiftStatusWhatsappModal = async function(logId = null) {
+        const dateInput = document.getElementById('shiftStatusDate');
+        const deptSelect = document.getElementById('shiftStatusDept');
+        const shiftSelect = document.getElementById('shiftStatusShift');
+
+        let date = dateInput ? dateInput.value : '';
+        let dept = deptSelect ? deptSelect.value : '';
+        let shift = shiftSelect ? shiftSelect.value : '';
+
+        const shiftTimingMap = {
+            'First': '7.00 to 3.00',
+            'Second': '3.00 to 11.00',
+            'Third': '11.00 to 7.00',
+            'Gen Shift A': '8.00 to 4.30',
+            'Gen Shift B': '9.30 to 6.00'
+        };
+
+        let total = 0;
+        let avail = 0;
+        let notAvail = 0;
+        const unmannedList = [];
+        const mannedList = [];
+
+        if (logId) {
+            try {
+                const res = await fetch(`/api/shift-status/logs`);
+                const allLogs = await res.json();
+                const log = allLogs.find(x => x.id === logId);
+                if (log) {
+                    date = log.date;
+                    dept = log.dept;
+                    shift = log.shift;
+                    total = log.total_machines;
+                    avail = log.available_count;
+                    notAvail = log.not_available_count;
+                    if (Array.isArray(log.details)) {
+                        log.details.forEach(item => {
+                            const isAvail = (item.status || '').toLowerCase() === 'available';
+                            const opName = item.actual_operator || item.assigned_operator || 'Unassigned';
+                            const rem = item.remarks ? ` (${item.remarks})` : '';
+                            if (isAvail) {
+                                mannedList.push(`${item.machine} → ${opName}`);
+                            } else {
+                                unmannedList.push(`${item.machine} → ${opName}${rem}`);
+                            }
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        } else {
+            const rows = document.querySelectorAll('#shiftStatusBody tr');
+            rows.forEach(tr => {
+                const mc = tr.getAttribute('data-machine');
+                if (!mc) return;
+                total++;
+                const status = tr.querySelector('.shift-status-value')?.value || 'Available';
+                const assignedOp = tr.children[2]?.innerText.trim() || '';
+                const actualOp = tr.querySelector('.shift-status-actual-op')?.value.trim() || '';
+                const remarks = tr.querySelector('.shift-status-remarks')?.value.trim() || '';
+                const opDisplay = actualOp || (assignedOp.includes('Unassigned') ? 'No Operator Assigned' : assignedOp);
+
+                if (status === 'Available') {
+                    avail++;
+                    mannedList.push(`${mc} → ${opDisplay}`);
+                } else {
+                    notAvail++;
+                    const rem = remarks ? ` (${remarks})` : '';
+                    unmannedList.push(`${mc} → ${opDisplay}${rem}`);
+                }
+            });
+        }
+
+        const timingStr = shiftTimingMap[shift] ? ` (${shiftTimingMap[shift]})` : '';
+        const dmyDate = date.includes('-') ? date.split('-').reverse().join('/') : date;
+
+        let msg = `*GRS ENGINEERING PVT LTD*\n`;
+        msg += `📋 *SHIFT STATUS REPORT*\n`;
+        msg += `📅 *Date:* ${dmyDate}\n`;
+        msg += `🏢 *Dept:* ${dept}\n`;
+        msg += `⏰ *Shift:* ${shift}${timingStr}\n`;
+        msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+        msg += `📊 *SUMMARY:*\n`;
+        msg += `• Total Machines: *${total}*\n`;
+        msg += `• Operators Available: *${avail}* ✅\n`;
+        msg += `• Operators NOT Available: *${notAvail}* ❌\n\n`;
+
+        if (unmannedList.length > 0) {
+            msg += `🚨 *MACHINES WITHOUT OPERATOR (${unmannedList.length}):*\n`;
+            unmannedList.forEach((item, i) => {
+                msg += `  ${i + 1}. ${item}\n`;
+            });
+            msg += `\n`;
+        } else {
+            msg += `✅ *All machines have operators available!*\n\n`;
+        }
+
+        if (mannedList.length > 0) {
+            msg += `✅ *MANNED MACHINES (${mannedList.length}):*\n`;
+            mannedList.forEach((item, i) => {
+                msg += `  ${i + 1}. ${item}\n`;
+            });
+            msg += `\n`;
+        }
+
+        msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+        msg += `_Generated via GRS Tool Monitoring System_`;
+
+        const txtArea = document.getElementById('shiftStatusWhatsappText');
+        const modal = document.getElementById('shiftStatusWhatsappModal');
+        const copiedMsg = document.getElementById('shiftStatusCopiedMsg');
+        if (txtArea) txtArea.value = msg;
+        if (copiedMsg) copiedMsg.style.display = 'none';
+        if (modal) modal.classList.add('show');
+    };
+
+    window.shareShiftStatusLogWhatsapp = function(logId) {
+        openShiftStatusWhatsappModal(logId);
+    };
 });
+

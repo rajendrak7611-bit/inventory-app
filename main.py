@@ -565,7 +565,8 @@ def run_startup_migrations():
                     "setters", "suppliers", "raw_materials", "raw_material_logs", 
                     "ht_logs", "ht_receipt_logs", "pc_logs", "pc_receipt_logs", 
                     "production_logs", "production_schedules", "customer_masters",
-                    "drill_masters", "insert_masters", "tap_masters"
+                    "drill_masters", "insert_masters", "tap_masters",
+                    "hr_shift_assignments", "shift_status_logs"
                 ]:
                     try:
                         conn.execute(text(f"""
@@ -8572,6 +8573,246 @@ def delete_hr_shift_assignment(item_id: int, db: Session = Depends(get_db)):
         db.delete(rec)
         db.commit()
         return {"status": "success", "deleted_id": item_id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==========================================
+# --- SERVICE: SHIFT STATUS MANAGEMENT ---
+# ==========================================
+
+def ensure_shift_status_logs_table(db: Session):
+    try:
+        models.ShiftStatusLog.__table__.create(bind=db.get_bind(), checkfirst=True)
+    except Exception:
+        pass
+
+def get_shift_status_monday_str(date_str: str) -> str:
+    try:
+        from datetime import datetime as dt_cls, timedelta as td_cls
+        dt = dt_cls.strptime(date_str.strip(), "%Y-%m-%d").date()
+        monday = dt - td_cls(days=dt.weekday())
+        return monday.strftime("%Y-%m-%d")
+    except Exception:
+        return date_str
+
+@app.get("/api/shift-status/populate")
+def populate_shift_status(date: str, dept: str, shift: str, db: Session = Depends(get_db)):
+    ensure_hr_shift_table(db)
+    ensure_shift_status_logs_table(db)
+    try:
+        date_clean = (date or "").strip()
+        dept_clean = (dept or "").strip()
+        shift_clean = (shift or "").strip()
+        week_monday = get_shift_status_monday_str(date_clean)
+
+        # 1. Fetch machines for the dept
+        mc_rows = []
+        try:
+            mc_rows = db.execute(text("""
+                SELECT id, machine_name, dept, department 
+                FROM machines 
+                WHERE UPPER(TRIM(COALESCE(dept, ''))) = :d 
+                   OR UPPER(TRIM(COALESCE(department, ''))) = :d
+                ORDER BY id ASC
+            """), {"d": dept_clean.upper()}).mappings().all()
+        except Exception:
+            try:
+                mc_rows = db.execute(text("SELECT id, machine_name FROM machines ORDER BY id ASC")).mappings().all()
+            except Exception:
+                pass
+
+        dept_machines = []
+        for m in mc_rows:
+            m_name = (m.get("machine_name") or "").strip()
+            if m_name and m_name not in dept_machines:
+                dept_machines.append(m_name)
+
+        # 2. Fetch shift allocations from hr_shift_assignments for week_monday, dept_clean, shift_clean
+        allocations = db.query(models.HrShiftAssignment).filter(
+            models.HrShiftAssignment.week_start_date == week_monday,
+            func.upper(func.trim(models.HrShiftAssignment.dept)) == dept_clean.upper(),
+            func.upper(func.trim(models.HrShiftAssignment.shift)) == shift_clean.upper()
+        ).all()
+
+        # Build machine -> list of operator info
+        mc_assigned_map = {}
+        for a in allocations:
+            op_name = (a.emp_name or "").strip()
+            if not op_name:
+                continue
+            m1 = (a.machine_1 or "").strip()
+            m2 = (a.machine_2 or "").strip()
+            if m1:
+                if m1 not in mc_assigned_map:
+                    mc_assigned_map[m1] = []
+                mc_assigned_map[m1].append({"operator": op_name, "is_dual": bool(m2), "other_machine": m2})
+                if m1 not in dept_machines:
+                    dept_machines.append(m1)
+            if m2:
+                if m2 not in mc_assigned_map:
+                    mc_assigned_map[m2] = []
+                mc_assigned_map[m2].append({"operator": op_name, "is_dual": True, "other_machine": m1})
+                if m2 not in dept_machines:
+                    dept_machines.append(m2)
+
+        # 3. Check if an existing log exists for date_clean, dept_clean, shift_clean
+        existing_log = db.query(models.ShiftStatusLog).filter(
+            models.ShiftStatusLog.date == date_clean,
+            func.upper(func.trim(models.ShiftStatusLog.dept)) == dept_clean.upper(),
+            func.upper(func.trim(models.ShiftStatusLog.shift)) == shift_clean.upper()
+        ).order_by(models.ShiftStatusLog.id.desc()).first()
+
+        existing_details_map = {}
+        if existing_log and existing_log.details:
+            try:
+                detail_items = json.loads(existing_log.details)
+                for item in detail_items:
+                    mc_name = item.get("machine") or item.get("machine_name")
+                    if mc_name:
+                        existing_details_map[mc_name] = item
+            except Exception:
+                pass
+
+        # 4. Construct machine list with assigned operators and status
+        result_machines = []
+        for m_name in dept_machines:
+            assigned_list = mc_assigned_map.get(m_name, [])
+            assigned_op_names = ", ".join([x["operator"] for x in assigned_list]) if assigned_list else ""
+            is_dual = any(x.get("is_dual") for x in assigned_list)
+            other_mcs = ", ".join([x["other_machine"] for x in assigned_list if x.get("other_machine")])
+
+            existing_info = existing_details_map.get(m_name)
+            if existing_info:
+                status = existing_info.get("status", "Available")
+                actual_op = existing_info.get("actual_operator") or existing_info.get("operator") or assigned_op_names
+                remarks = existing_info.get("remarks") or ""
+            else:
+                status = "Available" if assigned_op_names else "Not Available"
+                actual_op = assigned_op_names
+                remarks = "No operator assigned in Shift List" if not assigned_op_names else ("Dual M/C with " + other_mcs if is_dual else "")
+
+            result_machines.append({
+                "machine": m_name,
+                "assigned_operator": assigned_op_names,
+                "is_dual": is_dual,
+                "other_machine": other_mcs,
+                "actual_operator": actual_op,
+                "status": status, # "Available" or "Not Available"
+                "remarks": remarks
+            })
+
+        return {
+            "status": "success",
+            "date": date_clean,
+            "dept": dept_clean,
+            "shift": shift_clean,
+            "week_monday": week_monday,
+            "has_existing_log": bool(existing_log),
+            "existing_log_id": existing_log.id if existing_log else None,
+            "existing_summary": existing_log.not_available_summary if existing_log else "",
+            "machines": result_machines
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/shift-status/logs")
+def save_shift_status_log(payload: dict, db: Session = Depends(get_db)):
+    ensure_shift_status_logs_table(db)
+    try:
+        date_val = (payload.get("date") or "").strip()
+        dept_val = (payload.get("dept") or "").strip()
+        shift_val = (payload.get("shift") or "").strip()
+        if not date_val or not dept_val or not shift_val:
+            raise HTTPException(status_code=400, detail="Date, Dept, and Shift are required")
+
+        total_machines = int(payload.get("total_machines") or 0)
+        available_count = int(payload.get("available_count") or 0)
+        not_available_count = int(payload.get("not_available_count") or 0)
+        summary = (payload.get("not_available_summary") or "").strip()
+        details_val = payload.get("details") or []
+        details_str = json.dumps(details_val) if isinstance(details_val, (list, dict)) else str(details_val)
+        logged_by = (payload.get("logged_by") or "admin").strip()
+
+        existing = db.query(models.ShiftStatusLog).filter(
+            models.ShiftStatusLog.date == date_val,
+            func.upper(func.trim(models.ShiftStatusLog.dept)) == dept_val.upper(),
+            func.upper(func.trim(models.ShiftStatusLog.shift)) == shift_val.upper()
+        ).first()
+
+        if existing:
+            existing.total_machines = total_machines
+            existing.available_count = available_count
+            existing.not_available_count = not_available_count
+            existing.not_available_summary = summary
+            existing.details = details_str
+            existing.logged_by = logged_by
+            existing.created_at = get_now_ist()
+            rec = existing
+        else:
+            rec = models.ShiftStatusLog(
+                date=date_val,
+                dept=dept_val,
+                shift=shift_val,
+                total_machines=total_machines,
+                available_count=available_count,
+                not_available_count=not_available_count,
+                not_available_summary=summary,
+                details=details_str,
+                logged_by=logged_by
+            )
+            db.add(rec)
+
+        db.commit()
+        db.refresh(rec)
+        return {"status": "success", "id": rec.id, "message": "Shift status logged successfully!"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/shift-status/logs")
+def get_shift_status_logs(date: Optional[str] = None, dept: Optional[str] = None, shift: Optional[str] = None, limit: int = 50, db: Session = Depends(get_db)):
+    ensure_shift_status_logs_table(db)
+    try:
+        q = db.query(models.ShiftStatusLog)
+        if date and not date.startswith("--"):
+            q = q.filter(models.ShiftStatusLog.date == date.strip())
+        if dept and not dept.startswith("--") and dept.upper() != "ALL":
+            q = q.filter(func.upper(func.trim(models.ShiftStatusLog.dept)) == dept.strip().upper())
+        if shift and not shift.startswith("--") and shift.upper() != "ALL":
+            q = q.filter(func.upper(func.trim(models.ShiftStatusLog.shift)) == shift.strip().upper())
+
+        rows = q.order_by(models.ShiftStatusLog.date.desc(), models.ShiftStatusLog.id.desc()).limit(limit).all()
+        return [
+            {
+                "id": r.id,
+                "date": r.date,
+                "dept": r.dept,
+                "shift": r.shift,
+                "total_machines": r.total_machines,
+                "available_count": r.available_count,
+                "not_available_count": r.not_available_count,
+                "not_available_summary": r.not_available_summary or "",
+                "details": json.loads(r.details) if r.details else [],
+                "logged_by": r.logged_by or "",
+                "created_at": r.created_at.strftime("%Y-%m-%d %H:%M:%S") if r.created_at else ""
+            } for r in rows
+        ]
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/shift-status/logs/{log_id}")
+def delete_shift_status_log(log_id: int, db: Session = Depends(get_db)):
+    ensure_shift_status_logs_table(db)
+    try:
+        rec = db.query(models.ShiftStatusLog).filter(models.ShiftStatusLog.id == log_id).first()
+        if not rec:
+            raise HTTPException(status_code=404, detail="Shift status log not found")
+        db.delete(rec)
+        db.commit()
+        return {"status": "success", "deleted_id": log_id}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
