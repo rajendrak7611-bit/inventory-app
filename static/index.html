@@ -1272,7 +1272,7 @@
                                 <th style="padding: 8px 10px; min-width: 160px;">Machine / Station</th>
                                 <th style="padding: 8px 10px; min-width: 180px;">Assigned Operator (Shift List)</th>
                                 <th style="padding: 8px 10px; min-width: 180px; text-align: center;">Certification Status</th>
-                                <th style="padding: 8px 10px; min-width: 160px;">Actual / Substitute Operator</th>
+                                <th style="padding: 8px 10px; min-width: 220px;">Actual / Substitute Operator</th>
                                 <th style="padding: 8px 10px; min-width: 180px;">Remarks / Reason</th>
                             </tr>
                         </thead>
@@ -1302,7 +1302,11 @@
                         <i class="fas fa-history" style="color: #0284c7;"></i> Shift Status History Logs
                     </h3>
                     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <span style="font-size: 0.8rem; color: #64748b; font-weight: 600;">Filter Date:</span>
                         <input type="date" id="shiftStatusHistoryDateFilter" style="padding: 0.35rem 0.5rem; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                        <button type="button" id="clearShiftStatusHistoryDateBtn" class="btn btn-outline" style="padding: 0.35rem 0.6rem; font-size: 0.8rem;">
+                            <i class="fas fa-calendar"></i> All Dates
+                        </button>
                         <button type="button" id="refreshShiftStatusHistoryBtn" class="btn btn-outline" style="padding: 0.35rem 0.7rem; font-size: 0.82rem;">
                             <i class="fas fa-sync-alt"></i> Refresh
                         </button>
@@ -1320,7 +1324,7 @@
                                 <th style="padding: 8px 8px; text-align: center; color: #16a34a;">Available</th>
                                 <th style="padding: 8px 8px; text-align: center; color: #dc2626;">Not Available</th>
                                 <th style="padding: 8px 8px;">Unmanned Machines Summary</th>
-                                <th style="padding: 8px 8px;">Logged At</th>
+                                <th style="padding: 8px 8px;">Certified By / Time</th>
                                 <th style="padding: 8px 8px; text-align: center;">Actions</th>
                             </tr>
                         </thead>
@@ -5331,6 +5335,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10088"></script>
+    <script src="/static/app.js?v=10089"></script>
 </body>
 </html>

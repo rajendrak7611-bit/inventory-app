@@ -19699,6 +19699,37 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     let shiftStatusInitialized = false;
     let shiftStatusCurrentData = null;
+    let cachedShiftStatusOperators = null;
+    let shiftStatusRowTomSelects = [];
+
+    async function loadShiftStatusOperatorMaster() {
+        if (cachedShiftStatusOperators !== null) return cachedShiftStatusOperators;
+        try {
+            const res = await fetch('/api/operators');
+            if (res.ok) {
+                const data = await res.json();
+                const names = (Array.isArray(data) ? data : [])
+                    .map(o => typeof o === 'string' ? o.trim() : (o.name || '').trim())
+                    .filter(Boolean);
+                cachedShiftStatusOperators = Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
+            } else {
+                cachedShiftStatusOperators = [];
+            }
+        } catch (err) {
+            console.error('Error fetching operator master for shift status:', err);
+            cachedShiftStatusOperators = [];
+        }
+        return cachedShiftStatusOperators;
+    }
+
+    function clearShiftStatusRowTomSelects() {
+        if (Array.isArray(shiftStatusRowTomSelects)) {
+            shiftStatusRowTomSelects.forEach(ts => {
+                try { ts.destroy(); } catch (e) {}
+            });
+        }
+        shiftStatusRowTomSelects = [];
+    }
 
     async function initShiftStatusSection() {
         const dateInput = document.getElementById('shiftStatusDate');
@@ -19712,13 +19743,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const topWhatsappBtn = document.getElementById('shiftStatusTopWhatsappBtn');
         const bottomWhatsappBtn = document.getElementById('shiftStatusBottomWhatsappBtn');
         const historyDateFilter = document.getElementById('shiftStatusHistoryDateFilter');
+        const clearHistoryDateBtn = document.getElementById('clearShiftStatusHistoryDateBtn');
         const refreshHistoryBtn = document.getElementById('refreshShiftStatusHistoryBtn');
 
-        // Set default date if empty
+        // Pre-load operator master into cache
+        loadShiftStatusOperatorMaster();
+
+        // Set default date if empty (leave history date filter empty so all recent logs load)
         if (dateInput && !dateInput.value) {
             const today = new Date().toISOString().split('T')[0];
             dateInput.value = today;
-            if (historyDateFilter && !historyDateFilter.value) historyDateFilter.value = today;
         }
 
         // Load Departments into dept dropdown if not yet populated
@@ -19793,6 +19827,10 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             historyDateFilter?.addEventListener('change', () => loadShiftStatusHistory());
+            clearHistoryDateBtn?.addEventListener('click', () => {
+                if (historyDateFilter) historyDateFilter.value = '';
+                loadShiftStatusHistory();
+            });
             refreshHistoryBtn?.addEventListener('click', () => loadShiftStatusHistory());
         }
 
@@ -19824,6 +19862,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
+            await loadShiftStatusOperatorMaster();
             const url = `/api/shift-status/populate?date=${encodeURIComponent(date)}&dept=${encodeURIComponent(dept)}&shift=${encodeURIComponent(shift)}`;
             const res = await fetch(url);
             if (!res.ok) {
@@ -19859,6 +19898,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderShiftStatusTable(machines) {
+        clearShiftStatusRowTomSelects();
         const tableBody = document.getElementById('shiftStatusBody');
         if (!tableBody) return;
         tableBody.innerHTML = '';
@@ -19868,6 +19908,8 @@ document.addEventListener('DOMContentLoaded', () => {
             recalculateShiftStatusSummary();
             return;
         }
+
+        const opMaster = cachedShiftStatusOperators || [];
 
         machines.forEach((m, idx) => {
             const tr = document.createElement('tr');
@@ -19911,6 +19953,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 machineBadge = ` <span style="background: #e0e7ff; color: #3730a3; font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; font-weight: 700; white-space: nowrap;"><i class="fas fa-layer-group"></i> Dual M/C</span>`;
             }
 
+            // Options for TomSelect
+            const currentSelectedOp = (m.actual_operator || m.assigned_operator || '').trim();
+            let optionsHtml = '';
+            let selectedFound = false;
+
+            opMaster.forEach(name => {
+                const isSelected = (!selectedFound && name.toUpperCase() === currentSelectedOp.toUpperCase());
+                if (isSelected) selectedFound = true;
+                optionsHtml += `<option value="${escapeHtml(name)}"${isSelected ? ' selected' : ''}>${escapeHtml(name)}</option>`;
+            });
+
+            // If current operator is not in operator master, prepend it so selection is preserved
+            if (currentSelectedOp && !selectedFound) {
+                optionsHtml = `<option value="${escapeHtml(currentSelectedOp)}" selected>${escapeHtml(currentSelectedOp)}</option>` + optionsHtml;
+            }
+
             tr.innerHTML = `
                 <td style="padding: 10px 8px; text-align: center; font-weight: 600; color: #64748b;">${idx + 1}</td>
                 <td style="padding: 10px 8px; font-weight: 700; color: #1e293b;">
@@ -19928,8 +19986,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     </button>
                     <input type="hidden" class="shift-status-value" value="${isAvail ? 'Available' : 'Not Available'}">
                 </td>
-                <td style="padding: 8px 8px;">
-                    <input type="text" class="shift-status-actual-op" value="${escapeHtml(m.actual_operator || m.assigned_operator || '')}" placeholder="Operator name..." style="width: 100%; padding: 4px 8px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                <td style="padding: 8px 8px; min-width: 220px;">
+                    <select class="shift-status-actual-op" style="width: 100%;">
+                        <option value="">-- Select Substitute Operator --</option>
+                        ${optionsHtml}
+                    </select>
                 </td>
                 <td style="padding: 8px 8px;">
                     <input type="text" class="shift-status-remarks" value="${escapeHtml(m.remarks || '')}" placeholder="Notes / reason..." style="width: 100%; padding: 4px 8px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px;">
@@ -19938,6 +19999,53 @@ document.addEventListener('DOMContentLoaded', () => {
 
             tableBody.appendChild(tr);
         });
+
+        // Initialize TomSelect on each substitute operator dropdown
+        if (window.TomSelect) {
+            tableBody.querySelectorAll('.shift-status-actual-op').forEach(selectEl => {
+                try {
+                    const ts = new TomSelect(selectEl, {
+                        create: true,
+                        placeholder: '-- Select Substitute Operator --',
+                        allowEmptyOption: true,
+                        maxOptions: 300,
+                        sortField: { field: "text", direction: "asc" },
+                        openOnFocus: true,
+                        closeAfterSelect: true
+                    });
+
+                    ts.on('change', (val) => {
+                        const tr = selectEl.closest('tr');
+                        if (!tr) return;
+                        const hiddenInput = tr.querySelector('.shift-status-value');
+                        const btn = tr.querySelector('.shift-status-toggle-btn');
+                        const remarksInput = tr.querySelector('.shift-status-remarks');
+
+                        // If a substitute operator is picked on an absent or unallocated station, auto-toggle to Available
+                        if (val && val.trim() && hiddenInput && hiddenInput.value !== 'Available') {
+                            hiddenInput.value = 'Available';
+                            if (btn) {
+                                btn.style.background = '#dcfce7';
+                                btn.style.color = '#166534';
+                                btn.style.borderColor = '#86efac';
+                                const labelSpan = btn.querySelector('.status-label');
+                                if (labelSpan) labelSpan.textContent = 'Available';
+                                const icon = btn.querySelector('i');
+                                if (icon) icon.className = 'fas fa-check-circle';
+                            }
+                            if (remarksInput && (!remarksInput.value || remarksInput.value.toLowerCase().includes('absent') || remarksInput.value.toLowerCase().includes('unallocated'))) {
+                                remarksInput.value = `Substitute: ${val.trim()}`;
+                            }
+                        }
+                        recalculateShiftStatusSummary();
+                    });
+
+                    shiftStatusRowTomSelects.push(ts);
+                } catch (err) {
+                    console.error('Error initializing TomSelect on operator select:', err);
+                }
+            });
+        }
 
         tableBody.querySelectorAll('.shift-status-toggle-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -20219,7 +20327,11 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(`✅ Shift Status certified & saved by ${loggedByVal}!`);
             const logBadge = document.getElementById('shiftStatusLogBadge');
             if (logBadge) logBadge.style.display = 'inline-block';
-            loadShiftStatusHistory();
+
+            // Sync history date filter to the saved date so the record is immediately visible
+            const historyDateFilter = document.getElementById('shiftStatusHistoryDateFilter');
+            if (historyDateFilter) historyDateFilter.value = date;
+            await loadShiftStatusHistory();
         } catch (err) {
             console.error('Error saving shift status log:', err);
             alert('Error saving log: ' + err.message);
@@ -20240,7 +20352,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             historyBody.innerHTML = '';
             if (!logs || logs.length === 0) {
-                historyBody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 1rem;">No shift status logs recorded yet.</td></tr>';
+                const filterMsg = dateFilter ? ` for date ${escapeHtml(dateFilter)}` : '';
+                const clearBtn = dateFilter ? ` <button type="button" class="btn btn-outline" style="padding: 2px 8px; font-size: 0.75rem; margin-left: 8px;" onclick="const f = document.getElementById('shiftStatusHistoryDateFilter'); if (f) f.value = ''; loadShiftStatusHistory();"><i class="fas fa-calendar"></i> View All Logs</button>` : '';
+                historyBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 1.2rem;">No shift status logs recorded yet${filterMsg}.${clearBtn}</td></tr>`;
                 return;
             }
 
