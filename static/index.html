@@ -65,6 +65,7 @@
             <div class="sub-group" id="submenuService" style="display: none;">
                 <button class="sub-tab" id="sidebarServiceSetters" data-screen="service_setters">Setters</button>
                 <button class="sub-tab" id="sidebarShiftStatus" data-screen="shift_status">Shift Status</button>
+                <button class="sub-tab" id="sidebarHourlyReport" data-screen="hourly_report">Hourly Report</button>
             </div>
             <div class="sub-group" id="submenuMaster" style="display: none;">
                 <button class="sub-tab" id="sidebarPartMaster" data-screen="partmaster">Part Master</button>
@@ -1367,6 +1368,426 @@
                     <button type="button" id="openShiftStatusWhatsappAppBtn" class="btn btn-primary" style="background: #25D366; border-color: #25D366; padding: 0.45rem 1.1rem; color: #fff; font-weight: 600;">
                         <i class="fab fa-whatsapp"></i> Open in WhatsApp
                     </button>
+                </div>
+            </div>
+        </div>
+        </div>
+
+        <!-- Service: Hourly Report Section (Mobile-Optimized Piece & Serial Tracking) -->
+        <style>
+            .hourly-report-container {
+                padding: 1rem;
+                background: #f8fafc;
+                min-height: calc(100vh - 120px);
+            }
+            @media (max-width: 768px) {
+                .hourly-report-container {
+                    padding: 0.5rem;
+                }
+            }
+            .hourly-input-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                gap: 10px;
+                align-items: flex-end;
+            }
+            @media (max-width: 640px) {
+                .hourly-input-grid {
+                    grid-template-columns: 1fr;
+                    gap: 8px;
+                }
+            }
+            .hourly-kpi-banner {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+                gap: 10px;
+                margin: 12px 0;
+            }
+            @media (max-width: 640px) {
+                .hourly-kpi-banner {
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: 6px;
+                }
+            }
+            .hourly-kpi-card {
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 8px 12px;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+                text-align: center;
+            }
+            .hourly-kpi-card .val {
+                font-size: 1.35rem;
+                font-weight: 700;
+                line-height: 1.2;
+            }
+            .hourly-kpi-card .lbl {
+                font-size: 0.72rem;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                color: #64748b;
+                font-weight: 600;
+                margin-top: 2px;
+            }
+            .hourly-grid-tabs {
+                display: flex;
+                gap: 6px;
+                overflow-x: auto;
+                padding-bottom: 6px;
+                scrollbar-width: thin;
+            }
+            .hourly-grid-tab-btn {
+                background: #f1f5f9;
+                color: #334155;
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 0.85rem;
+                font-weight: 600;
+                white-space: nowrap;
+                cursor: pointer;
+                transition: all 0.15s ease;
+            }
+            .hourly-grid-tab-btn.active {
+                background: #0284c7;
+                color: #ffffff;
+                border-color: #0284c7;
+                box-shadow: 0 2px 4px rgba(2, 132, 199, 0.25);
+            }
+            .hourly-cells-grid {
+                display: grid;
+                grid-template-columns: repeat(10, 1fr);
+                gap: 6px;
+                margin-top: 10px;
+            }
+            @media (max-width: 768px) {
+                .hourly-cells-grid {
+                    grid-template-columns: repeat(5, 1fr);
+                    gap: 5px;
+                }
+            }
+            .hourly-cell {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-height: 44px;
+                border-radius: 6px;
+                font-weight: 700;
+                font-size: 0.92rem;
+                cursor: pointer;
+                user-select: none;
+                transition: transform 0.1s, box-shadow 0.1s;
+                position: relative;
+                touch-action: manipulation;
+                border: 1.5px solid #cbd5e1;
+                background: #ffffff;
+                color: #1e293b;
+            }
+            .hourly-cell:active {
+                transform: scale(0.96);
+            }
+            .hourly-cell.available {
+                background: #ffffff;
+                color: #1e293b;
+                border-color: #94a3b8;
+            }
+            .hourly-cell.available:hover {
+                border-color: #10b981;
+                background: #f0fdf4;
+            }
+            .hourly-cell.selected {
+                background: #10b981 !important;
+                color: #ffffff !important;
+                border-color: #059669 !important;
+                box-shadow: 0 2px 6px rgba(16, 185, 129, 0.4);
+            }
+            .hourly-cell.selected::after {
+                content: '✓';
+                font-size: 0.65rem;
+                position: absolute;
+                top: 2px;
+                right: 4px;
+            }
+            .hourly-cell.completed {
+                background: #2563eb !important;
+                color: #ffffff !important;
+                border-color: #1d4ed8 !important;
+                cursor: not-allowed;
+                opacity: 0.92;
+            }
+            .hourly-cell.completed::after {
+                content: '🔒';
+                font-size: 0.6rem;
+                position: absolute;
+                top: 2px;
+                right: 3px;
+            }
+            .hourly-cell.locked {
+                background: #f1f5f9 !important;
+                color: #94a3b8 !important;
+                border-color: #e2e8f0 !important;
+                cursor: not-allowed;
+                opacity: 0.65;
+            }
+            .hourly-cell.locked::after {
+                content: '🔒';
+                font-size: 0.6rem;
+                position: absolute;
+                top: 2px;
+                right: 3px;
+            }
+            .hourly-sticky-action {
+                position: sticky;
+                bottom: 10px;
+                z-index: 50;
+                background: rgba(255, 255, 255, 0.95);
+                backdrop-filter: blur(6px);
+                border: 1px solid #cbd5e1;
+                border-radius: 8px;
+                padding: 10px 14px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                margin-top: 15px;
+            }
+        </style>
+
+        <div class="table-container hourly-report-container" id="hourlyReportSection" style="display: none;">
+            <!-- Header -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <div>
+                    <h2 style="margin: 0; display: flex; align-items: center; gap: 8px; color: #0f172a; font-size: 1.25rem;">
+                        <i class="fas fa-th-large" style="color: #0284c7;"></i> Hourly Report (Piece Tracking)
+                    </h2>
+                    <span style="font-size: 0.82rem; color: var(--text-muted);">
+                        Select Part & Opn, tap piece serial numbers, validate sequential progression, and log production.
+                    </span>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    <button type="button" id="hourlyReloadBtn" class="btn btn-outline" style="padding: 0.45rem 0.8rem; font-size: 0.82rem;">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mobile & Desktop Form Selection Card -->
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                <div class="hourly-input-grid">
+                    <div>
+                        <label for="hourlyDate" style="font-size: 0.8rem; font-weight: 600; color: #334155; margin-bottom: 3px; display: block;">
+                            <i class="far fa-calendar-alt" style="color: #0284c7;"></i> Date *
+                        </label>
+                        <input type="date" id="hourlyDate" style="width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;">
+                    </div>
+                    <div>
+                        <label for="hourlyTime" style="font-size: 0.8rem; font-weight: 600; color: #334155; margin-bottom: 3px; display: block;">
+                            <i class="far fa-clock" style="color: #0284c7;"></i> Time *
+                        </label>
+                        <input type="time" id="hourlyTime" style="width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;">
+                    </div>
+                    <div>
+                        <label for="hourlyDept" style="font-size: 0.8rem; font-weight: 600; color: #334155; margin-bottom: 3px; display: block;">
+                            <i class="fas fa-building" style="color: #0284c7;"></i> Dept *
+                        </label>
+                        <select id="hourlyDept" style="width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #fff;">
+                            <option value="">-- Select Dept --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="hourlyOperator" style="font-size: 0.8rem; font-weight: 600; color: #334155; margin-bottom: 3px; display: block;">
+                            <i class="fas fa-user" style="color: #0284c7;"></i> Operator *
+                        </label>
+                        <select id="hourlyOperator" placeholder="Select operator...">
+                            <option value="">-- Select Operator --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="hourlyMachine" style="font-size: 0.8rem; font-weight: 600; color: #334155; margin-bottom: 3px; display: block;">
+                            <i class="fas fa-cogs" style="color: #0284c7;"></i> Machine *
+                        </label>
+                        <select id="hourlyMachine" style="width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #fff;">
+                            <option value="">-- Select Machine --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="hourlyPartNo" style="font-size: 0.8rem; font-weight: 600; color: #334155; margin-bottom: 3px; display: block;">
+                            <i class="fas fa-cube" style="color: #0284c7;"></i> Part No *
+                        </label>
+                        <select id="hourlyPartNo" placeholder="Search Part No...">
+                            <option value="">-- Select Part No --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="hourlyOpnNo" style="font-size: 0.8rem; font-weight: 600; color: #334155; margin-bottom: 3px; display: block;">
+                            <i class="fas fa-tasks" style="color: #0284c7;"></i> Opn No *
+                        </label>
+                        <select id="hourlyOpnNo" style="width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: #fff;">
+                            <option value="">-- Select Opn --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="hourlyOpnDesc" style="font-size: 0.8rem; font-weight: 600; color: #334155; margin-bottom: 3px; display: block;">
+                            <i class="fas fa-align-left" style="color: #64748b;"></i> Opn Description
+                        </label>
+                        <input type="text" id="hourlyOpnDesc" readonly placeholder="Auto-populated" style="width: 100%; padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.9rem; background: #f8fafc; color: #475569;">
+                    </div>
+                    <div>
+                        <label for="hourlyScheduleQty" style="font-size: 0.8rem; font-weight: 600; color: #334155; margin-bottom: 3px; display: block;">
+                            <i class="fas fa-layer-group" style="color: #0284c7;"></i> Schedule Qty *
+                        </label>
+                        <input type="number" id="hourlyScheduleQty" min="1" placeholder="0" style="width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; font-weight: 600;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live KPI Banner -->
+            <div class="hourly-kpi-banner">
+                <div class="hourly-kpi-card">
+                    <div class="val" id="hourlyStatScheduleQty" style="color: #0f172a;">0</div>
+                    <div class="lbl">Schedule Qty</div>
+                </div>
+                <div class="hourly-kpi-card" id="hourlyStatPriorCard" style="display: none;">
+                    <div class="val" id="hourlyStatPriorQty" style="color: #8b5cf6;">0</div>
+                    <div class="lbl" id="hourlyStatPriorLbl">Prior Opn Done</div>
+                </div>
+                <div class="hourly-kpi-card">
+                    <div class="val" id="hourlyStatOpnDoneQty" style="color: #2563eb;">0</div>
+                    <div class="lbl">Completed in Opn</div>
+                </div>
+                <div class="hourly-kpi-card">
+                    <div class="val" id="hourlyStatBalanceQty" style="color: #f59e0b;">0</div>
+                    <div class="lbl">Balance to Mach</div>
+                </div>
+                <div class="hourly-kpi-card" style="border-color: #10b981; background: #f0fdf4;">
+                    <div class="val" id="hourlyStatSelectedQty" style="color: #10b981;">0</div>
+                    <div class="lbl" style="color: #047857;">Selected Now</div>
+                </div>
+            </div>
+
+            <!-- Grid Navigation Bar & Batch Helpers -->
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <button type="button" id="hourlyPrevGridBtn" class="btn btn-outline" style="padding: 0.35rem 0.7rem; font-size: 0.82rem;">
+                            <i class="fas fa-chevron-left"></i> Prev
+                        </button>
+                        <button type="button" id="hourlyNextGridBtn" class="btn btn-outline" style="padding: 0.35rem 0.7rem; font-size: 0.82rem;">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </button>
+                        <span id="hourlyActiveGridTitle" style="font-weight: 700; font-size: 0.9rem; color: #1e293b; margin-left: 4px;">Grid 1 (1 - 100)</span>
+                    </div>
+
+                    <!-- Batch & Range Selection for Mobile & Fast Entry -->
+                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                        <span style="font-size: 0.8rem; color: #64748b; font-weight: 600;">Range:</span>
+                        <input type="number" id="hourlyRangeStart" placeholder="From" style="width: 65px; padding: 0.3rem 0.4rem; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                        <span style="font-size: 0.8rem; color: #64748b;">to</span>
+                        <input type="number" id="hourlyRangeEnd" placeholder="To" style="width: 65px; padding: 0.3rem 0.4rem; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                        <button type="button" id="hourlyApplyRangeBtn" class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; background: #e0f2fe; color: #0284c7; border-color: #bae6fd;">
+                            Select Range
+                        </button>
+                        <button type="button" id="hourlySelectAllGridBtn" class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">
+                            All Available in Grid
+                        </button>
+                        <button type="button" id="hourlyClearSelectionBtn" class="btn btn-outline" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; color: #ef4444; border-color: #fecaca;">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tabs for multiple 100-cell grids -->
+                <div class="hourly-grid-tabs" id="hourlyGridTabs">
+                    <button class="hourly-grid-tab-btn active" data-grid-index="0">Grid 1 (1 - 100)</button>
+                </div>
+            </div>
+
+            <!-- Legend & Info Banner -->
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; font-size: 0.78rem; color: #475569;">
+                <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+                    <span style="display: inline-flex; align-items: center; gap: 4px;">
+                        <span style="width: 14px; height: 14px; border: 1.5px solid #94a3b8; background: #fff; border-radius: 3px; display: inline-block;"></span>
+                        Available
+                    </span>
+                    <span style="display: inline-flex; align-items: center; gap: 4px;">
+                        <span style="width: 14px; height: 14px; background: #10b981; border-radius: 3px; display: inline-block;"></span>
+                        Selected Now
+                    </span>
+                    <span style="display: inline-flex; align-items: center; gap: 4px;">
+                        <span style="width: 14px; height: 14px; background: #2563eb; border-radius: 3px; display: inline-block;"></span>
+                        Completed in this Opn (Blocked)
+                    </span>
+                    <span style="display: inline-flex; align-items: center; gap: 4px;">
+                        <span style="width: 14px; height: 14px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 3px; display: inline-block;"></span>
+                        Locked (Prior Opn Incomplete)
+                    </span>
+                </div>
+                <div id="hourlyCellHoverInfo" style="font-weight: 600; color: #0369a1; font-size: 0.8rem; min-height: 18px;">
+                    Tap on available numbers to mark completed
+                </div>
+            </div>
+
+            <!-- Interactive Serial Numbers Grid -->
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 12px; min-height: 220px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                <div id="hourlyGridContainer" class="hourly-cells-grid">
+                    <div style="grid-column: 1 / -1; text-align: center; color: #94a3b8; padding: 3rem 1rem;">
+                        <i class="fas fa-hand-pointer" style="font-size: 2rem; margin-bottom: 8px; display: block; color: #cbd5e1;"></i>
+                        Please select Department, Operator, Machine, Part No, and Opn No to generate the serial tracking grid.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sticky Save Bar for Mobile & Desktop -->
+            <div class="hourly-sticky-action">
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 200px;">
+                        <input type="text" id="hourlyRemarks" placeholder="Remarks / Batch notes (optional)..." style="width: 100%; padding: 0.55rem 0.8rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.88rem;">
+                    </div>
+                    <div>
+                        <button type="button" id="hourlySaveBtn" class="btn btn-primary" style="background: #10b981; border-color: #10b981; padding: 0.6rem 1.4rem; font-size: 0.95rem; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);">
+                            <i class="fas fa-check-circle"></i> Save Hourly Production Log (<span id="hourlySaveBadgeCount">0</span> pcs)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History Logs Section -->
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-top: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                    <h3 style="margin: 0; font-size: 1rem; font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 6px;">
+                        <i class="fas fa-history" style="color: #0284c7;"></i> Hourly Production Logs History
+                    </h3>
+                    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                        <input type="date" id="hourlyHistoryDateFilter" style="padding: 0.35rem 0.5rem; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                        <button type="button" id="hourlyHistoryAllDatesBtn" class="btn btn-outline" style="padding: 0.35rem 0.6rem; font-size: 0.8rem;">
+                            All Dates
+                        </button>
+                        <button type="button" id="hourlyHistoryRefreshBtn" class="btn btn-outline" style="padding: 0.35rem 0.6rem; font-size: 0.82rem;">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+                <div style="max-height: 350px; overflow-x: auto; overflow-y: auto;">
+                    <table id="hourlyHistoryTable" style="width: 100%; border-collapse: collapse; font-size: 0.84rem;">
+                        <thead>
+                            <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1; text-align: left;">
+                                <th style="padding: 8px 6px; width: 45px; text-align: center;">ID</th>
+                                <th style="padding: 8px 8px;">Date</th>
+                                <th style="padding: 8px 8px;">Time</th>
+                                <th style="padding: 8px 8px;">Dept</th>
+                                <th style="padding: 8px 8px;">Operator</th>
+                                <th style="padding: 8px 8px;">Machine</th>
+                                <th style="padding: 8px 8px;">Part No</th>
+                                <th style="padding: 8px 8px;">Opn</th>
+                                <th style="padding: 8px 8px; text-align: center;">Qty</th>
+                                <th style="padding: 8px 8px;">Serial Numbers Done</th>
+                                <th style="padding: 8px 8px;">Remarks</th>
+                                <th style="padding: 8px 8px; text-align: center;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="hourlyHistoryBody">
+                            <tr><td colspan="12" style="text-align: center; color: var(--text-muted); padding: 1rem;">Loading hourly logs...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -3338,6 +3759,7 @@
                                     <label><input type="checkbox" value="service"> Service</label>
                                     <label><input type="checkbox" value="service_setters"> Setters (Service)</label>
                                     <label><input type="checkbox" value="shift_status"> Shift Status</label>
+                                    <label><input type="checkbox" value="hourly_report"> Hourly Report</label>
                                 </div>
                             </div>
                             <div style="margin-top: 20px;">
@@ -5344,6 +5766,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10091"></script>
+    <script src="/static/app.js?v=10092"></script>
 </body>
 </html>

@@ -409,3 +409,22 @@ class ShiftStatusLog(Base):
     details = Column(Text, nullable=True) # JSON string of all machine/operator allocations and statuses
     logged_by = Column(String, nullable=True, default="")
     created_at = Column(DateTime, default=get_now_ist)
+
+class HourlyReport(Base):
+    __tablename__ = "hourly_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(String, index=True, nullable=False) # e.g. "2026-09-15"
+    time = Column(String, nullable=False) # e.g. "14:30:00"
+    dept = Column(String, index=True, nullable=True) # e.g. "WIPRO"
+    operator = Column(String, index=True, nullable=False)
+    machine = Column(String, index=True, nullable=False)
+    part_no = Column(String, index=True, nullable=False)
+    opn_no = Column(String, index=True, nullable=False)
+    opn_desc = Column(String, nullable=True)
+    schedule_qty = Column(Integer, default=0)
+    qty = Column(Integer, default=0) # count of serial numbers in this batch
+    serial_numbers = Column(Text, nullable=False) # JSON array string: "[1, 2, 3]"
+    remarks = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=get_now_ist)
+

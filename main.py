@@ -567,7 +567,7 @@ def run_startup_migrations():
                     "ht_logs", "ht_receipt_logs", "pc_logs", "pc_receipt_logs", 
                     "production_logs", "production_schedules", "customer_masters",
                     "drill_masters", "insert_masters", "tap_masters",
-                    "hr_shift_assignments", "shift_status_logs"
+                    "hr_shift_assignments", "shift_status_logs", "hourly_reports"
                 ]:
                     try:
                         conn.execute(text(f"""
@@ -8907,6 +8907,422 @@ def delete_shift_status_log(log_id: int, db: Session = Depends(get_db)):
         db.delete(rec)
         db.commit()
         return {"status": "success", "deleted_id": log_id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==========================================
+# --- SERVICE: HOURLY REPORT & SERIAL TRACKING ---
+# ==========================================
+
+def ensure_hourly_reports_table(db: Session):
+    try:
+        models.HourlyReport.__table__.create(bind=db.get_bind(), checkfirst=True)
+    except Exception:
+        db.rollback()
+    try:
+        bind = db.get_bind()
+        if "sqlite" in str(bind.url):
+            cols = [row[1] for row in db.execute(text("PRAGMA table_info(hourly_reports);")).fetchall()]
+            if "dept" not in cols:
+                db.execute(text("ALTER TABLE hourly_reports ADD COLUMN dept TEXT;"))
+                db.commit()
+        else:
+            db.execute(text("ALTER TABLE hourly_reports ADD COLUMN IF NOT EXISTS dept VARCHAR(100);"))
+            db.commit()
+    except Exception:
+        db.rollback()
+
+def get_part_ordered_operations(part_no: str, db: Session) -> list:
+    if not part_no:
+        return []
+    clean_p = part_no.strip()
+    ops = []
+    # 1. Search in part_operations via part_masters
+    try:
+        pm_rows = db.execute(text("SELECT id, partno FROM part_masters WHERE UPPER(TRIM(partno)) = :p"), {"p": clean_p.upper()}).mappings().all()
+        if pm_rows:
+            pid = pm_rows[0].get("id")
+            rows = db.execute(text("SELECT * FROM part_operations WHERE CAST(part_id AS TEXT) = :pid ORDER BY id ASC"), {"pid": str(pid)}).mappings().all()
+            if rows:
+                for r in rows:
+                    ops.append({
+                        "opn_no": str(r.get("opn_no") or "").strip(),
+                        "description": r.get("description") or r.get("opn_name") or "",
+                        "machine": r.get("machine") or r.get("machine_name") or "",
+                        "cycle_time": float(r.get("cycle_time") or r.get("cycletime") or 0.0)
+                    })
+    except Exception:
+        db.rollback()
+
+    # 2. Search in operations via parts table if not found
+    if not ops:
+        try:
+            p_rows = db.execute(text("SELECT id, part_no FROM parts WHERE UPPER(TRIM(part_no)) = :p"), {"p": clean_p.upper()}).mappings().all()
+            if p_rows:
+                pid = p_rows[0].get("id")
+                rows = db.execute(text("SELECT * FROM operations WHERE part_id = :pid ORDER BY id ASC"), {"pid": pid}).mappings().all()
+                if rows:
+                    for r in rows:
+                        ops.append({
+                            "opn_no": str(r.get("opn_no") or "").strip(),
+                            "description": r.get("description") or "",
+                            "machine": r.get("machine_name") or r.get("machine") or "",
+                            "cycle_time": float(r.get("cycle_time") or 0.0)
+                        })
+        except Exception:
+            db.rollback()
+
+    # Deduplicate operations by opn_no preserving first occurrence
+    seen_opns = set()
+    unique_ops = []
+    for op in ops:
+        op_key = op.get("opn_no")
+        if op_key and op_key not in seen_opns:
+            seen_opns.add(op_key)
+            unique_ops.append(op)
+
+    # Sort operations numerically if numeric (e.g. 10, 20, 30), else string
+    def op_sort_key(x):
+        val = str(x.get("opn_no") or "")
+        m = re.match(r'^(\d+)', val)
+        if m:
+            return (0, int(m.group(1)), val)
+        return (1, 0, val)
+
+    unique_ops.sort(key=op_sort_key)
+    return unique_ops
+
+def format_serial_ranges(serials: list) -> str:
+    if not serials:
+        return ""
+    try:
+        nums = sorted(list(set(int(x) for x in serials)))
+    except Exception:
+        return ", ".join(str(x) for x in serials)
+    if not nums:
+        return ""
+    ranges = []
+    start = nums[0]
+    end = nums[0]
+    for n in nums[1:]:
+        if n == end + 1:
+            end = n
+        else:
+            if start == end:
+                ranges.append(str(start))
+            else:
+                ranges.append(f"{start}-{end}")
+            start = n
+            end = n
+    if start == end:
+        ranges.append(str(start))
+    else:
+        ranges.append(f"{start}-{end}")
+    return ", ".join(ranges)
+
+@app.get("/api/hourly-reports/part-status")
+def get_hourly_report_part_status(part_no: str, db: Session = Depends(get_db)):
+    ensure_hourly_reports_table(db)
+    clean_p = (part_no or "").strip()
+    if not clean_p:
+        return {"part_no": "", "schedule_qty": 0, "operations": [], "completed_by_opn": {}, "completed_details_by_opn": {}}
+
+    # 1. Fetch operations for part
+    operations = get_part_ordered_operations(clean_p, db)
+
+    # 2. Fetch schedule quantity
+    sch_qty = 0
+    try:
+        sch_rows = db.execute(text("SELECT qty FROM schedules WHERE UPPER(TRIM(partno)) = :p ORDER BY id DESC LIMIT 1"), {"p": clean_p.upper()}).mappings().all()
+        if sch_rows:
+            sch_qty = int(float(sch_rows[0].get("qty") or 0))
+    except Exception:
+        db.rollback()
+
+    if sch_qty <= 0:
+        try:
+            ps_rows = db.execute(text("SELECT total_sch_qty FROM production_schedules WHERE UPPER(TRIM(part_no)) = :p ORDER BY id DESC LIMIT 1"), {"p": clean_p.upper()}).mappings().all()
+            if ps_rows:
+                sch_qty = int(float(ps_rows[0].get("total_sch_qty") or 0))
+        except Exception:
+            db.rollback()
+
+    # 3. Query existing hourly_reports for this part
+    completed_by_opn = {}
+    completed_details_by_opn = {}
+    try:
+        records = db.query(models.HourlyReport).filter(func.upper(func.trim(models.HourlyReport.part_no)) == clean_p.upper()).order_by(models.HourlyReport.id.asc()).all()
+        for r in records:
+            opn = str(r.opn_no or "").strip()
+            if opn not in completed_by_opn:
+                completed_by_opn[opn] = set()
+                completed_details_by_opn[opn] = {}
+            try:
+                s_list = json.loads(r.serial_numbers or "[]")
+                if isinstance(s_list, list):
+                    for s in s_list:
+                        s_int = int(s)
+                        completed_by_opn[opn].add(s_int)
+                        completed_details_by_opn[opn][str(s_int)] = {
+                            "operator": r.operator,
+                            "machine": r.machine,
+                            "date": r.date,
+                            "time": r.time,
+                            "log_id": r.id,
+                            "dept": r.dept or ""
+                        }
+            except Exception:
+                pass
+
+        # Convert sets to sorted lists
+        res_completed = {k: sorted(list(v)) for k, v in completed_by_opn.items()}
+    except Exception as e:
+        db.rollback()
+        res_completed = {}
+        completed_details_by_opn = {}
+
+    return {
+        "part_no": clean_p,
+        "schedule_qty": sch_qty,
+        "operations": operations,
+        "completed_by_opn": res_completed,
+        "completed_details_by_opn": completed_details_by_opn
+    }
+
+@app.get("/api/hourly-reports")
+def get_hourly_reports(
+    date: Optional[str] = None,
+    dept: Optional[str] = None,
+    part_no: Optional[str] = None,
+    operator: Optional[str] = None,
+    machine: Optional[str] = None,
+    opn_no: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    ensure_hourly_reports_table(db)
+    try:
+        q = db.query(models.HourlyReport)
+        if date:
+            q = q.filter(models.HourlyReport.date == date.strip())
+        if dept and dept.strip().upper() != "ALL":
+            q = q.filter(func.upper(models.HourlyReport.dept) == dept.strip().upper())
+        if part_no:
+            q = q.filter(func.upper(func.trim(models.HourlyReport.part_no)) == part_no.strip().upper())
+        if operator:
+            q = q.filter(func.upper(func.trim(models.HourlyReport.operator)) == operator.strip().upper())
+        if machine:
+            q = q.filter(func.upper(func.trim(models.HourlyReport.machine)) == machine.strip().upper())
+        if opn_no:
+            q = q.filter(func.upper(func.trim(models.HourlyReport.opn_no)) == opn_no.strip().upper())
+
+        rows = q.order_by(models.HourlyReport.id.desc()).limit(200).all()
+        results = []
+        for r in rows:
+            try:
+                s_list = json.loads(r.serial_numbers or "[]")
+            except Exception:
+                s_list = []
+            range_str = format_serial_ranges(s_list)
+            results.append({
+                "id": r.id,
+                "date": r.date,
+                "time": r.time,
+                "dept": r.dept or "",
+                "operator": r.operator,
+                "machine": r.machine,
+                "part_no": r.part_no,
+                "opn_no": r.opn_no,
+                "opn_desc": r.opn_desc or "",
+                "schedule_qty": r.schedule_qty or 0,
+                "qty": r.qty or len(s_list),
+                "serial_numbers": s_list,
+                "serial_range": range_str,
+                "remarks": r.remarks or "",
+                "created_at": r.created_at.strftime("%Y-%m-%d %H:%M:%S") if r.created_at else ""
+            })
+        return results
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/hourly-reports")
+def create_hourly_report(payload: dict, db: Session = Depends(get_db)):
+    ensure_hourly_reports_table(db)
+    try:
+        date_val = str(payload.get("date") or "").strip()
+        time_val = str(payload.get("time") or "").strip()
+        dept_val = str(payload.get("dept") or "").strip()
+        operator_val = str(payload.get("operator") or "").strip()
+        machine_val = str(payload.get("machine") or "").strip()
+        part_no_val = str(payload.get("part_no") or "").strip()
+        opn_no_val = str(payload.get("opn_no") or "").strip()
+        opn_desc_val = str(payload.get("opn_desc") or "").strip()
+        schedule_qty_val = int(payload.get("schedule_qty") or 0)
+        remarks_val = str(payload.get("remarks") or "").strip()
+        raw_serials = payload.get("serial_numbers") or []
+
+        if not date_val:
+            raise HTTPException(status_code=400, detail="Date is required")
+        if not operator_val:
+            raise HTTPException(status_code=400, detail="Operator is required")
+        if not machine_val:
+            raise HTTPException(status_code=400, detail="Machine is required")
+        if not part_no_val:
+            raise HTTPException(status_code=400, detail="Part number is required")
+        if not opn_no_val:
+            raise HTTPException(status_code=400, detail="Operation number is required")
+
+        if not time_val:
+            time_val = models.get_now_ist().strftime("%H:%M:%S")
+
+        # Parse and sanitize serial numbers
+        if isinstance(raw_serials, str):
+            try:
+                raw_serials = json.loads(raw_serials)
+            except Exception:
+                raw_serials = [int(s.strip()) for s in raw_serials.split(",") if s.strip().isdigit()]
+        
+        serial_nums = sorted(list(set(int(x) for x in raw_serials)))
+        if not serial_nums:
+            raise HTTPException(status_code=400, detail="Please select at least one serial number")
+
+        # Check for duplicates in current operation
+        existing_logs = db.query(models.HourlyReport).filter(
+            func.upper(func.trim(models.HourlyReport.part_no)) == part_no_val.upper(),
+            func.upper(func.trim(models.HourlyReport.opn_no)) == opn_no_val.upper()
+        ).all()
+        already_done = set()
+        for el in existing_logs:
+            try:
+                for s in json.loads(el.serial_numbers or "[]"):
+                    already_done.add(int(s))
+            except Exception:
+                pass
+
+        conflict_serials = [s for s in serial_nums if s in already_done]
+        if conflict_serials:
+            raise HTTPException(
+                status_code=400,
+                detail=f"The following serial numbers are already completed in Opn {opn_no_val}: {format_serial_ranges(conflict_serials)}"
+            )
+
+        # Sequential operation validation
+        ops = get_part_ordered_operations(part_no_val, db)
+        opn_index = -1
+        for idx, op in enumerate(ops):
+            if str(op.get("opn_no", "")).strip().upper() == opn_no_val.upper():
+                opn_index = idx
+                break
+
+        # If not the first operation, verify all serials are completed in the prior operation
+        if opn_index > 0:
+            prev_op = ops[opn_index - 1]
+            prev_opn_no = str(prev_op.get("opn_no", "")).strip()
+            prev_logs = db.query(models.HourlyReport).filter(
+                func.upper(func.trim(models.HourlyReport.part_no)) == part_no_val.upper(),
+                func.upper(func.trim(models.HourlyReport.opn_no)) == prev_opn_no.upper()
+            ).all()
+            prev_done = set()
+            for pl in prev_logs:
+                try:
+                    for s in json.loads(pl.serial_numbers or "[]"):
+                        prev_done.add(int(s))
+                except Exception:
+                    pass
+
+            uncompleted_in_prev = [s for s in serial_nums if s not in prev_done]
+            if uncompleted_in_prev:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Serial numbers not yet completed in prior operation (Opn {prev_opn_no}): {format_serial_ranges(uncompleted_in_prev)}. Sequential progression required."
+                )
+
+        # Create record
+        record = models.HourlyReport(
+            date=date_val,
+            time=time_val,
+            dept=dept_val,
+            operator=operator_val,
+            machine=machine_val,
+            part_no=part_no_val,
+            opn_no=opn_no_val,
+            opn_desc=opn_desc_val,
+            schedule_qty=schedule_qty_val,
+            qty=len(serial_nums),
+            serial_numbers=json.dumps(serial_nums),
+            remarks=remarks_val,
+            created_at=models.get_now_ist()
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+
+        return {
+            "status": "success",
+            "id": record.id,
+            "message": f"Successfully logged {len(serial_nums)} pieces for Opn {opn_no_val}",
+            "qty": len(serial_nums),
+            "serial_range": format_serial_ranges(serial_nums)
+        }
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/hourly-reports/{log_id}")
+def delete_hourly_report(log_id: int, db: Session = Depends(get_db)):
+    ensure_hourly_reports_table(db)
+    try:
+        rec = db.query(models.HourlyReport).filter(models.HourlyReport.id == log_id).first()
+        if not rec:
+            raise HTTPException(status_code=404, detail="Hourly report log not found")
+        
+        # Check if subsequent operations depend on this log's serial numbers
+        part_no = rec.part_no
+        opn_no = rec.opn_no
+        try:
+            serials_in_rec = set(int(s) for s in json.loads(rec.serial_numbers or "[]"))
+        except Exception:
+            serials_in_rec = set()
+
+        ops = get_part_ordered_operations(part_no, db)
+        opn_index = -1
+        for idx, op in enumerate(ops):
+            if str(op.get("opn_no", "")).strip().upper() == opn_no.upper():
+                opn_index = idx
+                break
+
+        if opn_index >= 0 and opn_index < len(ops) - 1:
+            # Check subsequent operations
+            for next_op in ops[opn_index + 1:]:
+                next_opn = str(next_op.get("opn_no", "")).strip()
+                subseq_logs = db.query(models.HourlyReport).filter(
+                    func.upper(func.trim(models.HourlyReport.part_no)) == part_no.upper(),
+                    func.upper(func.trim(models.HourlyReport.opn_no)) == next_opn.upper()
+                ).all()
+                for sl in subseq_logs:
+                    try:
+                        sl_serials = set(int(s) for s in json.loads(sl.serial_numbers or "[]"))
+                        overlap = serials_in_rec.intersection(sl_serials)
+                        if overlap:
+                            raise HTTPException(
+                                status_code=400,
+                                detail=f"Cannot delete log: serial numbers {format_serial_ranges(list(overlap))} have already been processed in subsequent Opn {next_opn}. Revert subsequent operations first."
+                            )
+                    except HTTPException:
+                        raise
+                    except Exception:
+                        pass
+
+        db.delete(rec)
+        db.commit()
+        return {"status": "success", "deleted_id": log_id, "message": "Hourly production log deleted successfully"}
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

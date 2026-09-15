@@ -165,9 +165,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 ((screen === 'attendance' || screen === 'hr_shift_list') && accessibleScreens.includes('hr')) ||
                 (screen === 'attendance' && accessibleScreens.includes('attendance')) ||
                 (screen === 'hr_shift_list' && (accessibleScreens.includes('hr_shift_list') || accessibleScreens.includes('shift_list') || accessibleScreens.includes('shiftlist'))) ||
-                ((screen === 'service_setters' || screen === 'shift_status') && accessibleScreens.includes('service')) ||
+                ((screen === 'service_setters' || screen === 'shift_status' || screen === 'hourly_report') && accessibleScreens.includes('service')) ||
                 (screen === 'service_setters' && accessibleScreens.includes('service_setters')) ||
                 (screen === 'shift_status' && (accessibleScreens.includes('shift_status') || accessibleScreens.includes('shiftstatus'))) ||
+                (screen === 'hourly_report' && (accessibleScreens.includes('hourly_report') || accessibleScreens.includes('hourlyreport'))) ||
                 ((screen === 'bdslip' || screen === 'servicedetails') && (accessibleScreens.includes('maintenance') || accessibleScreens.includes('bdslip') || accessibleScreens.includes('servicedetails'))) ||
                 ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'tapmaster' || screen === 'insertreceipt' || screen === 'tapreceipt' || screen === 'insertissue' || screen === 'tapissue' || screen === 'insertcpc' || screen === 'insertstock') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib'))) ||
                 ((screen === 'rm_requirement' || screen === 'mc_util' || screen === 'oper_eff' || screen === 'reports' || screen === 'att_vs_login' || screen === 'bc_prod') && accessibleScreens.includes('reports'))
@@ -196,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'reports': ['reports', 'rm_requirement', 'mc_util', 'oper_eff', 'bc_prod', 'att_vs_login'],
                     'maintenance': ['maintenance', 'bdslip', 'servicedetails'],
                     'hr': ['hr', 'attendance', 'hr_shift_list', 'shift_list', 'shiftlist'],
-                    'service': ['service', 'service_setters', 'setters', 'shift_status', 'shiftstatus'],
+                    'service': ['service', 'service_setters', 'setters', 'shift_status', 'shiftstatus', 'hourly_report', 'hourlyreport'],
                     'inspection': ['inspection', 'line_insp']
                 };
                 const allowed = (accessibleScreens && accessibleScreens.length > 0) && (groupScreens[group] ? groupScreens[group].some(s => accessibleScreens.includes(s) || accessibleScreens.includes(group)) : false);
@@ -474,7 +475,7 @@ document.addEventListener('DOMContentLoaded', () => {
             'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'insertConsumptionSection', 'insertStockSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'dbBackupSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'resourceReqdSection', 'scheduleRunSection',
             'scheduleStatusSection', 'prodLogSection', 'deburSection', 'bcStatusSection', 'wiproStatusSection',
-            'inspectionSection', 'lineInspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'serviceSettersSection', 'shiftStatusSection', 'hrSection', 'attendanceSection', 'hrShiftListSection', 'rfqSection', 'quoteSection'
+            'inspectionSection', 'lineInspectionSection', 'maintenanceSection', 'bdSlipSection', 'serviceDetailsSection', 'serviceSettersSection', 'shiftStatusSection', 'hourlyReportSection', 'hrSection', 'attendanceSection', 'hrShiftListSection', 'rfqSection', 'quoteSection'
         ];
         sections.forEach(id => {
             const el = document.getElementById(id);
@@ -572,6 +573,13 @@ document.addEventListener('DOMContentLoaded', () => {
             importBtn.style.display = 'none';
             addBtn.style.display = 'none';
             initShiftStatusSection();
+        }},
+        'sidebarHourlyReport': { tab: 'hourly_report', action: () => {
+            const sec = document.getElementById('hourlyReportSection');
+            if (sec) sec.style.display = 'block';
+            importBtn.style.display = 'none';
+            addBtn.style.display = 'none';
+            initHourlyReportSection();
         }},
         'sidebarRfq': { tab: 'rfq', action: () => {
             const sec = document.getElementById('rfqSection');
@@ -10038,6 +10046,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 chk.checked = screens.includes('hr_shift_list') || screens.includes('shift_list') || screens.includes('shiftlist');
             } else if (chk.value === 'shift_status') {
                 chk.checked = screens.includes('shift_status') || screens.includes('shiftstatus');
+            } else if (chk.value === 'hourly_report') {
+                chk.checked = screens.includes('hourly_report') || screens.includes('hourlyreport');
             } else {
                 chk.checked = screens.includes(chk.value);
             }
@@ -20591,5 +20601,865 @@ document.addEventListener('DOMContentLoaded', () => {
     window.shareShiftStatusLogWhatsapp = function(logId) {
         openShiftStatusWhatsappModal(logId);
     };
+
+    // ==========================================
+    // --- SERVICE: HOURLY REPORT & SERIAL TRACKING ---
+    // ==========================================
+
+    let hourlyPartTomSelect = null;
+    let hourlyOperatorTomSelect = null;
+    let hourlyAllOperators = [];
+    let hourlyAllMachines = [];
+    let hourlyAllParts = [];
+    let hourlyPartStatusData = null;
+    let hourlySelectedSerials = new Set();
+    let hourlyCurrentGridIndex = 0;
+    let hourlyIsInitialized = false;
+
+    async function initHourlyReportSection() {
+        // 1. Initialize Date & Time to current IST if empty
+        const dateInput = document.getElementById('hourlyDate');
+        const timeInput = document.getElementById('hourlyTime');
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (dateInput && !dateInput.value) {
+            dateInput.value = todayStr;
+        }
+        if (timeInput && !timeInput.value) {
+            const now = new Date();
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            timeInput.value = `${hh}:${mm}`;
+        }
+        const histDateFilter = document.getElementById('hourlyHistoryDateFilter');
+        if (histDateFilter && !histDateFilter.value) {
+            histDateFilter.value = todayStr;
+        }
+
+        // 2. Fetch Departments, Operators, Machines, Parts
+        try {
+            const [deptRes, opRes, mcRes, pmRes] = await Promise.all([
+                fetch('/api/departments').then(r => r.ok ? r.json() : []).catch(() => []),
+                fetch('/api/operators').then(r => r.ok ? r.json() : []).catch(() => []),
+                fetch('/api/machines').then(r => r.ok ? r.json() : []).catch(() => []),
+                fetch('/api/partmaster').then(r => r.ok ? r.json() : []).catch(() => [])
+            ]);
+
+            hourlyAllOperators = opRes || [];
+            hourlyAllMachines = mcRes || [];
+            hourlyAllParts = pmRes || [];
+
+            // Populate Dept dropdown
+            const deptSelect = document.getElementById('hourlyDept');
+            if (deptSelect) {
+                const currentDept = deptSelect.value;
+                deptSelect.innerHTML = '<option value="">-- All / Select Dept --</option>';
+                const deptNames = Array.isArray(deptRes) ? deptRes.map(d => typeof d === 'string' ? d : (d.name || d.dept)).filter(Boolean) : [];
+                // Add unique department names
+                const uniqueDepts = Array.from(new Set(deptNames)).sort();
+                uniqueDepts.forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d;
+                    opt.textContent = d;
+                    deptSelect.appendChild(opt);
+                });
+                if (currentDept && uniqueDepts.includes(currentDept)) {
+                    deptSelect.value = currentDept;
+                }
+            }
+
+            // Initialize Operator TomSelect
+            initHourlyOperatorTomSelect();
+            populateHourlyOperators(deptSelect ? deptSelect.value : '');
+
+            // Populate Machines
+            populateHourlyMachines(deptSelect ? deptSelect.value : '');
+
+            // Initialize Part No TomSelect
+            initHourlyPartTomSelect();
+
+        } catch (err) {
+            console.error('Error initializing hourly report masters:', err);
+        }
+
+        // 3. Attach Event Listeners once
+        if (!hourlyIsInitialized) {
+            hourlyIsInitialized = true;
+
+            // Dept change -> re-filter operators and machines
+            const deptSelect = document.getElementById('hourlyDept');
+            if (deptSelect) {
+                deptSelect.addEventListener('change', () => {
+                    const selDept = deptSelect.value;
+                    populateHourlyOperators(selDept);
+                    populateHourlyMachines(selDept);
+                });
+            }
+
+            // Opn No change
+            const opnSelect = document.getElementById('hourlyOpnNo');
+            if (opnSelect) {
+                opnSelect.addEventListener('change', onHourlyOpnChanged);
+            }
+
+            // Schedule Qty manual change
+            const schQtyInput = document.getElementById('hourlyScheduleQty');
+            if (schQtyInput) {
+                schQtyInput.addEventListener('input', () => {
+                    renderHourlyGrids();
+                });
+            }
+
+            // Grid Nav buttons
+            const prevBtn = document.getElementById('hourlyPrevGridBtn');
+            const nextBtn = document.getElementById('hourlyNextGridBtn');
+            if (prevBtn) {
+                prevBtn.addEventListener('click', () => {
+                    if (hourlyCurrentGridIndex > 0) {
+                        hourlyCurrentGridIndex--;
+                        renderHourlyGrids();
+                    }
+                });
+            }
+            if (nextBtn) {
+                nextBtn.addEventListener('click', () => {
+                    const totalQty = parseInt(document.getElementById('hourlyScheduleQty')?.value) || 0;
+                    const maxGrids = Math.max(1, Math.ceil(totalQty / 100));
+                    if (hourlyCurrentGridIndex < maxGrids - 1) {
+                        hourlyCurrentGridIndex++;
+                        renderHourlyGrids();
+                    }
+                });
+            }
+
+            // Batch selection helpers
+            const selAllGridBtn = document.getElementById('hourlySelectAllGridBtn');
+            if (selAllGridBtn) {
+                selAllGridBtn.addEventListener('click', onHourlySelectAllInGrid);
+            }
+
+            const clearSelBtn = document.getElementById('hourlyClearSelectionBtn');
+            if (clearSelBtn) {
+                clearSelBtn.addEventListener('click', onHourlyClearSelection);
+            }
+
+            const applyRangeBtn = document.getElementById('hourlyApplyRangeBtn');
+            if (applyRangeBtn) {
+                applyRangeBtn.addEventListener('click', onHourlyApplyRange);
+            }
+
+            // Save log button
+            const saveBtn = document.getElementById('hourlySaveBtn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', saveHourlyReportLog);
+            }
+
+            // Reload / Refresh
+            const reloadBtn = document.getElementById('hourlyReloadBtn');
+            if (reloadBtn) {
+                reloadBtn.addEventListener('click', () => {
+                    const partVal = hourlyPartTomSelect ? hourlyPartTomSelect.getValue() : document.getElementById('hourlyPartNo')?.value;
+                    if (partVal) {
+                        onHourlyPartChanged(partVal);
+                    }
+                    loadHourlyReportLogs();
+                });
+            }
+
+            // History table filters
+            const histRefreshBtn = document.getElementById('hourlyHistoryRefreshBtn');
+            if (histRefreshBtn) {
+                histRefreshBtn.addEventListener('click', loadHourlyReportLogs);
+            }
+            const histDateInput = document.getElementById('hourlyHistoryDateFilter');
+            if (histDateInput) {
+                histDateInput.addEventListener('change', loadHourlyReportLogs);
+            }
+            const histAllDatesBtn = document.getElementById('hourlyHistoryAllDatesBtn');
+            if (histAllDatesBtn) {
+                histAllDatesBtn.addEventListener('click', () => {
+                    if (histDateInput) histDateInput.value = '';
+                    loadHourlyReportLogs();
+                });
+            }
+        }
+
+        // Load History logs
+        loadHourlyReportLogs();
+    }
+
+    function initHourlyOperatorTomSelect() {
+        const selectEl = document.getElementById('hourlyOperator');
+        if (!selectEl || !window.TomSelect) return;
+        if (!hourlyOperatorTomSelect) {
+            try {
+                hourlyOperatorTomSelect = new TomSelect(selectEl, {
+                    plugins: ['dropdown_input'],
+                    create: false,
+                    placeholder: 'Search Operator...',
+                    maxOptions: 500,
+                    searchField: ['text']
+                });
+            } catch (e) {
+                console.error('Error initializing hourlyOperatorTomSelect:', e);
+            }
+        }
+    }
+
+    function populateHourlyOperators(deptFilter) {
+        if (!hourlyOperatorTomSelect) {
+            initHourlyOperatorTomSelect();
+        }
+        const cleanDept = (deptFilter || '').trim().toUpperCase();
+        const filteredOps = hourlyAllOperators.filter(op => {
+            if (!cleanDept || cleanDept === 'ALL') return true;
+            const opDept = (op.dept || op.department || '').trim().toUpperCase();
+            return opDept === cleanDept;
+        });
+
+        const currentVal = hourlyOperatorTomSelect ? hourlyOperatorTomSelect.getValue() : '';
+        if (hourlyOperatorTomSelect) {
+            hourlyOperatorTomSelect.clear(true);
+            hourlyOperatorTomSelect.clearOptions();
+            hourlyOperatorTomSelect.addOption({ value: '', text: '-- Select Operator --' });
+            filteredOps.forEach(op => {
+                const name = op.name || op.operator_name || '';
+                const designation = op.designation ? ` (${op.designation})` : '';
+                if (name) {
+                    hourlyOperatorTomSelect.addOption({
+                        value: name,
+                        text: `${name}${designation}`
+                    });
+                }
+            });
+            hourlyOperatorTomSelect.refreshOptions(false);
+            if (currentVal) {
+                hourlyOperatorTomSelect.setValue(currentVal, true);
+            }
+        }
+    }
+
+    function populateHourlyMachines(deptFilter) {
+        const mcSelect = document.getElementById('hourlyMachine');
+        if (!mcSelect) return;
+        const cleanDept = (deptFilter || '').trim().toUpperCase();
+        const filteredMcs = hourlyAllMachines.filter(mc => {
+            if (!cleanDept || cleanDept === 'ALL') return true;
+            const mcDept = (mc.dept || mc.department || '').trim().toUpperCase();
+            return mcDept === cleanDept;
+        });
+
+        const currentVal = mcSelect.value;
+        mcSelect.innerHTML = '<option value="">-- Select Machine --</option>';
+        filteredMcs.forEach(mc => {
+            const name = mc.name || mc.machine_name || '';
+            if (name) {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                mcSelect.appendChild(opt);
+            }
+        });
+        if (currentVal) {
+            mcSelect.value = currentVal;
+        }
+    }
+
+    function initHourlyPartTomSelect() {
+        const selectEl = document.getElementById('hourlyPartNo');
+        if (!selectEl || !window.TomSelect) return;
+        if (!hourlyPartTomSelect) {
+            try {
+                hourlyPartTomSelect = new TomSelect(selectEl, {
+                    plugins: ['dropdown_input'],
+                    create: false,
+                    placeholder: 'Search Part No...',
+                    maxOptions: 1000,
+                    searchField: ['text'],
+                    onChange: (val) => {
+                        onHourlyPartChanged(val);
+                    }
+                });
+            } catch (e) {
+                console.error('Error initializing hourlyPartTomSelect:', e);
+            }
+        }
+
+        if (hourlyPartTomSelect && hourlyAllParts.length > 0) {
+            const curVal = hourlyPartTomSelect.getValue();
+            hourlyPartTomSelect.clear(true);
+            hourlyPartTomSelect.clearOptions();
+            hourlyPartTomSelect.addOption({ value: '', text: '-- Select Part No --' });
+            hourlyAllParts.forEach(p => {
+                const pno = p.partno || p.part_no || '';
+                if (pno) {
+                    const desc = p.description ? ` - ${p.description}` : '';
+                    hourlyPartTomSelect.addOption({
+                        value: pno,
+                        text: `${pno}${desc}`
+                    });
+                }
+            });
+            hourlyPartTomSelect.refreshOptions(false);
+            if (curVal) {
+                hourlyPartTomSelect.setValue(curVal, true);
+            }
+        }
+    }
+
+    async function onHourlyPartChanged(partNo) {
+        const opnSelect = document.getElementById('hourlyOpnNo');
+        const opnDescInput = document.getElementById('hourlyOpnDesc');
+        const schQtyInput = document.getElementById('hourlyScheduleQty');
+        const gridContainer = document.getElementById('hourlyGridContainer');
+
+        if (!partNo) {
+            if (opnSelect) opnSelect.innerHTML = '<option value="">-- Select Opn --</option>';
+            if (opnDescInput) opnDescInput.value = '';
+            if (schQtyInput) schQtyInput.value = '';
+            hourlyPartStatusData = null;
+            hourlySelectedSerials.clear();
+            if (gridContainer) {
+                gridContainer.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; color: #94a3b8; padding: 3rem 1rem;">
+                        <i class="fas fa-hand-pointer" style="font-size: 2rem; margin-bottom: 8px; display: block; color: #cbd5e1;"></i>
+                        Please select Department, Operator, Machine, Part No, and Opn No to generate the serial tracking grid.
+                    </div>`;
+            }
+            updateHourlyKpis(0, 0, 0, 0, 0, null);
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/hourly-reports/part-status?part_no=${encodeURIComponent(partNo)}`);
+            if (!res.ok) throw new Error('Failed to fetch part status');
+            hourlyPartStatusData = await res.json();
+
+            // Set Schedule Quantity
+            if (schQtyInput) {
+                schQtyInput.value = hourlyPartStatusData.schedule_qty || 0;
+            }
+
+            // Populate Operations
+            if (opnSelect) {
+                opnSelect.innerHTML = '<option value="">-- Select Opn --</option>';
+                const ops = hourlyPartStatusData.operations || [];
+                ops.forEach(op => {
+                    const opt = document.createElement('option');
+                    opt.value = op.opn_no;
+                    opt.textContent = `${op.opn_no} - ${op.description || 'Operation ' + op.opn_no}`;
+                    opnSelect.appendChild(opt);
+                });
+
+                // Default to first operation if available
+                if (ops.length > 0) {
+                    opnSelect.selectedIndex = 1;
+                    onHourlyOpnChanged();
+                } else {
+                    if (opnDescInput) opnDescInput.value = '';
+                    renderHourlyGrids();
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching hourly report part status:', err);
+            if (gridContainer) {
+                gridContainer.innerHTML = `<div style="grid-column: 1 / -1; color: #ef4444; text-align: center; padding: 2rem;">Failed to load part operations. Please try again.</div>`;
+            }
+        }
+    }
+
+    function onHourlyOpnChanged() {
+        const opnSelect = document.getElementById('hourlyOpnNo');
+        const opnDescInput = document.getElementById('hourlyOpnDesc');
+        const mcSelect = document.getElementById('hourlyMachine');
+
+        if (!opnSelect || !hourlyPartStatusData) return;
+        const selectedOpn = opnSelect.value.trim();
+        const ops = hourlyPartStatusData.operations || [];
+        const opObj = ops.find(o => String(o.opn_no).trim().toUpperCase() === selectedOpn.toUpperCase());
+
+        if (opObj) {
+            if (opnDescInput) opnDescInput.value = opObj.description || '';
+            // Auto-select machine if specified and exists in options
+            if (opObj.machine && mcSelect) {
+                for (let i = 0; i < mcSelect.options.length; i++) {
+                    if (mcSelect.options[i].value.trim().toUpperCase() === opObj.machine.trim().toUpperCase()) {
+                        mcSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+        } else {
+            if (opnDescInput) opnDescInput.value = '';
+        }
+
+        hourlySelectedSerials.clear();
+        hourlyCurrentGridIndex = 0;
+        renderHourlyGrids();
+    }
+
+    function renderHourlyGrids() {
+        const schQtyInput = document.getElementById('hourlyScheduleQty');
+        const opnSelect = document.getElementById('hourlyOpnNo');
+        const gridContainer = document.getElementById('hourlyGridContainer');
+        const gridTabsContainer = document.getElementById('hourlyGridTabs');
+        const activeGridTitle = document.getElementById('hourlyActiveGridTitle');
+        const prevBtn = document.getElementById('hourlyPrevGridBtn');
+        const nextBtn = document.getElementById('hourlyNextGridBtn');
+
+        const totalQty = parseInt(schQtyInput?.value) || 0;
+        const selectedOpn = opnSelect ? opnSelect.value.trim() : '';
+
+        if (!hourlyPartStatusData || !selectedOpn || totalQty <= 0) {
+            if (gridContainer) {
+                gridContainer.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; color: #94a3b8; padding: 3rem 1rem;">
+                        <i class="fas fa-layer-group" style="font-size: 2rem; margin-bottom: 8px; display: block; color: #cbd5e1;"></i>
+                        ${totalQty <= 0 ? 'Schedule Quantity is 0. Please enter a valid target schedule quantity.' : 'Please select an Operation to view the production grid.'}
+                    </div>`;
+            }
+            if (gridTabsContainer) gridTabsContainer.innerHTML = '';
+            if (activeGridTitle) activeGridTitle.textContent = 'Grid 1 (1 - 0)';
+            updateHourlyKpis(totalQty, 0, 0, 0, 0, null);
+            return;
+        }
+
+        const ops = hourlyPartStatusData.operations || [];
+        const opnIndex = ops.findIndex(o => String(o.opn_no).trim().toUpperCase() === selectedOpn.toUpperCase());
+        const prevOpn = opnIndex > 0 ? String(ops[opnIndex - 1].opn_no).trim() : null;
+
+        const completedByOpn = hourlyPartStatusData.completed_by_opn || {};
+        const completedCurrSet = new Set((completedByOpn[selectedOpn] || []).map(Number));
+        const completedPrevSet = prevOpn ? new Set((completedByOpn[prevOpn] || []).map(Number)) : null;
+        const detailsCurr = (hourlyPartStatusData.completed_details_by_opn && hourlyPartStatusData.completed_details_by_opn[selectedOpn]) || {};
+
+        // Calculate Grids
+        const numGrids = Math.max(1, Math.ceil(totalQty / 100));
+        if (hourlyCurrentGridIndex >= numGrids) {
+            hourlyCurrentGridIndex = numGrids - 1;
+        }
+        if (hourlyCurrentGridIndex < 0) {
+            hourlyCurrentGridIndex = 0;
+        }
+
+        // Render Tabs
+        if (gridTabsContainer) {
+            gridTabsContainer.innerHTML = '';
+            for (let g = 0; g < numGrids; g++) {
+                const gStart = g * 100 + 1;
+                const gEnd = Math.min((g + 1) * 100, totalQty);
+                let gDone = 0;
+                for (let s = gStart; s <= gEnd; s++) {
+                    if (completedCurrSet.has(s)) gDone++;
+                }
+                const tabBtn = document.createElement('button');
+                tabBtn.type = 'button';
+                tabBtn.className = `hourly-grid-tab-btn ${g === hourlyCurrentGridIndex ? 'active' : ''}`;
+                tabBtn.innerHTML = `Grid ${g + 1} (${gStart} - ${gEnd}) <span style="font-size: 0.75rem; opacity: 0.85; margin-left: 4px;">[${gDone}/${gEnd - gStart + 1}]</span>`;
+                tabBtn.addEventListener('click', () => {
+                    hourlyCurrentGridIndex = g;
+                    renderHourlyGrids();
+                });
+                gridTabsContainer.appendChild(tabBtn);
+            }
+        }
+
+        // Active grid numbers range
+        const startNo = hourlyCurrentGridIndex * 100 + 1;
+        const endNo = Math.min((hourlyCurrentGridIndex + 1) * 100, totalQty);
+
+        if (activeGridTitle) {
+            activeGridTitle.textContent = `Grid ${hourlyCurrentGridIndex + 1} (${startNo} - ${endNo})`;
+        }
+        if (prevBtn) prevBtn.disabled = hourlyCurrentGridIndex <= 0;
+        if (nextBtn) nextBtn.disabled = hourlyCurrentGridIndex >= numGrids - 1;
+
+        // Render Cells
+        if (gridContainer) {
+            gridContainer.innerHTML = '';
+            for (let s = startNo; s <= endNo; s++) {
+                const cell = document.createElement('div');
+                cell.className = 'hourly-cell';
+                cell.textContent = s;
+                cell.setAttribute('data-serial', s);
+
+                // 1. Completed in current operation -> Blocked
+                if (completedCurrSet.has(s)) {
+                    cell.classList.add('completed');
+                    const d = detailsCurr[String(s)] || detailsCurr[s] || {};
+                    const info = `Piece #${s} completed by ${d.operator || 'Operator'} on ${d.date || ''} at ${d.time || ''} (M/C: ${d.machine || 'N/A'})`;
+                    cell.title = info;
+                    cell.addEventListener('click', () => {
+                        const hoverEl = document.getElementById('hourlyCellHoverInfo');
+                        if (hoverEl) hoverEl.innerText = info;
+                    });
+                }
+                // 2. Sequential rule: If not first operation and not completed in previous operation -> Locked
+                else if (prevOpn !== null && !completedPrevSet.has(s)) {
+                    cell.classList.add('locked');
+                    const info = `Piece #${s} locked: pending completion in Opn ${prevOpn}`;
+                    cell.title = info;
+                    cell.addEventListener('click', () => {
+                        const hoverEl = document.getElementById('hourlyCellHoverInfo');
+                        if (hoverEl) hoverEl.innerText = `⚠️ Piece #${s} cannot be worked on: must be completed in Opn ${prevOpn} first.`;
+                    });
+                }
+                // 3. Available for machining
+                else {
+                    if (hourlySelectedSerials.has(s)) {
+                        cell.classList.add('selected');
+                    } else {
+                        cell.classList.add('available');
+                    }
+                    cell.title = `Piece #${s} Available - Tap to mark completed`;
+                    cell.addEventListener('click', () => {
+                        toggleHourlyCell(s, cell);
+                    });
+                }
+
+                gridContainer.appendChild(cell);
+            }
+        }
+
+        // Update KPIs
+        const doneCount = completedCurrSet.size;
+        const priorDoneCount = prevOpn !== null ? completedPrevSet.size : 0;
+        const balanceCount = prevOpn !== null ? Math.max(0, completedPrevSet.size - doneCount) : Math.max(0, totalQty - doneCount);
+        const selectedCount = hourlySelectedSerials.size;
+
+        updateHourlyKpis(totalQty, priorDoneCount, doneCount, balanceCount, selectedCount, prevOpn);
+    }
+
+    function toggleHourlyCell(serialNo, cellEl) {
+        if (hourlySelectedSerials.has(serialNo)) {
+            hourlySelectedSerials.delete(serialNo);
+            cellEl.classList.remove('selected');
+            cellEl.classList.add('available');
+        } else {
+            hourlySelectedSerials.add(serialNo);
+            cellEl.classList.remove('available');
+            cellEl.classList.add('selected');
+        }
+
+        // Update Selected badge & KPI
+        const selCount = hourlySelectedSerials.size;
+        const statSelected = document.getElementById('hourlyStatSelectedQty');
+        const badgeCount = document.getElementById('hourlySaveBadgeCount');
+        if (statSelected) statSelected.textContent = selCount;
+        if (badgeCount) badgeCount.textContent = selCount;
+    }
+
+    function onHourlySelectAllInGrid() {
+        if (!hourlyPartStatusData) return;
+        const schQtyInput = document.getElementById('hourlyScheduleQty');
+        const opnSelect = document.getElementById('hourlyOpnNo');
+        const totalQty = parseInt(schQtyInput?.value) || 0;
+        const selectedOpn = opnSelect ? opnSelect.value.trim() : '';
+        if (!selectedOpn || totalQty <= 0) return;
+
+        const ops = hourlyPartStatusData.operations || [];
+        const opnIndex = ops.findIndex(o => String(o.opn_no).trim().toUpperCase() === selectedOpn.toUpperCase());
+        const prevOpn = opnIndex > 0 ? String(ops[opnIndex - 1].opn_no).trim() : null;
+
+        const completedCurrSet = new Set(((hourlyPartStatusData.completed_by_opn || {})[selectedOpn] || []).map(Number));
+        const completedPrevSet = prevOpn ? new Set(((hourlyPartStatusData.completed_by_opn || {})[prevOpn] || []).map(Number)) : null;
+
+        const startNo = hourlyCurrentGridIndex * 100 + 1;
+        const endNo = Math.min((hourlyCurrentGridIndex + 1) * 100, totalQty);
+
+        for (let s = startNo; s <= endNo; s++) {
+            if (!completedCurrSet.has(s)) {
+                if (prevOpn === null || completedPrevSet.has(s)) {
+                    hourlySelectedSerials.add(s);
+                }
+            }
+        }
+        renderHourlyGrids();
+    }
+
+    function onHourlyClearSelection() {
+        hourlySelectedSerials.clear();
+        renderHourlyGrids();
+    }
+
+    function onHourlyApplyRange() {
+        if (!hourlyPartStatusData) return;
+        const startInput = document.getElementById('hourlyRangeStart');
+        const endInput = document.getElementById('hourlyRangeEnd');
+        const fromVal = parseInt(startInput?.value);
+        const toVal = parseInt(endInput?.value);
+
+        if (isNaN(fromVal) || isNaN(toVal)) {
+            alert('Please enter both valid From and To serial numbers');
+            return;
+        }
+        if (fromVal > toVal) {
+            alert('From number cannot be greater than To number');
+            return;
+        }
+
+        const schQtyInput = document.getElementById('hourlyScheduleQty');
+        const opnSelect = document.getElementById('hourlyOpnNo');
+        const totalQty = parseInt(schQtyInput?.value) || 0;
+        const selectedOpn = opnSelect ? opnSelect.value.trim() : '';
+        if (!selectedOpn || totalQty <= 0) return;
+
+        const ops = hourlyPartStatusData.operations || [];
+        const opnIndex = ops.findIndex(o => String(o.opn_no).trim().toUpperCase() === selectedOpn.toUpperCase());
+        const prevOpn = opnIndex > 0 ? String(ops[opnIndex - 1].opn_no).trim() : null;
+
+        const completedCurrSet = new Set(((hourlyPartStatusData.completed_by_opn || {})[selectedOpn] || []).map(Number));
+        const completedPrevSet = prevOpn ? new Set(((hourlyPartStatusData.completed_by_opn || {})[prevOpn] || []).map(Number)) : null;
+
+        let addedCount = 0;
+        for (let s = fromVal; s <= toVal; s++) {
+            if (s >= 1 && s <= totalQty) {
+                if (!completedCurrSet.has(s)) {
+                    if (prevOpn === null || completedPrevSet.has(s)) {
+                        hourlySelectedSerials.add(s);
+                        addedCount++;
+                    }
+                }
+            }
+        }
+
+        // Navigate to the grid containing the start number if needed
+        const targetGrid = Math.floor((fromVal - 1) / 100);
+        if (targetGrid >= 0 && targetGrid !== hourlyCurrentGridIndex) {
+            hourlyCurrentGridIndex = targetGrid;
+        }
+
+        renderHourlyGrids();
+        const hoverEl = document.getElementById('hourlyCellHoverInfo');
+        if (hoverEl) {
+            hoverEl.innerText = `Selected ${addedCount} available piece(s) in range ${fromVal} - ${toVal}`;
+        }
+    }
+
+    function updateHourlyKpis(totalQty, priorDone, opnDone, balance, selected, prevOpn) {
+        const statSch = document.getElementById('hourlyStatScheduleQty');
+        const statPriorCard = document.getElementById('hourlyStatPriorCard');
+        const statPriorQty = document.getElementById('hourlyStatPriorQty');
+        const statPriorLbl = document.getElementById('hourlyStatPriorLbl');
+        const statOpnDone = document.getElementById('hourlyStatOpnDoneQty');
+        const statBalance = document.getElementById('hourlyStatBalanceQty');
+        const statSelected = document.getElementById('hourlyStatSelectedQty');
+        const badgeCount = document.getElementById('hourlySaveBadgeCount');
+
+        if (statSch) statSch.textContent = totalQty;
+        if (statOpnDone) statOpnDone.textContent = opnDone;
+        if (statBalance) statBalance.textContent = balance;
+        if (statSelected) statSelected.textContent = selected;
+        if (badgeCount) badgeCount.textContent = selected;
+
+        if (statPriorCard) {
+            if (prevOpn !== null) {
+                statPriorCard.style.display = 'block';
+                if (statPriorLbl) statPriorLbl.textContent = `Opn ${prevOpn} Done`;
+                if (statPriorQty) statPriorQty.textContent = priorDone;
+            } else {
+                statPriorCard.style.display = 'none';
+            }
+        }
+    }
+
+    async function saveHourlyReportLog() {
+        const dateInput = document.getElementById('hourlyDate');
+        const timeInput = document.getElementById('hourlyTime');
+        const deptSelect = document.getElementById('hourlyDept');
+        const mcSelect = document.getElementById('hourlyMachine');
+        const opnSelect = document.getElementById('hourlyOpnNo');
+        const opnDescInput = document.getElementById('hourlyOpnDesc');
+        const schQtyInput = document.getElementById('hourlyScheduleQty');
+        const remarksInput = document.getElementById('hourlyRemarks');
+
+        const dateVal = dateInput?.value;
+        const timeVal = timeInput?.value || new Date().toTimeString().slice(0, 8);
+        const deptVal = deptSelect?.value || '';
+        const operatorVal = hourlyOperatorTomSelect ? hourlyOperatorTomSelect.getValue() : document.getElementById('hourlyOperator')?.value;
+        const machineVal = mcSelect?.value;
+        const partNoVal = hourlyPartTomSelect ? hourlyPartTomSelect.getValue() : document.getElementById('hourlyPartNo')?.value;
+        const opnNoVal = opnSelect?.value;
+        const opnDescVal = opnDescInput?.value || '';
+        const schQtyVal = parseInt(schQtyInput?.value) || 0;
+        const remarksVal = remarksInput?.value || '';
+
+        // Validation
+        if (!dateVal) {
+            alert('Please select a Date.');
+            dateInput?.focus();
+            return;
+        }
+        if (!operatorVal) {
+            alert('Please select an Operator.');
+            return;
+        }
+        if (!machineVal) {
+            alert('Please select a Machine.');
+            mcSelect?.focus();
+            return;
+        }
+        if (!partNoVal) {
+            alert('Please select a Part Number.');
+            return;
+        }
+        if (!opnNoVal) {
+            alert('Please select an Operation Number.');
+            opnSelect?.focus();
+            return;
+        }
+        if (hourlySelectedSerials.size === 0) {
+            alert('Please click on at least one piece cell in the grid to mark it completed before saving.');
+            return;
+        }
+
+        const serialsArray = Array.from(hourlySelectedSerials).sort((a, b) => a - b);
+        const saveBtn = document.getElementById('hourlySaveBtn');
+        const origText = saveBtn ? saveBtn.innerHTML : '';
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving Log...';
+        }
+
+        try {
+            const res = await fetch('/api/hourly-reports', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    date: dateVal,
+                    time: timeVal,
+                    dept: deptVal,
+                    operator: operatorVal,
+                    machine: machineVal,
+                    part_no: partNoVal,
+                    opn_no: opnNoVal,
+                    opn_desc: opnDescVal,
+                    schedule_qty: schQtyVal,
+                    serial_numbers: serialsArray,
+                    remarks: remarksVal
+                })
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.detail || 'Failed to save hourly production log');
+            }
+
+            alert(`✅ Success: Logged ${data.qty} pieces (${data.serial_range}) for Opn ${opnNoVal}!`);
+            hourlySelectedSerials.clear();
+            if (remarksInput) remarksInput.value = '';
+
+            // Refresh part status and re-render grid
+            await onHourlyPartChanged(partNoVal);
+            // Re-select same operation
+            if (opnSelect) {
+                opnSelect.value = opnNoVal;
+                onHourlyOpnChanged();
+            }
+
+            // Reload history table
+            loadHourlyReportLogs();
+        } catch (err) {
+            alert(`❌ Error: ${err.message}`);
+        } finally {
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = origText;
+            }
+        }
+    }
+
+    async function loadHourlyReportLogs() {
+        const tbody = document.getElementById('hourlyHistoryBody');
+        const dateFilterInput = document.getElementById('hourlyHistoryDateFilter');
+        const dateVal = dateFilterInput?.value || '';
+
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; color: var(--text-muted); padding: 1rem;"><i class="fas fa-spinner fa-spin"></i> Loading hourly logs...</td></tr>';
+        }
+
+        try {
+            let url = '/api/hourly-reports';
+            if (dateVal) {
+                url += `?date=${encodeURIComponent(dateVal)}`;
+            }
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('Failed to fetch hourly production logs');
+            const logs = await res.json();
+
+            if (!tbody) return;
+            if (!logs || logs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; color: #94a3b8; padding: 1.5rem;">No hourly production logs found${dateVal ? ' for ' + dateVal : ''}.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = '';
+            logs.forEach(log => {
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid #e2e8f0';
+
+                tr.innerHTML = `
+                    <td style="padding: 8px 6px; text-align: center; font-weight: 700; color: #64748b;">${log.id}</td>
+                    <td style="padding: 8px 8px; white-space: nowrap;">${log.date || ''}</td>
+                    <td style="padding: 8px 8px; font-weight: 600; color: #0284c7;">${log.time || ''}</td>
+                    <td style="padding: 8px 8px;">${log.dept || '-'}</td>
+                    <td style="padding: 8px 8px; font-weight: 600; color: #1e293b;">${log.operator || ''}</td>
+                    <td style="padding: 8px 8px;">${log.machine || ''}</td>
+                    <td style="padding: 8px 8px; font-weight: 700; color: #0f172a;">${log.part_no || ''}</td>
+                    <td style="padding: 8px 8px; font-weight: 600;">Opn ${log.opn_no || ''}</td>
+                    <td style="padding: 8px 8px; text-align: center; font-weight: 700; color: #10b981; font-size: 0.95rem;">${log.qty || 0}</td>
+                    <td style="padding: 8px 8px;">
+                        <span style="display: inline-block; background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.82rem;">
+                            ${log.serial_range || (log.serial_numbers || []).join(', ')}
+                        </span>
+                    </td>
+                    <td style="padding: 8px 8px; color: #64748b; font-size: 0.8rem; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${log.remarks || '-'}</td>
+                    <td style="padding: 8px 8px; text-align: center;">
+                        <button type="button" class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.78rem; color: #ef4444; border-color: #fca5a5;" onclick="window.deleteHourlyReportLog(${log.id})">
+                            <i class="fas fa-trash-alt"></i> Delete
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch (err) {
+            console.error('Error loading hourly report logs:', err);
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; color: #ef4444; padding: 1rem;">Failed to load logs: ${err.message}</td></tr>`;
+            }
+        }
+    }
+
+    window.deleteHourlyReportLog = async function(logId) {
+        if (!confirm(`Are you sure you want to delete Hourly Production Log #${logId}? This will restore the serial numbers back to uncompleted.`)) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/hourly-reports/${logId}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.detail || 'Failed to delete hourly production log');
+            }
+
+            alert('✅ Log deleted successfully.');
+            // Refresh current grid if open
+            const partVal = hourlyPartTomSelect ? hourlyPartTomSelect.getValue() : document.getElementById('hourlyPartNo')?.value;
+            const opnVal = document.getElementById('hourlyOpnNo')?.value;
+            if (partVal) {
+                await onHourlyPartChanged(partVal);
+                if (opnVal) {
+                    const opnSelect = document.getElementById('hourlyOpnNo');
+                    if (opnSelect) opnSelect.value = opnVal;
+                    onHourlyOpnChanged();
+                }
+            }
+            loadHourlyReportLogs();
+        } catch (err) {
+            alert(`❌ Cannot delete log: ${err.message}`);
+        }
+    };
 });
+
 
