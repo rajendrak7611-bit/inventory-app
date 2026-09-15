@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text, or_
-from typing import List, Optional
+from typing import List, Optional, Union, Any
 from pydantic import BaseModel
 import datetime
 import io
@@ -77,6 +77,7 @@ def run_db_migrations():
         "ALTER TABLE inspection_reports ADD COLUMN inspection_date VARCHAR;",
         "ALTER TABLE inspection_parameters ADD COLUMN dept VARCHAR;",
         "ALTER TABLE inspection_reports ADD COLUMN dept VARCHAR;",
+        "ALTER TABLE raw_material_logs ADD COLUMN remarks TEXT;",
     ]
     for sql in migration_statements:
         try:
@@ -4142,6 +4143,7 @@ def get_raw_material_logs(db: Session = Depends(get_db)):
                 "finish_part_no": r.get("finish_part_no") or "",
                 "part_prefix": r.get("part_prefix") or "",
                 "qty": int(r.get("qty") or 0),
+                "remarks": r.get("remarks") or "",
                 "created_at": str(r.get("created_at") or "")
             } for r in rows]
         return []
@@ -4159,6 +4161,7 @@ def get_raw_material_logs(db: Session = Depends(get_db)):
                 "finish_part_no": l.finish_part_no or "",
                 "part_prefix": l.part_prefix or "",
                 "qty": l.qty or 0,
+                "remarks": getattr(l, "remarks", "") or "",
                 "created_at": str(getattr(l, "created_at", "") or "")
             } for l in logs]
         except Exception:
@@ -4175,6 +4178,7 @@ def create_raw_material_log(data: dict, db: Session = Depends(get_db)):
     fpno = (data.get("finish_part_no") or "").strip()
     pprefix = (data.get("part_prefix") or "").strip()
     qty = int(data.get("qty") or data.get("quantity") or 0)
+    remarks = (data.get("remarks") or "").strip()
 
     if not fpn:
         raise HTTPException(status_code=400, detail="Forge PN is required")
@@ -4187,9 +4191,9 @@ def create_raw_material_log(data: dict, db: Session = Depends(get_db)):
 
     try:
         db.execute(text("""
-            INSERT INTO raw_material_logs (type, date, dc_type, forge_pn, dc_no, finish_part_no, part_prefix, qty)
-            VALUES (:type, :date, :dc_type, :forge_pn, :dc_no, :finish_part_no, :part_prefix, :qty)
-        """), {"type": rtype, "date": rdate, "dc_type": dctype, "forge_pn": fpn, "dc_no": dcno, "finish_part_no": fpno, "part_prefix": pprefix, "qty": qty})
+            INSERT INTO raw_material_logs (type, date, dc_type, forge_pn, dc_no, finish_part_no, part_prefix, qty, remarks)
+            VALUES (:type, :date, :dc_type, :forge_pn, :dc_no, :finish_part_no, :part_prefix, :qty, :remarks)
+        """), {"type": rtype, "date": rdate, "dc_type": dctype, "forge_pn": fpn, "dc_no": dcno, "finish_part_no": fpno, "part_prefix": pprefix, "qty": qty, "remarks": remarks})
         
         # Auto sync stock in raw_materials
         logs_for_fpn = db.execute(text("SELECT type, qty FROM raw_material_logs WHERE forge_pn = :fpn"), {"fpn": fpn}).mappings().all()
@@ -4225,6 +4229,7 @@ def update_raw_material_log(log_id: int, data: dict, db: Session = Depends(get_d
         fpno = (data.get("finish_part_no") or "").strip()
         pprefix = (data.get("part_prefix") or "").strip()
         qty = int(data.get("qty") or data.get("quantity") or 0)
+        remarks = (data.get("remarks") or "").strip()
 
         if not fpn:
             raise HTTPException(status_code=400, detail="Forge PN is required")
@@ -4232,7 +4237,8 @@ def update_raw_material_log(log_id: int, data: dict, db: Session = Depends(get_d
         db.execute(text("""
             UPDATE raw_material_logs
             SET type = :type, date = :date, dc_type = :dc_type, forge_pn = :forge_pn,
-                dc_no = :dc_no, finish_part_no = :finish_part_no, part_prefix = :part_prefix, qty = :qty
+                dc_no = :dc_no, finish_part_no = :finish_part_no, part_prefix = :part_prefix, qty = :qty,
+                remarks = :remarks
             WHERE id = :id
         """), {
             "id": log_id,
@@ -4243,7 +4249,8 @@ def update_raw_material_log(log_id: int, data: dict, db: Session = Depends(get_d
             "dc_no": dcno,
             "finish_part_no": fpno,
             "part_prefix": pprefix,
-            "qty": qty
+            "qty": qty,
+            "remarks": remarks
         })
         
         # Recalculate stock for this forge_pn
@@ -4292,8 +4299,9 @@ def clear_all_raw_material_logs(db: Session = Depends(get_db)):
     return {"message": "All Raw Material logs deleted successfully"}
 
 @app.post("/api/rawmateriallogs/bulk")
-def bulk_import_raw_material_logs(items: list, db: Session = Depends(get_db)):
-    for rl in items:
+def bulk_import_raw_material_logs(items: Union[list, dict], db: Session = Depends(get_db)):
+    raw_list = items.get("logs", []) if isinstance(items, dict) else items
+    for rl in raw_list:
         rtype = (rl.get("type") or "receipt").strip().lower()
         rdate = (rl.get("date") or "").strip()
         dctype = (rl.get("dc_type") or "").strip()
@@ -4302,17 +4310,18 @@ def bulk_import_raw_material_logs(items: list, db: Session = Depends(get_db)):
         fpno = (rl.get("finish_part_no") or "").strip()
         pprefix = (rl.get("part_prefix") or "").strip()
         rqty = int(rl.get("qty") or rl.get("quantity") or 0)
+        rremarks = (rl.get("remarks") or "").strip()
         if not fpn:
             continue
         try:
             db.execute(text("""
-                INSERT INTO raw_material_logs (type, date, dc_type, forge_pn, dc_no, finish_part_no, part_prefix, qty)
-                VALUES (:type, :date, :dc_type, :forge_pn, :dc_no, :finish_part_no, :part_prefix, :qty)
-            """), {"type": rtype, "date": rdate, "dc_type": dctype, "forge_pn": fpn, "dc_no": dcno, "finish_part_no": fpno, "part_prefix": pprefix, "qty": rqty})
+                INSERT INTO raw_material_logs (type, date, dc_type, forge_pn, dc_no, finish_part_no, part_prefix, qty, remarks)
+                VALUES (:type, :date, :dc_type, :forge_pn, :dc_no, :finish_part_no, :part_prefix, :qty, :remarks)
+            """), {"type": rtype, "date": rdate, "dc_type": dctype, "forge_pn": fpn, "dc_no": dcno, "finish_part_no": fpno, "part_prefix": pprefix, "qty": rqty, "remarks": rremarks})
         except Exception:
             pass
     db.commit()
-    return {"message": f"Imported {len(items)} logs successfully"}
+    return {"message": f"Imported {len(raw_list)} logs successfully"}
 
 # --- HR ATTENDANCE CRUD ---
 @app.get("/api/attendance")

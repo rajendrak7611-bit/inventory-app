@@ -992,12 +992,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('rmLogDcNoGroup').style.display = 'none';
                 document.getElementById('rmLogFinishPartNoGroup').style.display = 'none';
                 if (document.getElementById('rmLogPartPrefixGroup')) document.getElementById('rmLogPartPrefixGroup').style.display = 'none';
+                if (document.getElementById('rmLogRemarksGroup')) document.getElementById('rmLogRemarksGroup').style.display = 'none';
             } else {
                 if (document.getElementById('rmLogDcTypeGroup')) document.getElementById('rmLogDcTypeGroup').style.display = 'block';
                 document.getElementById('rmLogDcNoGroup').style.display = 'block';
                 document.getElementById('rmLogFinishPartNoGroup').style.display = 'block';
                 if (document.getElementById('rmLogPartPrefixGroup')) document.getElementById('rmLogPartPrefixGroup').style.display = 'block';
+                if (document.getElementById('rmLogRemarksGroup')) document.getElementById('rmLogRemarksGroup').style.display = 'block';
                 if (document.getElementById('rmLogPartPrefix')) document.getElementById('rmLogPartPrefix').value = '';
+                if (document.getElementById('rmLogRemarks')) document.getElementById('rmLogRemarks').value = '';
 
                 // Auto-generate DC No for selected DC Type
                 await autoGenerateRmDcNo();
@@ -1179,13 +1182,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     const logs = [];
                     const type = currentTab === 'rm_receipt' ? 'receipt' : 'despatch';
                     json.forEach(row => {
-                        let forge_pn = '', qty = 0, date = '';
+                        let forge_pn = '', qty = 0, date = '', remarks = '';
                         for (let k in row) {
                             let key = k.toLowerCase().replace(/[^a-z0-9]/g, '');
                             let val = String(row[k]).trim();
                             if (key === 'forgepn') forge_pn = val;
                             else if (key === 'quantity' || key === 'qty') qty = parseInt(val) || 0;
                             else if (key === 'date') date = row[k];
+                            else if (key === 'remarks' || key === 'remark') remarks = val;
                         }
                         if (!forge_pn || qty <= 0) return;
                         
@@ -1198,7 +1202,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                         
-                        logs.push({ type, date, forge_pn, qty });
+                        logs.push({ type, date, forge_pn, qty, remarks });
                     });
                     
                     if (logs.length === 0) {
@@ -9466,6 +9470,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td>${log.date}</td>
                         ${type === 'receipt' ? `<td>${log.forge_pn}</td>` : extraCols}
                         <td>${log.qty}</td>
+                        ${type === 'despatch' ? `<td>${escapeHtml(log.remarks || '')}</td>` : ''}
                         <td>
                             ${actionBtns}
                         </td>
@@ -9525,12 +9530,15 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('rmLogDcNoGroup').style.display = 'none';
             document.getElementById('rmLogFinishPartNoGroup').style.display = 'none';
             if (document.getElementById('rmLogPartPrefixGroup')) document.getElementById('rmLogPartPrefixGroup').style.display = 'none';
+            if (document.getElementById('rmLogRemarksGroup')) document.getElementById('rmLogRemarksGroup').style.display = 'none';
         } else {
             if (document.getElementById('rmLogDcTypeGroup')) document.getElementById('rmLogDcTypeGroup').style.display = 'block';
             if (document.getElementById('rmLogDcType')) document.getElementById('rmLogDcType').value = log.dc_type || 'Mfg-spider';
             document.getElementById('rmLogDcNoGroup').style.display = 'block';
             document.getElementById('rmLogFinishPartNoGroup').style.display = 'block';
             if (document.getElementById('rmLogPartPrefixGroup')) document.getElementById('rmLogPartPrefixGroup').style.display = 'block';
+            if (document.getElementById('rmLogRemarksGroup')) document.getElementById('rmLogRemarksGroup').style.display = 'block';
+            if (document.getElementById('rmLogRemarks')) document.getElementById('rmLogRemarks').value = log.remarks || '';
             document.getElementById('rmLogDcNo').value = log.dc_no || '';
 
             if (globalPartMasters.length === 0) {
@@ -9895,8 +9903,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const finish_part_no = type === 'despatch' ? document.getElementById('rmLogFinishPartNo').value : null;
             const part_prefix = type === 'despatch' ? (document.getElementById('rmLogPartPrefix') ? document.getElementById('rmLogPartPrefix').value : '') : null;
             const qty = parseInt(document.getElementById('rmLogQty').value) || 0;
+            const remarks = type === 'despatch' ? (document.getElementById('rmLogRemarks')?.value || '').trim() : '';
             
-            const payload = { type, date, dc_type, forge_pn, dc_no, finish_part_no, part_prefix, qty };
+            const payload = { type, date, dc_type, forge_pn, dc_no, finish_part_no, part_prefix, qty, remarks };
             const method = id ? 'PUT' : 'POST';
             const url = id ? `/api/rawmateriallogs/${id}` : '/api/rawmateriallogs';
             

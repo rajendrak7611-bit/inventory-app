@@ -149,6 +149,7 @@ class RawMaterialLog(Base):
     finish_part_no = Column(String, nullable=True)
     part_prefix = Column(String, nullable=True)
     qty = Column(Integer, default=0)
+    remarks = Column(String, nullable=True)
 class HTLog(Base):
     __tablename__ = "ht_logs"
 
