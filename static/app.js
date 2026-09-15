@@ -162,7 +162,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 accessibleScreens.includes(screen) ||
                 ((screen === 'rfq' || screen === 'quote') && (accessibleScreens.includes('sales') || accessibleScreens.includes('mfe') || accessibleScreens.includes('rfq') || accessibleScreens.includes('quote'))) ||
                 ((screen === 'rawmaterial' || screen === 'ht' || screen === 'pc') && (accessibleScreens.includes('inventory') || accessibleScreens.includes('rawmaterial'))) ||
-                (screen === 'attendance' && accessibleScreens.includes('hr')) ||
+                ((screen === 'attendance' || screen === 'hr_shift_list') && accessibleScreens.includes('hr')) ||
+                (screen === 'attendance' && accessibleScreens.includes('attendance')) ||
+                (screen === 'hr_shift_list' && (accessibleScreens.includes('hr_shift_list') || accessibleScreens.includes('shift_list') || accessibleScreens.includes('shiftlist'))) ||
+                ((screen === 'service_setters' || screen === 'shift_status') && accessibleScreens.includes('service')) ||
+                (screen === 'service_setters' && accessibleScreens.includes('service_setters')) ||
+                (screen === 'shift_status' && (accessibleScreens.includes('shift_status') || accessibleScreens.includes('shiftstatus'))) ||
                 ((screen === 'bdslip' || screen === 'servicedetails') && (accessibleScreens.includes('maintenance') || accessibleScreens.includes('bdslip') || accessibleScreens.includes('servicedetails'))) ||
                 ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'tapmaster' || screen === 'insertreceipt' || screen === 'tapreceipt' || screen === 'insertissue' || screen === 'tapissue' || screen === 'insertcpc' || screen === 'insertstock') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib'))) ||
                 ((screen === 'rm_requirement' || screen === 'mc_util' || screen === 'oper_eff' || screen === 'reports' || screen === 'att_vs_login' || screen === 'bc_prod') && accessibleScreens.includes('reports'))
@@ -190,8 +195,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     'toolcrib': ['insertmaster', 'drillmaster', 'products', 'insertreceipt', 'insertissue', 'insertcpc', 'insertstock'],
                     'reports': ['reports', 'rm_requirement', 'mc_util', 'oper_eff', 'bc_prod', 'att_vs_login'],
                     'maintenance': ['maintenance', 'bdslip', 'servicedetails'],
-                    'hr': ['hr', 'attendance'],
-                    'service': ['service', 'service_setters', 'setters', 'shift_status'],
+                    'hr': ['hr', 'attendance', 'hr_shift_list', 'shift_list', 'shiftlist'],
+                    'service': ['service', 'service_setters', 'setters', 'shift_status', 'shiftstatus'],
                     'inspection': ['inspection', 'line_insp']
                 };
                 const allowed = (accessibleScreens && accessibleScreens.length > 0) && (groupScreens[group] ? groupScreens[group].some(s => accessibleScreens.includes(s) || accessibleScreens.includes(group)) : false);
@@ -10020,6 +10025,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 chk.checked = screens.includes('inventory') || screens.includes('rawmaterial');
             } else if (chk.value === 'mfe') {
                 chk.checked = screens.includes('mfe') || screens.includes('rfq') || screens.includes('sales');
+            } else if (chk.value === 'hr_shift_list') {
+                chk.checked = screens.includes('hr_shift_list') || screens.includes('shift_list') || screens.includes('shiftlist');
+            } else if (chk.value === 'shift_status') {
+                chk.checked = screens.includes('shift_status') || screens.includes('shiftstatus');
             } else {
                 chk.checked = screens.includes(chk.value);
             }
