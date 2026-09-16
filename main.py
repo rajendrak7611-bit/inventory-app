@@ -2351,6 +2351,7 @@ def bulk_import_partmasters(data: dict, db: Session = Depends(get_db)):
                                 db.rollback()
                 except Exception:
                     db.rollback()
+    sync_partmaster_forge_pns_to_rawmaterials(db)
     return {"message": f"Successfully imported {count} parts!", "imported_count": count}
 @app.delete("/api/partmaster/clear-all")
 @app.post("/api/partmaster/clear-all")
@@ -2676,6 +2677,18 @@ def create_partmaster(data: dict, db: Session = Depends(get_db)):
             except Exception as pe:
                 print("Note syncing to parts table:", pe)
 
+        # Sync forge_pn to raw_materials table if provided
+        if forge_pn:
+            try:
+                exist_rm = db.execute(text("SELECT id FROM raw_materials WHERE UPPER(TRIM(forge_pn)) = UPPER(TRIM(:fpn))"), {"fpn": forge_pn}).mappings().first()
+                if not exist_rm:
+                    db.execute(text("""
+                        INSERT INTO raw_materials (forge_pn, receipt, despatch, stock)
+                        VALUES (:forge_pn, 0, 0, 0)
+                    """), {"forge_pn": forge_pn})
+            except Exception as rme:
+                print("Note syncing forge_pn to raw_materials:", rme)
+
         db.commit()
         return {"message": "Part master created", "id": next_id, **data}
     except Exception as e:
@@ -2733,6 +2746,18 @@ def update_partmaster(part_id: int, data: dict, db: Session = Depends(get_db)):
                     })
             except Exception as pe:
                 print("Note syncing update to parts table:", pe)
+
+        # Sync forge_pn to raw_materials table if provided
+        if forge_pn:
+            try:
+                exist_rm = db.execute(text("SELECT id FROM raw_materials WHERE UPPER(TRIM(forge_pn)) = UPPER(TRIM(:fpn))"), {"fpn": forge_pn}).mappings().first()
+                if not exist_rm:
+                    db.execute(text("""
+                        INSERT INTO raw_materials (forge_pn, receipt, despatch, stock)
+                        VALUES (:forge_pn, 0, 0, 0)
+                    """), {"forge_pn": forge_pn})
+            except Exception as rme:
+                print("Note syncing forge_pn to raw_materials on update:", rme)
 
         db.commit()
         return {"id": part_id, "message": "Part master updated", **data}
@@ -4135,8 +4160,36 @@ def delete_prodlog_range(data: DeleteProdLogRangeRequest, db: Session = Depends(
     }
 
 # --- RAW MATERIALS & RAW MATERIAL LOGS ---
+def sync_partmaster_forge_pns_to_rawmaterials(db: Session):
+    try:
+        pm_rows = db.execute(text("SELECT DISTINCT TRIM(forge_pn) as fpn FROM part_masters WHERE forge_pn IS NOT NULL AND TRIM(forge_pn) != ''")).mappings().all()
+        if not pm_rows:
+            return
+        rm_rows = db.execute(text("SELECT DISTINCT UPPER(TRIM(forge_pn)) as fpn FROM raw_materials WHERE forge_pn IS NOT NULL AND TRIM(forge_pn) != ''")).mappings().all()
+        existing_rms = {r["fpn"] for r in rm_rows if r.get("fpn")}
+
+        changed = False
+        for r in pm_rows:
+            fpn = (r.get("fpn") or "").strip()
+            if fpn and fpn.upper() not in existing_rms:
+                logs = db.execute(text("SELECT type, qty FROM raw_material_logs WHERE UPPER(TRIM(forge_pn)) = :fpn"), {"fpn": fpn.upper()}).mappings().all()
+                rcpt = sum(int(float(l["qty"] or 0)) for l in logs if (l.get("type") or "").strip().lower() == "receipt")
+                dspt = sum(int(float(l["qty"] or 0)) for l in logs if (l.get("type") or "").strip().lower() == "despatch")
+                stk = rcpt - dspt
+                db.execute(text("""
+                    INSERT INTO raw_materials (forge_pn, receipt, despatch, stock)
+                    VALUES (:forge_pn, :receipt, :despatch, :stock)
+                """), {"forge_pn": fpn, "receipt": rcpt, "despatch": dspt, "stock": stk})
+                existing_rms.add(fpn.upper())
+                changed = True
+        if changed:
+            db.commit()
+    except Exception as e:
+        db.rollback()
+
 @app.get("/api/rawmaterials")
 def get_raw_materials(db: Session = Depends(get_db)):
+    sync_partmaster_forge_pns_to_rawmaterials(db)
     try:
         rows = db.execute(text("SELECT id, forge_pn, receipt, despatch, stock FROM raw_materials ORDER BY forge_pn ASC;")).mappings().all()
         return [{

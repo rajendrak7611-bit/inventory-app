@@ -971,19 +971,35 @@ document.addEventListener('DOMContentLoaded', () => {
             else document.getElementById('rmLogDate').valueAsDate = new Date();
             document.getElementById('rmLogType').value = isReceipt ? 'receipt' : 'despatch';
             
-            // Fetch if empty
-            if (allRawMaterials.length === 0) {
-                const rRes = await fetch('/api/rawmaterials');
-                allRawMaterials = await rRes.json();
+            // Fetch fresh raw materials and part masters so newly added parts and raw materials appear immediately
+            try {
+                const [rRes, pmRes] = await Promise.all([
+                    fetch('/api/rawmaterials'),
+                    fetch('/api/partmaster')
+                ]);
+                if (rRes.ok) allRawMaterials = await rRes.json();
+                if (pmRes.ok) globalPartMasters = await pmRes.json();
+            } catch (err) {
+                console.error('Error refreshing masters for RM modal:', err);
             }
 
-            // Populate select with forge PNs
+            // Populate select with forge PNs from BOTH raw_materials and part_masters
             const selectEl = document.getElementById('rmLogForgePn');
             selectEl.innerHTML = '<option value="">-- Select Forge PN --</option>';
-            allRawMaterials.forEach(rm => {
+            const forgePnSet = new Set();
+            (allRawMaterials || []).forEach(rm => {
+                const val = (rm && rm.forge_pn ? String(rm.forge_pn).trim() : '');
+                if (val) forgePnSet.add(val);
+            });
+            (globalPartMasters || []).forEach(pm => {
+                const val = (pm && pm.forge_pn ? String(pm.forge_pn).trim() : '');
+                if (val) forgePnSet.add(val);
+            });
+
+            Array.from(forgePnSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })).forEach(fpn => {
                 const opt = document.createElement('option');
-                opt.value = rm.forge_pn;
-                opt.textContent = rm.forge_pn;
+                opt.value = fpn;
+                opt.textContent = fpn;
                 selectEl.appendChild(opt);
             });
             
@@ -992,6 +1008,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             rmLogForgePnSelect = new TomSelect(selectEl, {
                 create: true,
+                maxOptions: 1000,
                 sortField: { field: "text", direction: "asc" }
             });
             
@@ -1332,6 +1349,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch('/api/partmaster');
             const parts = await response.json();
+            globalPartMasters = Array.isArray(parts) ? parts : [];
             partMasterBody.innerHTML = '';
             if (parts.length === 0) {
                 partMasterBody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">No part masters found.</td></tr>';
@@ -9519,19 +9537,31 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('rmLogDate').value = log.date || '';
         document.getElementById('rmLogQty').value = log.qty || 1;
 
-        if (allRawMaterials.length === 0) {
-            try {
-                const rRes = await fetch('/api/rawmaterials');
-                allRawMaterials = await rRes.json();
-            } catch(e) {}
-        }
+        try {
+            const [rRes, pmRes] = await Promise.all([
+                fetch('/api/rawmaterials'),
+                fetch('/api/partmaster')
+            ]);
+            if (rRes.ok) allRawMaterials = await rRes.json();
+            if (pmRes.ok) globalPartMasters = await pmRes.json();
+        } catch(e) {}
 
         const selectEl = document.getElementById('rmLogForgePn');
         selectEl.innerHTML = '<option value="">-- Select Forge PN --</option>';
-        const forgePnSet = new Set(allRawMaterials.map(rm => rm.forge_pn));
-        if (log.forge_pn) forgePnSet.add(log.forge_pn);
+        const forgePnSet = new Set();
+        (allRawMaterials || []).forEach(rm => {
+            const val = (rm && rm.forge_pn ? String(rm.forge_pn).trim() : '');
+            if (val) forgePnSet.add(val);
+        });
+        (globalPartMasters || []).forEach(pm => {
+            const val = (pm && pm.forge_pn ? String(pm.forge_pn).trim() : '');
+            if (val) forgePnSet.add(val);
+        });
+        if (log.forge_pn && String(log.forge_pn).trim()) {
+            forgePnSet.add(String(log.forge_pn).trim());
+        }
 
-        Array.from(forgePnSet).sort().forEach(fpn => {
+        Array.from(forgePnSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })).forEach(fpn => {
             const opt = document.createElement('option');
             opt.value = fpn;
             opt.textContent = fpn;
@@ -9546,6 +9576,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         rmLogForgePnSelect = new TomSelect(selectEl, {
             create: true,
+            maxOptions: 1000,
             sortField: { field: "text", direction: "asc" }
         });
         if (log.forge_pn) {
@@ -9925,9 +9956,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const type = document.getElementById('rmLogType').value;
             const date = document.getElementById('rmLogDate').value;
             const dc_type = type === 'despatch' ? document.getElementById('rmLogDcType').value : null;
-            const forge_pn = document.getElementById('rmLogForgePn').value;
+            const forge_pn = (rmLogForgePnSelect ? rmLogForgePnSelect.getValue() : document.getElementById('rmLogForgePn').value || '').trim();
             const dc_no = type === 'despatch' ? document.getElementById('rmLogDcNo').value : null;
-            const finish_part_no = type === 'despatch' ? document.getElementById('rmLogFinishPartNo').value : null;
+            const finish_part_no = type === 'despatch' ? (rmLogFinishPartNoSelect ? rmLogFinishPartNoSelect.getValue() : document.getElementById('rmLogFinishPartNo').value) : null;
             const part_prefix = type === 'despatch' ? (document.getElementById('rmLogPartPrefix') ? document.getElementById('rmLogPartPrefix').value : '') : null;
             const qty = parseInt(document.getElementById('rmLogQty').value) || 0;
             const remarks = type === 'despatch' ? (document.getElementById('rmLogRemarks')?.value || '').trim() : '';
