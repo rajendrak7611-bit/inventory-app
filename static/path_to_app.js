@@ -20634,6 +20634,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let hourlySelectedSerials = new Set();
     let hourlyCurrentGridIndex = 0;
     let hourlyIsInitialized = false;
+    let hourlyCurrentLoadedLogs = [];
 
     function getNowIST() {
         const now = new Date();
@@ -20865,6 +20866,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (histDateInput) histDateInput.value = '';
                     loadHourlyReportLogs();
                 });
+            }
+            const exportLogsBtn = document.getElementById('exportHourlyLogsBtn');
+            if (exportLogsBtn) {
+                exportLogsBtn.addEventListener('click', exportHourlyReportLogsToExcel);
             }
         }
 
@@ -21539,9 +21544,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch(url);
             if (!res.ok) throw new Error('Failed to fetch hourly production logs');
             const logs = await res.json();
+            hourlyCurrentLoadedLogs = Array.isArray(logs) ? logs : [];
 
             if (!tbody) return;
             if (!logs || logs.length === 0) {
+                hourlyCurrentLoadedLogs = [];
                 tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; color: #94a3b8; padding: 1.5rem;">No hourly production logs found${dateVal ? ' for ' + dateVal : ''}.</td></tr>`;
                 return;
             }
@@ -21577,10 +21584,87 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } catch (err) {
             console.error('Error loading hourly report logs:', err);
+            hourlyCurrentLoadedLogs = [];
             if (tbody) {
                 tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; color: #ef4444; padding: 1rem;">Failed to load logs: ${err.message}</td></tr>`;
             }
         }
+    }
+
+    function exportHourlyReportLogsToExcel() {
+        if (!hourlyCurrentLoadedLogs || hourlyCurrentLoadedLogs.length === 0) {
+            alert('No hourly production logs available to export.');
+            return;
+        }
+
+        const headers = [
+            'Log ID',
+            'Date',
+            'Time (IST)',
+            'Department',
+            'Operator',
+            'Machine',
+            'Part No',
+            'Operation',
+            'Qty',
+            'Serial Numbers Done',
+            'Remarks'
+        ];
+
+        const exportData = [headers];
+        let totalQty = 0;
+
+        hourlyCurrentLoadedLogs.forEach(log => {
+            const qty = Number(log.qty) || 0;
+            totalQty += qty;
+
+            let timeStr = log.time || '';
+            if (timeStr && timeStr.length > 5) {
+                timeStr = timeStr.slice(0, 5);
+            }
+
+            const serialsDone = log.serial_range || (Array.isArray(log.serial_numbers) ? log.serial_numbers.join(', ') : '');
+
+            exportData.push([
+                log.id,
+                log.date || '',
+                timeStr,
+                log.dept || '',
+                log.operator || '',
+                log.machine || '',
+                log.part_no || '',
+                log.opn_no ? `Opn ${log.opn_no}` : '',
+                qty,
+                serialsDone,
+                log.remarks || ''
+            ]);
+        });
+
+        // Add Total Summary row
+        exportData.push(['Total', '', '', '', '', '', '', '', totalQty, '', '']);
+
+        const ws = XLSX.utils.aoa_to_sheet(exportData);
+        ws['!cols'] = [
+            { wch: 10 }, // Log ID
+            { wch: 13 }, // Date
+            { wch: 12 }, // Time (IST)
+            { wch: 16 }, // Department
+            { wch: 20 }, // Operator
+            { wch: 18 }, // Machine
+            { wch: 18 }, // Part No
+            { wch: 12 }, // Operation
+            { wch: 10 }, // Qty
+            { wch: 30 }, // Serial Numbers Done
+            { wch: 26 }  // Remarks
+        ];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Hourly_Production_Logs");
+
+        const dateFilter = document.getElementById('hourlyHistoryDateFilter')?.value || '';
+        const dateSuffix = dateFilter ? `_${dateFilter}` : `_All_Dates`;
+        const filename = `Hourly_Production_Logs${dateSuffix}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        XLSX.writeFile(wb, filename);
     }
 
     window.deleteHourlyReportLog = async function(logId) {

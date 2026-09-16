@@ -9318,6 +9318,144 @@ def get_hourly_reports(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/hourly-reports/export/excel")
+def export_hourly_reports_excel(
+    date: Optional[str] = None,
+    dept: Optional[str] = None,
+    part_no: Optional[str] = None,
+    operator: Optional[str] = None,
+    machine: Optional[str] = None,
+    opn_no: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    ensure_hourly_reports_table(db)
+    try:
+        q = db.query(models.HourlyReport)
+        if date:
+            q = q.filter(models.HourlyReport.date == date.strip())
+        if dept and dept.strip().upper() != "ALL":
+            q = q.filter(func.upper(models.HourlyReport.dept) == dept.strip().upper())
+        if part_no:
+            q = q.filter(func.upper(func.trim(models.HourlyReport.part_no)) == part_no.strip().upper())
+        if operator:
+            q = q.filter(func.upper(func.trim(models.HourlyReport.operator)) == operator.strip().upper())
+        if machine:
+            q = q.filter(func.upper(func.trim(models.HourlyReport.machine)) == machine.strip().upper())
+        if opn_no:
+            q = q.filter(func.upper(func.trim(models.HourlyReport.opn_no)) == opn_no.strip().upper())
+
+        rows = q.order_by(models.HourlyReport.id.desc()).all()
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Hourly Production Logs"
+
+        header_fill = PatternFill(start_color="0284C7", end_color="0284C7", fill_type="solid")
+        header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+        align_center = Alignment(horizontal="center", vertical="center")
+        align_left = Alignment(horizontal="left", vertical="center")
+        align_right = Alignment(horizontal="right", vertical="center")
+        thin_border = Border(
+            left=Side(style='thin', color='CBD5E1'),
+            right=Side(style='thin', color='CBD5E1'),
+            top=Side(style='thin', color='CBD5E1'),
+            bottom=Side(style='thin', color='CBD5E1')
+        )
+
+        headers = [
+            "Log ID", "Date", "Time (IST)", "Dept", "Operator", "Machine",
+            "Part No", "Opn", "Qty", "Serial Numbers Done", "Remarks"
+        ]
+        ws.append(headers)
+
+        for col_num in range(1, len(headers) + 1):
+            cell = ws.cell(row=1, column=col_num)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = align_center
+
+        ws.row_dimensions[1].height = 24
+
+        total_qty = 0
+        for r in rows:
+            try:
+                s_list = json.loads(r.serial_numbers or "[]")
+            except Exception:
+                s_list = []
+            range_str = format_serial_ranges(s_list)
+            q_val = r.qty or len(s_list)
+            total_qty += q_val
+            t_val = r.time or ""
+            if len(t_val) > 5:
+                t_val = t_val[:5]
+
+            row = [
+                r.id,
+                r.date or "",
+                t_val,
+                r.dept or "",
+                r.operator or "",
+                r.machine or "",
+                r.part_no or "",
+                f"Opn {r.opn_no}" if r.opn_no else "",
+                q_val,
+                range_str or (", ".join(str(s) for s in s_list)),
+                r.remarks or ""
+            ]
+            ws.append(row)
+            r_idx = ws.max_row
+            ws.row_dimensions[r_idx].height = 20
+            for c_idx in range(1, len(row) + 1):
+                cell = ws.cell(row=r_idx, column=c_idx)
+                cell.border = thin_border
+                if c_idx in [1, 2, 3, 8]:
+                    cell.alignment = align_center
+                elif c_idx == 9:
+                    cell.alignment = align_right
+                else:
+                    cell.alignment = align_left
+
+        # Total row
+        total_row = ["Total", "", "", "", "", "", "", "", total_qty, "", ""]
+        ws.append(total_row)
+        tot_idx = ws.max_row
+        ws.row_dimensions[tot_idx].height = 22
+        bold_font = Font(name="Calibri", size=11, bold=True)
+        tot_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+        for c_idx in range(1, len(total_row) + 1):
+            cell = ws.cell(row=tot_idx, column=c_idx)
+            cell.border = thin_border
+            cell.font = bold_font
+            cell.fill = tot_fill
+            if c_idx == 9:
+                cell.alignment = align_right
+            elif c_idx == 1:
+                cell.alignment = align_center
+
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or '')) for cell in col)
+            col_letter = get_column_letter(col[0].column)
+            ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        date_suffix = f"_{date}" if date else "_All_Dates"
+        filename = f"Hourly_Production_Logs{date_suffix}_{datetime.date.today().strftime('%Y%m%d')}.xlsx"
+        return Response(
+            content=output.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/hourly-reports")
 def create_hourly_report(payload: dict, db: Session = Depends(get_db)):
     ensure_hourly_reports_table(db)
