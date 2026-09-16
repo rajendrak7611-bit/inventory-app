@@ -20616,24 +20616,63 @@ document.addEventListener('DOMContentLoaded', () => {
     let hourlyCurrentGridIndex = 0;
     let hourlyIsInitialized = false;
 
-    async function initHourlyReportSection() {
-        // 1. Initialize Date & Time to current IST if empty
+    function getNowIST() {
+        const now = new Date();
+        const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Kolkata',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+        const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        const timeParts = timeFormatter.format(now); // "HH:MM:SS"
+        const dateParts = dateFormatter.format(now); // "YYYY-MM-DD"
+        return {
+            date: dateParts,
+            time: timeParts.slice(0, 5), // "HH:MM"
+            timeFull: timeParts
+        };
+    }
+
+    function setHourlyTimeToCurrentIST(force = false) {
         const dateInput = document.getElementById('hourlyDate');
         const timeInput = document.getElementById('hourlyTime');
-        const todayStr = new Date().toISOString().split('T')[0];
-        if (dateInput && !dateInput.value) {
-            dateInput.value = todayStr;
-        }
-        if (timeInput && !timeInput.value) {
-            const now = new Date();
-            const hh = String(now.getHours()).padStart(2, '0');
-            const mm = String(now.getMinutes()).padStart(2, '0');
-            timeInput.value = `${hh}:${mm}`;
-        }
         const histDateFilter = document.getElementById('hourlyHistoryDateFilter');
-        if (histDateFilter && !histDateFilter.value) {
-            histDateFilter.value = todayStr;
+        const ist = getNowIST();
+        if (dateInput && (!dateInput.value || force)) {
+            dateInput.value = ist.date;
         }
+        if (timeInput && (!timeInput.value || force)) {
+            timeInput.value = ist.time;
+        }
+        if (histDateFilter && !histDateFilter.value) {
+            histDateFilter.value = ist.date;
+        }
+    }
+
+    function formatLogTimeIST(timeStr) {
+        if (!timeStr) return '-';
+        const parts = String(timeStr).trim().split(':');
+        if (parts.length >= 2) {
+            const h = parseInt(parts[0], 10);
+            const m = parts[1].padStart(2, '0');
+            if (isNaN(h)) return timeStr;
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            const h12 = h % 12 === 0 ? 12 : h % 12;
+            return `${String(h).padStart(2, '0')}:${m} <span style="font-size:0.75rem; color:#64748b; font-weight:normal;">(${h12}:${m} ${ampm})</span>`;
+        }
+        return timeStr;
+    }
+
+    async function initHourlyReportSection() {
+        // 1. Initialize Date & Time to current IST
+        setHourlyTimeToCurrentIST(false);
 
         // 2. Fetch Departments, Operators, Machines, Parts
         try {
@@ -20654,7 +20693,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const currentDept = deptSelect.value;
                 deptSelect.innerHTML = '<option value="">-- All / Select Dept --</option>';
                 const deptNames = Array.isArray(deptRes) ? deptRes.map(d => typeof d === 'string' ? d : (d.name || d.dept)).filter(Boolean) : [];
-                // Add unique department names
                 const uniqueDepts = Array.from(new Set(deptNames)).sort();
                 uniqueDepts.forEach(d => {
                     const opt = document.createElement('option');
@@ -20685,6 +20723,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!hourlyIsInitialized) {
             hourlyIsInitialized = true;
 
+            // Set Current IST button
+            const setNowBtn = document.getElementById('hourlySetNowBtn');
+            if (setNowBtn) {
+                setNowBtn.addEventListener('click', () => {
+                    setHourlyTimeToCurrentIST(true);
+                });
+            }
+
             // Dept change -> re-filter operators and machines
             const deptSelect = document.getElementById('hourlyDept');
             if (deptSelect) {
@@ -20692,6 +20738,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     const selDept = deptSelect.value;
                     populateHourlyOperators(selDept);
                     populateHourlyMachines(selDept);
+                });
+            }
+
+            // Machine change -> auto-select department if not already selected
+            const mcSelect = document.getElementById('hourlyMachine');
+            if (mcSelect) {
+                mcSelect.addEventListener('change', () => {
+                    const selMc = mcSelect.value;
+                    if (selMc) {
+                        const mcObj = hourlyAllMachines.find(m => String(m.name || m.machine_name || '').trim().toUpperCase() === selMc.trim().toUpperCase());
+                        const mcDept = mcObj ? (mcObj.dept || mcObj.department || '') : '';
+                        if (mcDept) {
+                            const curDeptSelect = document.getElementById('hourlyDept');
+                            if (curDeptSelect && (!curDeptSelect.value || curDeptSelect.value !== mcDept)) {
+                                curDeptSelect.value = mcDept;
+                                populateHourlyOperators(mcDept);
+                            }
+                        }
+                    }
                 });
             }
 
@@ -20757,6 +20822,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const reloadBtn = document.getElementById('hourlyReloadBtn');
             if (reloadBtn) {
                 reloadBtn.addEventListener('click', () => {
+                    setHourlyTimeToCurrentIST(true);
                     const partVal = hourlyPartTomSelect ? hourlyPartTomSelect.getValue() : document.getElementById('hourlyPartNo')?.value;
                     if (partVal) {
                         onHourlyPartChanged(partVal);
@@ -20797,7 +20863,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     create: false,
                     placeholder: 'Search Operator...',
                     maxOptions: 500,
-                    searchField: ['text']
+                    searchField: ['text'],
+                    onChange: (opName) => {
+                        if (opName) {
+                            const opObj = hourlyAllOperators.find(o => String(o.name || o.operator_name || '').trim().toUpperCase() === opName.trim().toUpperCase());
+                            const opDept = opObj ? (opObj.dept || opObj.department || '') : '';
+                            if (opDept) {
+                                const deptSelect = document.getElementById('hourlyDept');
+                                if (deptSelect && !deptSelect.value) {
+                                    deptSelect.value = opDept;
+                                    populateHourlyMachines(opDept);
+                                }
+                            }
+                        }
+                    }
                 });
             } catch (e) {
                 console.error('Error initializing hourlyOperatorTomSelect:', e);
@@ -20929,6 +21008,18 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Auto-select department from part if dept is not selected
+        const pObj = hourlyAllParts.find(p => String(p.partno || p.part_no || '').trim().toUpperCase() === partNo.trim().toUpperCase());
+        const pDept = pObj ? (pObj.dept || pObj.department || '') : '';
+        if (pDept) {
+            const deptSelect = document.getElementById('hourlyDept');
+            if (deptSelect && !deptSelect.value) {
+                deptSelect.value = pDept;
+                populateHourlyOperators(pDept);
+                populateHourlyMachines(pDept);
+            }
+        }
+
         try {
             const res = await fetch(`/api/hourly-reports/part-status?part_no=${encodeURIComponent(partNo)}`);
             if (!res.ok) throw new Error('Failed to fetch part status');
@@ -20984,6 +21075,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (let i = 0; i < mcSelect.options.length; i++) {
                     if (mcSelect.options[i].value.trim().toUpperCase() === opObj.machine.trim().toUpperCase()) {
                         mcSelect.selectedIndex = i;
+                        // Auto-set dept from machine if not set
+                        const mcObj = hourlyAllMachines.find(m => String(m.name || m.machine_name || '').trim().toUpperCase() === opObj.machine.trim().toUpperCase());
+                        if (mcObj && (mcObj.dept || mcObj.department)) {
+                            const deptSelect = document.getElementById('hourlyDept');
+                            if (deptSelect && !deptSelect.value) {
+                                deptSelect.value = mcObj.dept || mcObj.department;
+                                populateHourlyOperators(deptSelect.value);
+                            }
+                        }
                         break;
                     }
                 }
@@ -21272,9 +21372,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const schQtyInput = document.getElementById('hourlyScheduleQty');
         const remarksInput = document.getElementById('hourlyRemarks');
 
-        const dateVal = dateInput?.value;
-        const timeVal = timeInput?.value || new Date().toTimeString().slice(0, 8);
-        const deptVal = deptSelect?.value || '';
+        const istNow = getNowIST();
+        const dateVal = (dateInput && dateInput.value) ? dateInput.value.trim() : istNow.date;
+        let timeVal = (timeInput && timeInput.value) ? timeInput.value.trim() : istNow.time;
+        if (!timeVal) timeVal = istNow.time;
+
+        let deptVal = deptSelect?.value ? deptSelect.value.trim() : '';
         const operatorVal = hourlyOperatorTomSelect ? hourlyOperatorTomSelect.getValue() : document.getElementById('hourlyOperator')?.value;
         const machineVal = mcSelect?.value;
         const partNoVal = hourlyPartTomSelect ? hourlyPartTomSelect.getValue() : document.getElementById('hourlyPartNo')?.value;
@@ -21283,10 +21386,39 @@ document.addEventListener('DOMContentLoaded', () => {
         const schQtyVal = parseInt(schQtyInput?.value) || 0;
         const remarksVal = remarksInput?.value || '';
 
+        // Auto-resolve dept if blank
+        if (!deptVal || deptVal === '-- All / Select Dept --' || deptVal.toUpperCase() === 'ALL') {
+            if (machineVal) {
+                const mcObj = hourlyAllMachines.find(m => String(m.name || m.machine_name || '').trim().toUpperCase() === machineVal.trim().toUpperCase());
+                if (mcObj && (mcObj.dept || mcObj.department)) deptVal = mcObj.dept || mcObj.department;
+            }
+            if (!deptVal && operatorVal) {
+                const opObj = hourlyAllOperators.find(o => String(o.name || o.operator_name || '').trim().toUpperCase() === operatorVal.trim().toUpperCase());
+                if (opObj && (opObj.dept || opObj.department)) deptVal = opObj.dept || opObj.department;
+            }
+            if (!deptVal && partNoVal) {
+                const pObj = hourlyAllParts.find(p => String(p.partno || p.part_no || '').trim().toUpperCase() === partNoVal.trim().toUpperCase());
+                if (pObj && (pObj.dept || pObj.department)) deptVal = pObj.dept || pObj.department;
+            }
+            if (deptSelect && deptVal) {
+                deptSelect.value = deptVal;
+            }
+        }
+
         // Validation
         if (!dateVal) {
             alert('Please select a Date.');
             dateInput?.focus();
+            return;
+        }
+        if (!timeVal) {
+            alert('Please enter or select a Time (IST).');
+            timeInput?.focus();
+            return;
+        }
+        if (!deptVal) {
+            alert('Please select a Department.');
+            deptSelect?.focus();
             return;
         }
         if (!operatorVal) {
@@ -21348,6 +21480,9 @@ document.addEventListener('DOMContentLoaded', () => {
             hourlySelectedSerials.clear();
             if (remarksInput) remarksInput.value = '';
 
+            // Update Time to current IST for next entry
+            setHourlyTimeToCurrentIST(true);
+
             // Refresh part status and re-render grid
             await onHourlyPartChanged(partNoVal);
             // Re-select same operation
@@ -21400,8 +21535,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 tr.innerHTML = `
                     <td style="padding: 8px 6px; text-align: center; font-weight: 700; color: #64748b;">${log.id}</td>
                     <td style="padding: 8px 8px; white-space: nowrap;">${log.date || ''}</td>
-                    <td style="padding: 8px 8px; font-weight: 600; color: #0284c7;">${log.time || ''}</td>
-                    <td style="padding: 8px 8px;">${log.dept || '-'}</td>
+                    <td style="padding: 8px 8px; font-weight: 600; color: #0284c7; white-space: nowrap;">${formatLogTimeIST(log.time)}</td>
+                    <td style="padding: 8px 8px; font-weight: 600; color: #0f172a;">${log.dept || '-'}</td>
                     <td style="padding: 8px 8px; font-weight: 600; color: #1e293b;">${log.operator || ''}</td>
                     <td style="padding: 8px 8px;">${log.machine || ''}</td>
                     <td style="padding: 8px 8px; font-weight: 700; color: #0f172a;">${log.part_no || ''}</td>

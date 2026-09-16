@@ -1580,9 +1580,14 @@
                         <input type="date" id="hourlyDate" style="width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;">
                     </div>
                     <div>
-                        <label for="hourlyTime" style="font-size: 0.8rem; font-weight: 600; color: #334155; margin-bottom: 3px; display: block;">
-                            <i class="far fa-clock" style="color: #0284c7;"></i> Time *
-                        </label>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+                            <label for="hourlyTime" style="font-size: 0.8rem; font-weight: 600; color: #334155; margin: 0;">
+                                <i class="far fa-clock" style="color: #0284c7;"></i> Time (IST) *
+                            </label>
+                            <button type="button" id="hourlySetNowBtn" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 1px 6px; font-size: 0.72rem; font-weight: 600; cursor: pointer;" title="Set to current Indian Standard Time">
+                                Current IST
+                            </button>
+                        </div>
                         <input type="time" id="hourlyTime" style="width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;">
                     </div>
                     <div>
@@ -1772,7 +1777,7 @@
                             <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1; text-align: left;">
                                 <th style="padding: 8px 6px; width: 45px; text-align: center;">ID</th>
                                 <th style="padding: 8px 8px;">Date</th>
-                                <th style="padding: 8px 8px;">Time</th>
+                                <th style="padding: 8px 8px;">Time (IST)</th>
                                 <th style="padding: 8px 8px;">Dept</th>
                                 <th style="padding: 8px 8px;">Operator</th>
                                 <th style="padding: 8px 8px;">Machine</th>
@@ -5766,6 +5771,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10092"></script>
+    <script src="/static/app.js?v=10093"></script>
 </body>
 </html>

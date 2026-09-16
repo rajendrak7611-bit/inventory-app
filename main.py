@@ -8933,6 +8933,55 @@ def ensure_hourly_reports_table(db: Session):
     except Exception:
         db.rollback()
 
+    # Auto-backfill empty dept from machines, operators, part_masters for existing logs
+    try:
+        db.execute(text("""
+            UPDATE hourly_reports
+            SET dept = (
+                SELECT dept FROM machines
+                WHERE UPPER(TRIM(machines.name)) = UPPER(TRIM(hourly_reports.machine))
+                AND dept IS NOT NULL AND dept != ''
+                LIMIT 1
+            )
+            WHERE (dept IS NULL OR dept = '' OR dept = '-')
+            AND machine IS NOT NULL AND machine != '';
+        """))
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    try:
+        db.execute(text("""
+            UPDATE hourly_reports
+            SET dept = (
+                SELECT dept FROM operators
+                WHERE UPPER(TRIM(operators.name)) = UPPER(TRIM(hourly_reports.operator))
+                AND dept IS NOT NULL AND dept != ''
+                LIMIT 1
+            )
+            WHERE (dept IS NULL OR dept = '' OR dept = '-')
+            AND operator IS NOT NULL AND operator != '';
+        """))
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    try:
+        db.execute(text("""
+            UPDATE hourly_reports
+            SET dept = (
+                SELECT dept FROM part_masters
+                WHERE UPPER(TRIM(part_masters.partno)) = UPPER(TRIM(hourly_reports.part_no))
+                AND dept IS NOT NULL AND dept != ''
+                LIMIT 1
+            )
+            WHERE (dept IS NULL OR dept = '' OR dept = '-')
+            AND part_no IS NOT NULL AND part_no != '';
+        """))
+        db.commit()
+    except Exception:
+        db.rollback()
+
 def get_part_ordered_operations(part_no: str, db: Session) -> list:
     if not part_no:
         return []
@@ -9173,8 +9222,38 @@ def create_hourly_report(payload: dict, db: Session = Depends(get_db)):
         if not opn_no_val:
             raise HTTPException(status_code=400, detail="Operation number is required")
 
+        # Auto-derive dept if not provided
+        if not dept_val or dept_val == "-" or dept_val.upper() == "ALL":
+            if machine_val:
+                try:
+                    m_row = db.execute(text("SELECT dept FROM machines WHERE UPPER(TRIM(name)) = :m LIMIT 1"), {"m": machine_val.upper()}).mappings().first()
+                    if m_row and m_row.get("dept"):
+                        dept_val = str(m_row.get("dept")).strip()
+                except Exception:
+                    pass
+            if not dept_val and operator_val:
+                try:
+                    o_row = db.execute(text("SELECT dept FROM operators WHERE UPPER(TRIM(name)) = :o LIMIT 1"), {"o": operator_val.upper()}).mappings().first()
+                    if o_row and o_row.get("dept"):
+                        dept_val = str(o_row.get("dept")).strip()
+                except Exception:
+                    pass
+            if not dept_val and part_no_val:
+                try:
+                    p_row = db.execute(text("SELECT dept FROM part_masters WHERE UPPER(TRIM(partno)) = :p LIMIT 1"), {"p": part_no_val.upper()}).mappings().first()
+                    if p_row and p_row.get("dept"):
+                        dept_val = str(p_row.get("dept")).strip()
+                except Exception:
+                    pass
+
+        # Time entry as per IST
         if not time_val:
-            time_val = models.get_now_ist().strftime("%H:%M:%S")
+            time_val = models.get_now_ist().strftime("%H:%M")
+        else:
+            # Normalize to clean HH:MM or HH:MM:SS
+            parts = time_val.split(":")
+            if len(parts) >= 2:
+                time_val = f"{parts[0].zfill(2)}:{parts[1].zfill(2)}"
 
         # Parse and sanitize serial numbers
         if isinstance(raw_serials, str):
