@@ -483,6 +483,48 @@ def import_schedule_excel():
         traceback.print_exc()
         return {"error": str(e)}
 
+def ensure_production_logs_columns():
+    try:
+        with engine.begin() as conn:
+            if "postgresql" in str(engine.url):
+                try:
+                    conn.execute(text("ALTER TABLE production_logs ADD COLUMN IF NOT EXISTS rej_qty FLOAT DEFAULT 0.0;"))
+                    conn.execute(text("ALTER TABLE production_logs ADD COLUMN IF NOT EXISTS remarks TEXT DEFAULT '';"))
+                except Exception:
+                    pass
+            else:
+                for col_stmt in [
+                    "ALTER TABLE production_logs ADD COLUMN dept TEXT DEFAULT '';",
+                    "ALTER TABLE production_logs ADD COLUMN date TEXT DEFAULT '';",
+                    "ALTER TABLE production_logs ADD COLUMN shift TEXT DEFAULT '';",
+                    "ALTER TABLE production_logs ADD COLUMN setter TEXT DEFAULT '';",
+                    "ALTER TABLE production_logs ADD COLUMN machine TEXT DEFAULT '';",
+                    "ALTER TABLE production_logs ADD COLUMN operator TEXT DEFAULT '';",
+                    "ALTER TABLE production_logs ADD COLUMN partno TEXT DEFAULT '';",
+                    "ALTER TABLE production_logs ADD COLUMN opn_no TEXT DEFAULT '';",
+                    "ALTER TABLE production_logs ADD COLUMN description TEXT DEFAULT '';",
+                    "ALTER TABLE production_logs ADD COLUMN runtime FLOAT DEFAULT 0.0;",
+                    "ALTER TABLE production_logs ADD COLUMN cycle_time FLOAT DEFAULT 0.0;",
+                    "ALTER TABLE production_logs ADD COLUMN target_qty FLOAT DEFAULT 0.0;",
+                    "ALTER TABLE production_logs ADD COLUMN prod_qty FLOAT DEFAULT 0.0;",
+                    "ALTER TABLE production_logs ADD COLUMN rej_qty FLOAT DEFAULT 0.0;",
+                    "ALTER TABLE production_logs ADD COLUMN efficiency FLOAT DEFAULT 0.0;",
+                    "ALTER TABLE production_logs ADD COLUMN remarks TEXT DEFAULT '';",
+                    "ALTER TABLE production_logs ADD COLUMN idle_hours FLOAT DEFAULT 0.0;",
+                    "ALTER TABLE production_logs ADD COLUMN idle_reason TEXT DEFAULT 'None';",
+                    "ALTER TABLE production_logs ADD COLUMN idle_hours_2 FLOAT DEFAULT 0.0;",
+                    "ALTER TABLE production_logs ADD COLUMN idle_reason_2 TEXT DEFAULT 'None';",
+                    "ALTER TABLE production_logs ADD COLUMN idle_hours_3 FLOAT DEFAULT 0.0;",
+                    "ALTER TABLE production_logs ADD COLUMN idle_reason_3 TEXT DEFAULT 'None';",
+                    "ALTER TABLE production_logs ADD COLUMN multiple_mc INTEGER DEFAULT 1;"
+                ]:
+                    try:
+                        conn.execute(text(col_stmt))
+                    except Exception:
+                        pass
+    except Exception as e:
+        pass
+
 @app.on_event("startup")
 def run_startup_migrations():
     try:
@@ -556,6 +598,10 @@ def run_startup_migrations():
             try:
                 conn.execute(text("UPDATE operators SET department = dept WHERE (department IS NULL OR department = '') AND dept IS NOT NULL;"))
                 conn.commit()
+            except Exception:
+                pass
+            try:
+                ensure_production_logs_columns()
             except Exception:
                 pass
             # Align sequences to MAX(id) for PostgreSQL
@@ -3701,7 +3747,9 @@ def get_all_prod_logs(db: Session = Depends(get_db)):
                     "cycle_time": float(r.get("cycle_time") or 0.0),
                     "target_qty": float(r.get("target_qty") or 0.0),
                     "prod_qty": float(r.get("prod_qty") if r.get("prod_qty") is not None else (r.get("qty_produced") or 0)),
+                    "rej_qty": float(r.get("rej_qty") if r.get("rej_qty") is not None else (r.get("scrap_qty") or 0)),
                     "efficiency": float(r.get("efficiency") or 0.0),
+                    "remarks": str(r.get("remarks") or ""),
                     "idle_hours": float(r.get("idle_hours") or 0.0),
                     "idle_reason": r.get("idle_reason") or "None",
                     "idle_hours_2": float(r.get("idle_hours_2") or 0.0),
@@ -3732,7 +3780,9 @@ def get_all_prod_logs(db: Session = Depends(get_db)):
             "cycle_time": float(getattr(l, "cycle_time", 0.0) or 0.0),
             "target_qty": float(getattr(l, "target_qty", 0.0) or 0.0),
             "prod_qty": float(getattr(l, "prod_qty", None) if getattr(l, "prod_qty", None) is not None else (getattr(l, "qty_produced", 0) or 0)),
+            "rej_qty": float(getattr(l, "rej_qty", None) if getattr(l, "rej_qty", None) is not None else (getattr(l, "scrap_qty", 0) or 0)),
             "efficiency": float(getattr(l, "efficiency", 0.0) or 0.0),
+            "remarks": str(getattr(l, "remarks", "") or ""),
             "idle_hours": float(getattr(l, "idle_hours", 0.0) or 0.0),
             "idle_reason": getattr(l, "idle_reason", "None") or "None",
             "idle_hours_2": float(getattr(l, "idle_hours_2", 0.0) or 0.0),
@@ -3762,7 +3812,9 @@ def create_prod_log(data: dict, db: Session = Depends(get_db)):
     cycle_time = float(data.get("cycle_time") or 0.0)
     target_qty = float(data.get("target_qty") or 0.0)
     prod_qty = float(data.get("prod_qty") if data.get("prod_qty") is not None else (data.get("qty_produced") or 0.0))
+    rej_qty = float(data.get("rej_qty") if data.get("rej_qty") is not None else (data.get("scrap_qty") or 0.0))
     efficiency = float(data.get("efficiency") or 0.0)
+    remarks = str(data.get("remarks") or "").strip()
     idle_hours = float(data.get("idle_hours") or 0.0)
     idle_reason = (data.get("idle_reason") or "None").strip()
     idle_hours_2 = float(data.get("idle_hours_2") or 0.0)
@@ -3786,22 +3838,42 @@ def create_prod_log(data: dict, db: Session = Depends(get_db)):
         db.rollback()
         next_id = 4421
 
+    # Adaptively match table columns for both Postgres and SQLite
+    table_cols = set()
+    try:
+        if "postgresql" in str(engine.url):
+            col_rows = db.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name = 'production_logs'")).fetchall()
+            table_cols = {r[0].lower() for r in col_rows}
+        else:
+            col_rows = db.execute(text("PRAGMA table_info(production_logs)")).fetchall()
+            table_cols = {r[1].lower() for r in col_rows}
+    except Exception:
+        pass
+
     params = {
         "id": next_id,
         "dept": dept,
         "date": date_val,
+        "log_date": date_val,
         "shift": shift,
         "setter": setter,
         "machine": machine,
+        "machine_name": machine,
         "operator": operator,
+        "operator_name": operator,
         "partno": partno,
+        "part_no": partno,
         "opn_no": opn_no,
         "description": description,
         "runtime": runtime,
         "cycle_time": cycle_time,
         "target_qty": target_qty,
         "prod_qty": prod_qty,
+        "qty_produced": int(prod_qty),
+        "rej_qty": rej_qty,
+        "scrap_qty": int(rej_qty),
         "efficiency": efficiency,
+        "remarks": remarks,
         "idle_hours": idle_hours,
         "idle_reason": idle_reason,
         "idle_hours_2": idle_hours_2,
@@ -3811,18 +3883,29 @@ def create_prod_log(data: dict, db: Session = Depends(get_db)):
         "multiple_mc": multiple_mc
     }
 
+    if table_cols:
+        insert_cols = [k for k in params.keys() if k.lower() in table_cols]
+        col_names_str = ", ".join(insert_cols)
+        col_vals_str = ", ".join([f":{k}" for k in insert_cols])
+        try:
+            db.execute(text(f"INSERT INTO production_logs ({col_names_str}) VALUES ({col_vals_str})"), params)
+            db.commit()
+            return {"id": next_id, "message": "Production Log saved successfully"}
+        except Exception:
+            db.rollback()
+
     try:
         db.execute(text("""
-            INSERT INTO production_logs (id, dept, date, shift, setter, machine, operator, partno, opn_no, description, runtime, cycle_time, target_qty, prod_qty, efficiency, idle_hours, idle_reason, idle_hours_2, idle_reason_2, idle_hours_3, idle_reason_3, multiple_mc)
-            VALUES (:id, :dept, :date, :shift, :setter, :machine, :operator, :partno, :opn_no, :description, :runtime, :cycle_time, :target_qty, :prod_qty, :efficiency, :idle_hours, :idle_reason, :idle_hours_2, :idle_reason_2, :idle_hours_3, :idle_reason_3, :multiple_mc)
+            INSERT INTO production_logs (id, dept, date, shift, setter, machine, operator, partno, opn_no, description, runtime, cycle_time, target_qty, prod_qty, rej_qty, efficiency, remarks, idle_hours, idle_reason, idle_hours_2, idle_reason_2, idle_hours_3, idle_reason_3, multiple_mc)
+            VALUES (:id, :dept, :date, :shift, :setter, :machine, :operator, :partno, :opn_no, :description, :runtime, :cycle_time, :target_qty, :prod_qty, :rej_qty, :efficiency, :remarks, :idle_hours, :idle_reason, :idle_hours_2, :idle_reason_2, :idle_hours_3, :idle_reason_3, :multiple_mc)
         """), params)
         db.commit()
     except Exception:
         db.rollback()
         try:
             db.execute(text("""
-                INSERT INTO production_logs (dept, date, shift, setter, machine, operator, partno, opn_no, description, runtime, cycle_time, target_qty, prod_qty, efficiency, idle_hours, idle_reason, idle_hours_2, idle_reason_2, idle_hours_3, idle_reason_3, multiple_mc)
-                VALUES (:dept, :date, :shift, :setter, :machine, :operator, :partno, :opn_no, :description, :runtime, :cycle_time, :target_qty, :prod_qty, :efficiency, :idle_hours, :idle_reason, :idle_hours_2, :idle_reason_2, :idle_hours_3, :idle_reason_3, :multiple_mc)
+                INSERT INTO production_logs (dept, date, shift, setter, machine, operator, partno, opn_no, description, runtime, cycle_time, target_qty, prod_qty, rej_qty, efficiency, remarks, idle_hours, idle_reason, idle_hours_2, idle_reason_2, idle_hours_3, idle_reason_3, multiple_mc)
+                VALUES (:dept, :date, :shift, :setter, :machine, :operator, :partno, :opn_no, :description, :runtime, :cycle_time, :target_qty, :prod_qty, :rej_qty, :efficiency, :remarks, :idle_hours, :idle_reason, :idle_hours_2, :idle_reason_2, :idle_hours_3, :idle_reason_3, :multiple_mc)
             """), params)
             db.commit()
         except Exception as ex:
@@ -3834,29 +3917,59 @@ def create_prod_log(data: dict, db: Session = Depends(get_db)):
 @app.put("/api/prodlog/{log_id}")
 @app.put("/api/production-logs/{log_id}")
 def update_prod_log(log_id: int, data: dict, db: Session = Depends(get_db)):
+    existing = db.execute(text("SELECT * FROM production_logs WHERE id = :id"), {"id": log_id}).mappings().first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Log not found")
+
+    dept = (data.get("dept") if "dept" in data else existing.get("dept")) or ""
+    date_val = normalize_date_str(data.get("date") if "date" in data else (existing.get("date") or existing.get("log_date") or ""))
+    shift = (data.get("shift") if "shift" in data else existing.get("shift")) or ""
+    setter = (data.get("setter") if "setter" in data else existing.get("setter")) or ""
+    machine = (data.get("machine") if "machine" in data else (existing.get("machine") or existing.get("machine_name"))) or ""
+    operator = (data.get("operator") if "operator" in data else (existing.get("operator") or existing.get("operator_name"))) or ""
+    partno = (data.get("partno") if "partno" in data else (existing.get("partno") or existing.get("part_no"))) or ""
+    opn_no = (data.get("opn_no") if "opn_no" in data else existing.get("opn_no")) or ""
+    description = (data.get("description") if "description" in data else existing.get("description")) or ""
+    runtime = float(data.get("runtime") if "runtime" in data else (existing.get("runtime") or 0.0))
+    cycle_time = float(data.get("cycle_time") if "cycle_time" in data else (existing.get("cycle_time") or 0.0))
+    target_qty = float(data.get("target_qty") if "target_qty" in data else (existing.get("target_qty") or 0.0))
+    prod_qty = float(data.get("prod_qty") if "prod_qty" in data else (existing.get("prod_qty") if existing.get("prod_qty") is not None else (existing.get("qty_produced") or 0.0)))
+    rej_qty = float(data.get("rej_qty") if "rej_qty" in data else (existing.get("rej_qty") if existing.get("rej_qty") is not None else (existing.get("scrap_qty") or 0.0)))
+    efficiency = float(data.get("efficiency") if "efficiency" in data else (existing.get("efficiency") or 0.0))
+    remarks = str(data.get("remarks") if "remarks" in data else (existing.get("remarks") or "")).strip()
+    idle_hours = float(data.get("idle_hours") if "idle_hours" in data else (existing.get("idle_hours") or 0.0))
+    idle_reason = (data.get("idle_reason") if "idle_reason" in data else existing.get("idle_reason")) or "None"
+    idle_hours_2 = float(data.get("idle_hours_2") if "idle_hours_2" in data else (existing.get("idle_hours_2") or 0.0))
+    idle_reason_2 = (data.get("idle_reason_2") if "idle_reason_2" in data else existing.get("idle_reason_2")) or "None"
+    idle_hours_3 = float(data.get("idle_hours_3") if "idle_hours_3" in data else (existing.get("idle_hours_3") or 0.0))
+    idle_reason_3 = (data.get("idle_reason_3") if "idle_reason_3" in data else existing.get("idle_reason_3")) or "None"
+    multiple_mc = int(data.get("multiple_mc") if "multiple_mc" in data else (existing.get("multiple_mc") or 1))
+
     params = {
         "id": log_id,
-        "dept": (data.get("dept") or "").strip(),
-        "date": normalize_date_str(data.get("date") or data.get("log_date") or ""),
-        "shift": (data.get("shift") or "").strip(),
-        "setter": (data.get("setter") or "").strip(),
-        "machine": (data.get("machine") or data.get("machine_name") or "").strip(),
-        "operator": (data.get("operator") or data.get("operator_name") or "").strip(),
-        "partno": (data.get("partno") or data.get("part_no") or "").strip(),
-        "opn_no": (data.get("opn_no") or "").strip(),
-        "description": (data.get("description") or "").strip(),
-        "runtime": float(data.get("runtime") or 0.0),
-        "cycle_time": float(data.get("cycle_time") or 0.0),
-        "target_qty": float(data.get("target_qty") or 0.0),
-        "prod_qty": float(data.get("prod_qty") if data.get("prod_qty") is not None else (data.get("qty_produced") or 0.0)),
-        "efficiency": float(data.get("efficiency") or 0.0),
-        "idle_hours": float(data.get("idle_hours") or 0.0),
-        "idle_reason": (data.get("idle_reason") or "None").strip(),
-        "idle_hours_2": float(data.get("idle_hours_2") or 0.0),
-        "idle_reason_2": (data.get("idle_reason_2") or "None").strip(),
-        "idle_hours_3": float(data.get("idle_hours_3") or 0.0),
-        "idle_reason_3": (data.get("idle_reason_3") or "None").strip(),
-        "multiple_mc": int(data.get("multiple_mc") or 1)
+        "dept": str(dept).strip(),
+        "date": date_val,
+        "shift": str(shift).strip(),
+        "setter": str(setter).strip(),
+        "machine": str(machine).strip(),
+        "operator": str(operator).strip(),
+        "partno": str(partno).strip(),
+        "opn_no": str(opn_no).strip(),
+        "description": str(description).strip(),
+        "runtime": runtime,
+        "cycle_time": cycle_time,
+        "target_qty": target_qty,
+        "prod_qty": prod_qty,
+        "rej_qty": rej_qty,
+        "efficiency": efficiency,
+        "remarks": remarks,
+        "idle_hours": idle_hours,
+        "idle_reason": str(idle_reason).strip(),
+        "idle_hours_2": idle_hours_2,
+        "idle_reason_2": str(idle_reason_2).strip(),
+        "idle_hours_3": idle_hours_3,
+        "idle_reason_3": str(idle_reason_3).strip(),
+        "multiple_mc": multiple_mc
     }
     try:
         db.execute(text("""
@@ -3865,7 +3978,8 @@ def update_prod_log(log_id: int, data: dict, db: Session = Depends(get_db)):
                 machine = :machine, operator = :operator, partno = :partno,
                 opn_no = :opn_no, description = :description, runtime = :runtime,
                 cycle_time = :cycle_time, target_qty = :target_qty, prod_qty = :prod_qty,
-                efficiency = :efficiency, idle_hours = :idle_hours, idle_reason = :idle_reason,
+                rej_qty = :rej_qty, efficiency = :efficiency, remarks = :remarks,
+                idle_hours = :idle_hours, idle_reason = :idle_reason,
                 idle_hours_2 = :idle_hours_2, idle_reason_2 = :idle_reason_2,
                 idle_hours_3 = :idle_hours_3, idle_reason_3 = :idle_reason_3,
                 multiple_mc = :multiple_mc
@@ -6823,8 +6937,8 @@ def export_production_logs_excel(db: Session = Depends(get_db)):
     )
 
     headers = [
-        "Log ID", "Date & Time", "Shift", "Machine Name", "Operator Name", 
-        "Part Number", "Operation No", "Qty Produced", "Scrap Qty", "Completed Serial Nos"
+        "Log ID", "Date", "Shift", "Dept", "Setter", "Machine", "Operator", 
+        "Part Number", "Operation No", "Description", "Prod Qty", "Rej Qty", "Efficiency %", "Remarks"
     ]
     ws.append(headers)
 
@@ -6837,18 +6951,25 @@ def export_production_logs_excel(db: Session = Depends(get_db)):
     ws.row_dimensions[1].height = 24
 
     for log in logs:
-        ts_str = log.created_at.strftime("%Y-%m-%d %H:%M:%S") if log.created_at else (log.log_date or "")
+        d_str = getattr(log, "date", "") or getattr(log, "log_date", "") or ""
+        p_qty = getattr(log, "prod_qty", None) if getattr(log, "prod_qty", None) is not None else (getattr(log, "qty_produced", 0) or 0)
+        r_qty = getattr(log, "rej_qty", None) if getattr(log, "rej_qty", None) is not None else (getattr(log, "scrap_qty", 0) or 0)
+        eff = getattr(log, "efficiency", 0.0) or 0.0
         row = [
             log.id,
-            ts_str,
+            d_str,
             log.shift or "",
-            log.machine_name or "",
-            log.operator_name or "",
-            log.part_no or "",
-            f"Opn {log.opn_no}" if log.opn_no else "",
-            log.qty_produced or 0,
-            log.scrap_qty or 0,
-            log.completed_sl_nos or ""
+            getattr(log, "dept", "") or "",
+            getattr(log, "setter", "") or "",
+            getattr(log, "machine", "") or getattr(log, "machine_name", "") or "",
+            getattr(log, "operator", "") or getattr(log, "operator_name", "") or "",
+            getattr(log, "partno", "") or getattr(log, "part_no", "") or "",
+            getattr(log, "opn_no", "") or "",
+            getattr(log, "description", "") or "",
+            p_qty,
+            r_qty,
+            f"{eff:.1f}%" if eff else "",
+            getattr(log, "remarks", "") or ""
         ]
         ws.append(row)
         r_idx = ws.max_row
@@ -6856,8 +6977,10 @@ def export_production_logs_excel(db: Session = Depends(get_db)):
         for c_idx in range(1, len(row) + 1):
             cell = ws.cell(row=r_idx, column=c_idx)
             cell.border = thin_border
-            if c_idx in [1, 2, 3, 7, 8, 9]:
+            if c_idx in [1, 2, 3, 4, 9]:
                 cell.alignment = align_center
+            elif c_idx in [11, 12, 13]:
+                cell.alignment = Alignment(horizontal="right", vertical="center")
             else:
                 cell.alignment = align_left
 

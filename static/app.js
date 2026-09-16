@@ -8838,41 +8838,51 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const tr = document.createElement('tr');
+                const rejVal = parseFloat(log.rej_qty) || 0;
+                const effVal = parseFloat(log.efficiency) || 0;
+                let effColor = '#1e293b';
+                if (effVal >= 90) effColor = '#16a34a';
+                else if (effVal >= 70) effColor = '#d97706';
+                else if (effVal > 0) effColor = '#dc2626';
+
                 tr.innerHTML = `
-                    <td>${log.date ? log.date.split('-').reverse().join('/') : ''}</td>
-                    <td>${log.dept}</td>
-                    <td>${log.shift}</td>
+                    <td style="text-align: center;">${log.date ? log.date.split('-').reverse().join('/') : ''}</td>
+                    <td style="text-align: center; font-weight: 600;">${log.dept || ''}</td>
+                    <td style="text-align: center;">${log.shift || ''}</td>
                     <td>${log.setter || ''}</td>
-                    <td>${log.partno}</td>
-                    <td>${log.opn_no}</td>
+                    <td style="font-weight: 600;">${log.partno || ''}</td>
+                    <td style="text-align: center;">${log.opn_no || ''}</td>
                     <td>${log.description || ''}</td>
-                    <td>${log.machine}</td>
+                    <td>${log.machine || ''}</td>
                     <td>${log.operator || ''}</td>
-                    <td>${log.multiple_mc || 1}</td>
-                    <td>${log.cycle_time || ''}</td>
-                    <td>${log.runtime || ''}</td>
-                    <td>${log.target_qty || ''}</td>
-                    <td><span style="font-weight:bold;color:var(--primary);">${log.prod_qty}</span></td>
-                    <td>${log.efficiency}%</td>
-                    <td><span style="font-weight:bold;">${totalIdle.toFixed(2)}</span></td>
-                    <td>${idleMap["No load"] || ''}</td>
-                    <td>${idleMap["No Operator"] || ''}</td>
-                    <td>${idleMap["Setting"] || ''}</td>
-                    <td>${idleMap["Setup"] || ''}</td>
-                    <td>${idleMap["No power"] || ''}</td>
-                    <td>${idleMap["Tool issue"] || ''}</td>
-                    <td>${idleMap["Quality issue"] || ''}</td>
-                    <td>${idleMap["fixture issue"] || ''}</td>
-                    <td>${idleMap["Machine bd"] || ''}</td>
-                    <td>${idleMap["misc"] || ''}</td>
-                    <td>${idleMap["Npd"] || ''}</td>
-                    <td>${idleMap["rework"] || ''}</td>
-                    <td>${idleMap["no plan"] || ''}</td>
-                    <td>${idleMap["setter"] || ''}</td>
+                    <td style="text-align: center;">${log.multiple_mc || 1}</td>
+                    <td style="text-align: right;">${log.cycle_time ? Number(log.cycle_time).toFixed(1) : ''}</td>
+                    <td style="text-align: right;">${log.runtime ? Number(log.runtime).toFixed(2) : ''}</td>
+                    <td style="text-align: right;">${log.target_qty || ''}</td>
+                    <td style="text-align: right;"><span style="font-weight: bold; color: #0284c7;">${log.prod_qty || 0}</span></td>
+                    <td style="text-align: right;"><span style="font-weight: 600; color: ${rejVal > 0 ? '#dc2626' : '#94a3b8'};">${rejVal > 0 ? rejVal : 0}</span></td>
+                    <td style="text-align: right;"><span style="font-weight: 600; color: ${effColor};">${effVal ? effVal.toFixed(1) + '%' : ''}</span></td>
+                    <td style="text-align: right;"><span style="font-weight: bold; color: #b45309;">${totalIdle > 0 ? totalIdle.toFixed(2) : '-'}</span></td>
+                    <td style="text-align: right;">${idleMap["No load"] ? idleMap["No load"].toFixed(2) : ''}</td>
+                    <td style="text-align: right;">${idleMap["No Operator"] ? idleMap["No Operator"].toFixed(2) : ''}</td>
+                    <td style="text-align: right;">${idleMap["Setting"] ? idleMap["Setting"].toFixed(2) : ''}</td>
+                    <td style="text-align: right;">${idleMap["Setup"] ? idleMap["Setup"].toFixed(2) : ''}</td>
+                    <td style="text-align: right;">${idleMap["No power"] ? idleMap["No power"].toFixed(2) : ''}</td>
+                    <td style="text-align: right;">${idleMap["Tool issue"] ? idleMap["Tool issue"].toFixed(2) : ''}</td>
+                    <td style="text-align: right;">${idleMap["Quality issue"] ? idleMap["Quality issue"].toFixed(2) : ''}</td>
+                    <td style="text-align: right;">${idleMap["fixture issue"] ? idleMap["fixture issue"].toFixed(2) : ''}</td>
+                    <td style="text-align: right;">${idleMap["Machine bd"] ? idleMap["Machine bd"].toFixed(2) : ''}</td>
+                    <td style="text-align: right;">${idleMap["misc"] ? idleMap["misc"].toFixed(2) : ''}</td>
+                    <td style="text-align: right;">${idleMap["Npd"] ? idleMap["Npd"].toFixed(2) : ''}</td>
+                    <td style="text-align: right;">${idleMap["rework"] ? idleMap["rework"].toFixed(2) : ''}</td>
+                    <td style="text-align: right;">${idleMap["no plan"] ? idleMap["no plan"].toFixed(2) : ''}</td>
+                    <td style="text-align: right;">${idleMap["setter"] ? idleMap["setter"].toFixed(2) : ''}</td>
+                    <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${(log.remarks || '').replace(/"/g, '&quot;')}">${log.remarks || ''}</td>
                 `;
                 
                 const actionTd = document.createElement('td');
                 actionTd.style.whiteSpace = 'nowrap';
+                actionTd.style.textAlign = 'center';
 
                 const editBtn = document.createElement('button');
                 editBtn.className = 'btn-text';
@@ -8917,6 +8927,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 tbody.appendChild(tr);
             });
+            const badge = document.getElementById('prodLogCountBadge');
+            if (badge) badge.textContent = `${data.length} records`;
             applyProdLogHeaderFilters();
         } catch (e) { console.error(e); }
     }
@@ -8982,7 +8994,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 runtime: isIdle ? 0 : (parseFloat(document.getElementById('prodLogRuntime').value) || 0),
                 target_qty: isIdle ? 0 : (parseFloat(document.getElementById('prodLogTargetQty').value) || 0),
                 prod_qty: isIdle ? 0 : (parseFloat(document.getElementById('prodLogProdQty').value) || 0),
+                rej_qty: isIdle ? 0 : (parseFloat(document.getElementById('prodLogRejQty')?.value) || 0),
                 efficiency: isIdle ? 0 : (parseFloat(document.getElementById('prodLogEfficiency').value) || 0),
+                remarks: (document.getElementById('prodLogRemarks')?.value || '').trim(),
                 idle_hours: parseFloat(document.getElementById('prodLogIdleHours').value) || 0,
                 idle_reason: document.getElementById('prodLogIdleReason').value,
                 idle_hours_2: isIdle ? 0 : (parseFloat(document.getElementById('prodLogIdleHours2').value) || 0),
@@ -9017,6 +9031,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         document.getElementById('prodLogSetter').value = savedSetter;
                         document.getElementById('prodLogOperator').value = savedOperator;
                         document.getElementById('prodLogContinueOperator').value = 'y';
+                        if (document.getElementById('prodLogRejQty')) document.getElementById('prodLogRejQty').value = '0';
+                        if (document.getElementById('prodLogRemarks')) document.getElementById('prodLogRemarks').value = '';
                         currentOperatorSessionHours += (
                             (parseFloat(data.runtime) || 0) + 
                             (parseFloat(data.idle_hours) || 0) + 
@@ -9032,7 +9048,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (document.getElementById('prodLogContinueOperator')) {
                             document.getElementById('prodLogContinueOperator').value = 'n';
                         }
+                        if (document.getElementById('prodLogRejQty')) document.getElementById('prodLogRejQty').value = '0';
+                        if (document.getElementById('prodLogRemarks')) document.getElementById('prodLogRemarks').value = '';
                     }
+                    if (prodLogPartNoSelect) prodLogPartNoSelect.clear(true);
                     toggleMachineIdleMode();
                     validateHours();
                     
