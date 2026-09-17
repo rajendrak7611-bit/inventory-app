@@ -6364,6 +6364,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 let lastOpProd = 0;
                 let lastOpMonthProd = 0;
+                let lastOpLogsThisMonth = [];
                 if (mfgOperations.length > 0) {
                     const lastOp = mfgOperations[mfgOperations.length - 1];
                     const lastOpnClean = (lastOp.opn_no || '').trim().toLowerCase();
@@ -6387,22 +6388,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     };
 
                     lastOpProd = allLogs.filter(isMatchOp).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                    lastOpMonthProd = allLogs.filter(l => isMatchOp(l) && isDateInMonth(l.date, month)).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                    lastOpLogsThisMonth = allLogs.filter(l => isMatchOp(l) && isDateInMonth(l.date, month));
+                    lastOpMonthProd = lastOpLogsThisMonth.reduce((sum, l) => sum + (l.prod_qty || 0), 0);
 
                     if (isLastPc || lastOpnClean.includes('pc')) {
                         const pcRec = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                         lastOpProd = Math.max(lastOpProd, pcRec);
+                        const pcRecMonth = monthPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                        lastOpMonthProd = Math.max(lastOpMonthProd, pcRecMonth);
                     } else if (isLastHt) {
                         const htRec = allHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                         lastOpProd = Math.max(lastOpProd, htRec);
+                        const htRecMonth = monthHtReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
+                        lastOpMonthProd = Math.max(lastOpMonthProd, htRecMonth);
                     }
                 } else {
                     const partAllLogs = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && !['debur', 'for ins', 'rfd', 'rework', 'rejection', 'nc', 'idle'].includes((l.opn_no || '').toLowerCase()));
                     const numericOps = partAllLogs.map(l => parseInt(l.opn_no) || 0).filter(n => n > 0);
                     if (numericOps.length > 0) {
                         const maxOp = Math.max(...numericOps);
-                        lastOpProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (parseInt(l.opn_no) || 0) === maxOp).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
-                        lastOpMonthProd = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (parseInt(l.opn_no) || 0) === maxOp && isDateInMonth(l.date, month)).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                        const isMatchNumeric = (l) => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (parseInt(l.opn_no) || 0) === maxOp;
+                        lastOpProd = allLogs.filter(isMatchNumeric).reduce((sum, l) => sum + (l.prod_qty || 0), 0);
+                        lastOpLogsThisMonth = allLogs.filter(l => isMatchNumeric(l) && isDateInMonth(l.date, month));
+                        lastOpMonthProd = lastOpLogsThisMonth.reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                     }
                     const pcRecTotal = allPcReceiptLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase()).reduce((sum, l) => sum + (l.qty || 0), 0);
                     if (pcRecTotal > lastOpProd) {
@@ -6410,16 +6418,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                if (lastOpProd <= 0) continue;
+                if (lastOpProd <= 0 && lastOpMonthProd <= 0) continue;
 
                 const deburredTotal = allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur').reduce((sum, l) => sum + (l.prod_qty || 0), 0);
                 
                 const balance = Math.max(0, lastOpProd - deburredTotal);
                 
-                // Show if currently pending debur (balance > 0) OR if completed final operation during this month
-                if (balance <= 0 && lastOpMonthProd <= 0) continue;
-                
-                const displayQty = balance;
+                let displayQty = balance;
+                // If cumulative balance is 0 or less due to historical debur, but final operation was completed this month, show pending quantity from this month's run
+                if (displayQty <= 0 && lastOpMonthProd > 0) {
+                    const opDates = lastOpLogsThisMonth.map(l => l.date).filter(Boolean);
+                    const minOpDate = opDates.length > 0 ? [...opDates].sort()[0] : null;
+                    const deburredAfterOp = minOpDate 
+                        ? allLogs.filter(l => (l.partno || '').trim().toUpperCase() === (partno || '').trim().toUpperCase() && (l.opn_no || '').toLowerCase() === 'debur' && (l.date || '') >= minOpDate).reduce((sum, l) => sum + (l.prod_qty || 0), 0)
+                        : 0;
+                    displayQty = Math.max(0, lastOpMonthProd - deburredAfterOp);
+                }
+
                 if (displayQty <= 0) continue;
 
                 const tr = document.createElement('tr');
