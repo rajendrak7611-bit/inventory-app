@@ -53,9 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function checkAdminAccess() {
+    function checkAdminAccess(action = 'delete records') {
         if (!isUserAdmin()) {
-            alert('Access Denied: Only Admin users are authorized to delete records.');
+            alert(`Access Denied: Only Admin users are authorized to ${action}.`);
             return false;
         }
         return true;
@@ -484,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.querySelectorAll('.main-tab').forEach(btn => btn.classList.remove('active'));
         document.querySelectorAll('.sub-tab').forEach(btn => btn.classList.remove('active'));
-        ['addPartTab', 'clearAllPartsTab', 'addReceiptTab', 'addDespatchTab', 'addRmTab', 'sendToHtTab', 'sendToPcTab'].forEach(id => {
+        ['addPartTab', 'clearAllPartsTab', 'addReceiptTab', 'addDespatchTab', 'sendToHtTab', 'sendToPcTab'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
         });
@@ -695,8 +695,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }},
         'sidebarRmMaster': { tab: 'rawmaterial', action: () => { 
             if (rawMaterialsSection) rawMaterialsSection.style.display = 'block';
-            const addRmBtnTab = document.getElementById('addRmTab');
-            if (addRmBtnTab) addRmBtnTab.style.display = 'inline-block';
+            addBtn.style.display = 'none';
             importBtn.style.display = 'inline-flex';
             fetchRawMaterials();
         }},
@@ -955,12 +954,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (currentTab === 'pc') openPcModal();
         else if (currentTab === 'rfq') openRfqModal();
         else if (currentTab === 'quote') openQuoteModal();
-        else if (currentTab === 'rawmaterial') {
-            document.getElementById('rmModalTitle').innerText = 'Add Raw Material';
-            document.getElementById('rawMaterialForm').reset();
-            document.getElementById('rmId').value = '';
-            document.getElementById('rawMaterialModal').classList.add('show');
-        }
+
         else if (currentTab === 'rm_receipt' || currentTab === 'rm_despatch') {
             const isReceipt = currentTab === 'rm_receipt';
             document.getElementById('rmLogModalTitle').innerText = isReceipt ? 'Add Receipt' : 'Add Despatch';
@@ -9875,6 +9869,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleOpeningStockChange(input) {
+        if (!checkAdminAccess('edit raw materials')) {
+            const rmId = parseInt(input.getAttribute('data-id')) || 0;
+            const rm = (allRawMaterials || []).find(r => r.id === rmId);
+            input.value = rm && rm.opening_stock !== undefined && rm.opening_stock !== null ? rm.opening_stock : 0;
+            return;
+        }
         const fpn = (input.getAttribute('data-fpn') || '').trim();
         const rmId = parseInt(input.getAttribute('data-id')) || 0;
         const val = parseInt(input.value) || 0;
@@ -9947,15 +9947,21 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const isAdmin = isUserAdmin();
         filtered.forEach(rm => {
             const tr = document.createElement('tr');
             tr.id = `rmRow_${rm.id}`;
             const stockColor = (rm.stock || 0) < 0 ? '#ef4444' : '#10b981';
             const opVal = rm.opening_stock !== undefined && rm.opening_stock !== null ? rm.opening_stock : 0;
+            const inputReadonly = !isAdmin ? 'readonly' : '';
+            const inputStyle = !isAdmin 
+                ? 'width: 85px; padding: 3px 6px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 0.85rem; font-weight: 600; text-align: right; background: #f8fafc; color: #64748b; cursor: not-allowed;' 
+                : 'width: 85px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem; font-weight: 600; text-align: right; background: #ffffff; color: #0f172a; transition: all 0.2s;';
+            const inputTitle = !isAdmin ? 'Admin rights required to edit opening stock' : 'Click to edit opening stock for this month';
             tr.innerHTML = `
                 <td style="font-weight: 500;">${escapeHtml(rm.forge_pn)}</td>
                 <td style="padding: 4px 8px;">
-                    <input type="number" class="rm-opening-input" data-id="${rm.id}" data-fpn="${escapeHtml(rm.forge_pn)}" value="${opVal}" style="width: 85px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem; font-weight: 600; text-align: right; background: #ffffff; color: #0f172a; transition: all 0.2s;" title="Click to edit opening stock for this month">
+                    <input type="number" class="rm-opening-input" data-id="${rm.id}" data-fpn="${escapeHtml(rm.forge_pn)}" value="${opVal}" ${inputReadonly} style="${inputStyle}" title="${inputTitle}">
                 </td>
                 <td>${rm.receipt || 0}</td>
                 <td>${rm.despatch || 0}</td>
@@ -9969,15 +9975,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         tbody.querySelectorAll('.rm-opening-input').forEach(input => {
-            input.addEventListener('change', async (e) => {
-                await handleOpeningStockChange(e.target);
-            });
-            input.addEventListener('keydown', async (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    input.blur();
-                }
-            });
+            if (!isAdmin) {
+                input.addEventListener('click', () => {
+                    checkAdminAccess('edit raw materials');
+                });
+            } else {
+                input.addEventListener('change', async (e) => {
+                    await handleOpeningStockChange(e.target);
+                });
+                input.addEventListener('keydown', async (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        input.blur();
+                    }
+                });
+            }
         });
     }
 
@@ -9999,6 +10011,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (rawMaterialForm) {
         rawMaterialForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (!checkAdminAccess('edit raw materials')) return;
             const id = document.getElementById('rmId').value;
             const forge_pn = document.getElementById('rmForgePn').value.trim();
             const opening_stock = parseInt(document.getElementById('rmQuantity').value) || 0;
@@ -10081,6 +10094,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.editRawMaterial = (id) => {
+        if (!checkAdminAccess('edit raw materials')) return;
         const rm = allRawMaterials.find(r => r.id === id);
         if (rm) {
             const month = document.getElementById('rmStatusMonth')?.value || new Date().toISOString().slice(0, 7);
