@@ -4592,7 +4592,16 @@
                 </div>
                 <div class="form-group">
                     <label for="operatorDesignation">Designation</label>
-                    <input type="text" id="operatorDesignation" required placeholder="e.g. Operator" value="Operator">
+                    <input type="text" id="operatorDesignation" required placeholder="e.g. Operator, Debur" list="operatorDesignationList" value="Operator">
+                    <datalist id="operatorDesignationList">
+                        <option value="Operator">
+                        <option value="Debur">
+                        <option value="Setter">
+                        <option value="Supervisor">
+                        <option value="Service">
+                        <option value="Helper">
+                        <option value="Technician">
+                    </datalist>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" id="cancelOperatorBtn">Cancel</button>
@@ -5821,6 +5830,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10099"></script>
+    <script src="/static/app.js?v=10100"></script>
 </body>
 </html>

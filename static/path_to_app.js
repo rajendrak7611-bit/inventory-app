@@ -1940,6 +1940,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (typeof cachedOperatorsForAtt !== 'undefined') cachedOperatorsForAtt = [];
             closeOperatorModal(); 
             await fetchOperators();
+            if (typeof populateDeburOperators === 'function') populateDeburOperators();
         } catch (err) {
             console.error(err);
             alert('Failed to save operator: ' + err.message);
@@ -1958,6 +1959,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (typeof cachedHrShiftOperators !== 'undefined') cachedHrShiftOperators = [];
                 if (typeof cachedOperatorsForAtt !== 'undefined') cachedOperatorsForAtt = [];
                 await fetchOperators();
+                if (typeof populateDeburOperators === 'function') populateDeburOperators();
             } catch (err) {
                 console.error(err);
                 alert('Error deleting operator.');
@@ -6179,7 +6181,66 @@ document.addEventListener('DOMContentLoaded', () => {
     let deburAllParts = [];
     let deburOperatorsLoaded = false;
     
-    document.getElementById('deburDeptSelect').addEventListener('change', fetchDeburStatus);
+    document.getElementById('deburDeptSelect').addEventListener('change', () => {
+        fetchDeburStatus();
+        populateDeburOperators();
+    });
+
+    async function populateDeburOperators() {
+        const deptSelect = document.getElementById('deburDeptSelect');
+        const selDept = (deptSelect ? deptSelect.value : '').trim();
+        const sel = document.getElementById('deburOperator');
+        if (!sel) return;
+
+        try {
+            const opRes = await fetch('/api/operators');
+            const operators = await opRes.json();
+
+            const norm = (str) => (str || '').replace(/[\s\-_]/g, '').toUpperCase();
+            const selDeptNorm = norm(selDept);
+
+            // Filter for operators designated as Debur from respective department
+            const deburOps = (operators || []).filter(o => {
+                const desig = (o.designation || '').trim().toUpperCase();
+                const isDebur = desig === 'DEBUR' || desig === 'DEB' || desig.startsWith('DEB') || desig.includes('DEBUR');
+                if (!isDebur) return false;
+
+                if (selDeptNorm) {
+                    const opDept = o.dept || o.department || '';
+                    return norm(opDept) === selDeptNorm;
+                }
+                return true;
+            });
+
+            deburOps.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+            const currentVal = sel.value;
+            sel.innerHTML = '<option value="">-- Select Operator --</option>';
+            if (deburOps.length === 0) {
+                const noOpt = document.createElement('option');
+                noOpt.value = '';
+                noOpt.textContent = selDept ? `No Debur operators found for ${selDept}` : 'No Debur operators found';
+                noOpt.disabled = true;
+                sel.appendChild(noOpt);
+            } else {
+                deburOps.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o.name;
+                    opt.textContent = o.name;
+                    sel.appendChild(opt);
+                });
+            }
+
+            if (currentVal && deburOps.some(o => o.name === currentVal)) {
+                sel.value = currentVal;
+            } else {
+                sel.value = '';
+            }
+        } catch (e) {
+            console.error('Error loading debur operators', e);
+        }
+    }
+    window.populateDeburOperators = populateDeburOperators;
     
     async function initDebur() {
         try {
@@ -6235,24 +6296,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     deburAllParts = await partsRes.json();
                 } catch(e) { deburAllParts = []; }
             }
-            if (!deburOperatorsLoaded) {
-                try {
-                    const opRes = await fetch('/api/operators');
-                    const operators = await opRes.json();
-                    operators.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                    const sel = document.getElementById('deburOperator');
-                    if (sel) {
-                        sel.innerHTML = '<option value="">-- Select Operator --</option>';
-                        operators.forEach(o => {
-                            const opt = document.createElement('option');
-                            opt.value = o.name;
-                            opt.textContent = o.name;
-                            sel.appendChild(opt);
-                        });
-                    }
-                    deburOperatorsLoaded = true;
-                } catch(e) { console.error('Error loading debur operators', e); }
-            }
+
+            await populateDeburOperators();
             
             fetchDeburLogs();
             
@@ -6265,6 +6310,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
                 if (deptSelect.value) {
+                    await populateDeburOperators();
                     fetchDeburStatus();
                 }
             }
@@ -6275,6 +6321,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function fetchDeburStatus() {
         const dept = document.getElementById('deburDeptSelect').value;
+        populateDeburOperators();
         const tbody = document.getElementById('deburPartsBody');
         if (!tbody) return;
         tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;"><i class="fas fa-spinner fa-spin"></i> Loading pending parts...</td></tr>';
