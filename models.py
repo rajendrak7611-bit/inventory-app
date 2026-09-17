@@ -135,9 +135,18 @@ class RawMaterial(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     forge_pn = Column(String, index=True, nullable=False)
+    opening_stock = Column(Integer, default=0)
     receipt = Column(Integer, default=0)
     despatch = Column(Integer, default=0)
     stock = Column(Integer, default=0)
+
+class RawMaterialMonthlyOpening(Base):
+    __tablename__ = "raw_material_monthly_opening"
+
+    id = Column(Integer, primary_key=True, index=True)
+    forge_pn = Column(String, index=True, nullable=False)
+    month = Column(String, index=True, nullable=False)
+    opening_stock = Column(Integer, default=0)
 
 class RawMaterialLog(Base):
     __tablename__ = "raw_material_logs"

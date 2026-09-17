@@ -9861,11 +9861,65 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- RAW MATERIAL LOGIC ---
     async function fetchRawMaterials() {
         try {
-            const res = await fetch('/api/rawmaterials');
+            const monthInput = document.getElementById('rmStatusMonth');
+            if (monthInput && !monthInput.value) {
+                monthInput.value = new Date().toISOString().slice(0, 7);
+            }
+            const m = monthInput ? monthInput.value : new Date().toISOString().slice(0, 7);
+            const res = await fetch(`/api/rawmaterials?month=${encodeURIComponent(m)}`);
             allRawMaterials = await res.json();
             renderRawMaterials();
         } catch (e) {
             console.error('Error fetching raw materials', e);
+        }
+    }
+
+    async function handleOpeningStockChange(input) {
+        const fpn = (input.getAttribute('data-fpn') || '').trim();
+        const rmId = parseInt(input.getAttribute('data-id')) || 0;
+        const val = parseInt(input.value) || 0;
+        const month = document.getElementById('rmStatusMonth')?.value || new Date().toISOString().slice(0, 7);
+        
+        // Update in memory immediately for snappy UI
+        const rm = (allRawMaterials || []).find(r => r.id === rmId || (r.forge_pn || '').trim().toUpperCase() === fpn.toUpperCase());
+        if (rm) {
+            rm.opening_stock = val;
+            rm.stock = val + (rm.receipt || 0) - (rm.despatch || 0);
+            const row = document.getElementById(`rmRow_${rm.id}`);
+            if (row) {
+                const stockCell = row.querySelector('.rm-stock-cell');
+                if (stockCell) {
+                    stockCell.innerText = rm.stock;
+                    stockCell.style.color = rm.stock < 0 ? '#ef4444' : '#10b981';
+                }
+            }
+        }
+        
+        input.style.borderColor = '#3b82f6';
+        try {
+            const res = await fetch('/api/rawmaterials/opening_stock', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    forge_pn: fpn,
+                    month: month,
+                    opening_stock: val
+                })
+            });
+            if (res.ok) {
+                input.style.borderColor = '#10b981';
+                input.style.background = '#ecfdf5';
+                setTimeout(() => {
+                    input.style.borderColor = '#cbd5e1';
+                    input.style.background = '#ffffff';
+                }, 1200);
+            } else {
+                input.style.borderColor = '#ef4444';
+                alert('Failed to save opening stock.');
+            }
+        } catch (err) {
+            console.error(err);
+            input.style.borderColor = '#ef4444';
         }
     }
 
@@ -9889,23 +9943,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tbody.innerHTML = '';
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 1rem;">No matching raw materials found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1rem;">No matching raw materials found</td></tr>';
             return;
         }
 
         filtered.forEach(rm => {
             const tr = document.createElement('tr');
+            tr.id = `rmRow_${rm.id}`;
+            const stockColor = (rm.stock || 0) < 0 ? '#ef4444' : '#10b981';
+            const opVal = rm.opening_stock !== undefined && rm.opening_stock !== null ? rm.opening_stock : 0;
             tr.innerHTML = `
-                <td>${rm.forge_pn}</td>
-                <td>${rm.receipt}</td>
-                <td>${rm.despatch}</td>
-                <td>${rm.stock}</td>
+                <td style="font-weight: 500;">${escapeHtml(rm.forge_pn)}</td>
+                <td style="padding: 4px 8px;">
+                    <input type="number" class="rm-opening-input" data-id="${rm.id}" data-fpn="${escapeHtml(rm.forge_pn)}" value="${opVal}" style="width: 85px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem; font-weight: 600; text-align: right; background: #ffffff; color: #0f172a; transition: all 0.2s;" title="Click to edit opening stock for this month">
+                </td>
+                <td>${rm.receipt || 0}</td>
+                <td>${rm.despatch || 0}</td>
+                <td class="rm-stock-cell" style="font-weight: 700; color: ${stockColor};">${rm.stock || 0}</td>
                 <td class="action-col">
                     <button class="btn btn-primary btn-sm" onclick="editRawMaterial(${rm.id})">Edit</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteRawMaterial(${rm.id})">Delete</button>
                 </td>
             `;
             tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.rm-opening-input').forEach(input => {
+            input.addEventListener('change', async (e) => {
+                await handleOpeningStockChange(e.target);
+            });
+            input.addEventListener('keydown', async (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    input.blur();
+                }
+            });
         });
     }
 
@@ -9918,21 +9990,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    document.getElementById('rmStatusMonth')?.addEventListener('change', () => {
+        fetchRawMaterials();
+    });
+
     const rawMaterialModal = document.getElementById('rawMaterialModal');
     const rawMaterialForm = document.getElementById('rawMaterialForm');
     if (rawMaterialForm) {
         rawMaterialForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const id = document.getElementById('rmId').value;
-            const forge_pn = document.getElementById('rmForgePn').value;
-            const quantity = parseInt(document.getElementById('rmQuantity').value) || 0;
-            const despatch = parseInt(document.getElementById('rmDespatch').value) || 0;
+            const forge_pn = document.getElementById('rmForgePn').value.trim();
+            const opening_stock = parseInt(document.getElementById('rmQuantity').value) || 0;
+            const month = document.getElementById('rmStatusMonth')?.value || new Date().toISOString().slice(0, 7);
             
-            // Map quantity to receipt, stock is receipt - despatch
-            const receipt = quantity;
-            const stock = receipt - despatch;
-            
-            const payload = { forge_pn, receipt, despatch, stock };
+            const payload = { forge_pn, opening_stock, month };
             
             const method = id ? 'PUT' : 'POST';
             const url = id ? `/api/rawmaterials/${id}` : '/api/rawmaterials';
@@ -10011,11 +10083,29 @@ document.addEventListener('DOMContentLoaded', () => {
     window.editRawMaterial = (id) => {
         const rm = allRawMaterials.find(r => r.id === id);
         if (rm) {
-            document.getElementById('rmModalTitle').innerText = 'Edit Raw Material';
+            const month = document.getElementById('rmStatusMonth')?.value || new Date().toISOString().slice(0, 7);
+            document.getElementById('rmModalTitle').innerText = `Edit Raw Material (${month})`;
             document.getElementById('rmId').value = rm.id;
             document.getElementById('rmForgePn').value = rm.forge_pn;
-            document.getElementById('rmQuantity').value = rm.receipt;
-            document.getElementById('rmDespatch').value = rm.despatch;
+            const opVal = rm.opening_stock !== undefined && rm.opening_stock !== null ? rm.opening_stock : 0;
+            document.getElementById('rmQuantity').value = opVal;
+            
+            const breakdown = document.getElementById('rmModalBreakdown');
+            if (breakdown) {
+                breakdown.style.display = 'block';
+                document.getElementById('rmModalReceipt').innerText = rm.receipt || 0;
+                document.getElementById('rmModalDespatch').innerText = rm.despatch || 0;
+                const stockEl = document.getElementById('rmModalStock');
+                stockEl.innerText = rm.stock || 0;
+                stockEl.style.color = (rm.stock || 0) < 0 ? '#ef4444' : '#10b981';
+                
+                document.getElementById('rmQuantity').oninput = () => {
+                    const op = parseInt(document.getElementById('rmQuantity').value) || 0;
+                    const st = op + (rm.receipt || 0) - (rm.despatch || 0);
+                    stockEl.innerText = st;
+                    stockEl.style.color = st < 0 ? '#ef4444' : '#10b981';
+                };
+            }
             rawMaterialModal.classList.add('show');
         }
     };

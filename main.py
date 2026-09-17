@@ -78,7 +78,12 @@ def run_db_migrations():
         "ALTER TABLE inspection_parameters ADD COLUMN dept VARCHAR;",
         "ALTER TABLE inspection_reports ADD COLUMN dept VARCHAR;",
         "ALTER TABLE raw_material_logs ADD COLUMN remarks TEXT;",
+        "ALTER TABLE raw_materials ADD COLUMN opening_stock INTEGER DEFAULT 0;",
     ]
+    try:
+        models.Base.metadata.create_all(bind=engine)
+    except Exception:
+        pass
     for sql in migration_statements:
         try:
             with engine.begin() as conn:
@@ -4176,10 +4181,16 @@ def sync_partmaster_forge_pns_to_rawmaterials(db: Session):
                 rcpt = sum(int(float(l["qty"] or 0)) for l in logs if (l.get("type") or "").strip().lower() == "receipt")
                 dspt = sum(int(float(l["qty"] or 0)) for l in logs if (l.get("type") or "").strip().lower() == "despatch")
                 stk = rcpt - dspt
-                db.execute(text("""
-                    INSERT INTO raw_materials (forge_pn, receipt, despatch, stock)
-                    VALUES (:forge_pn, :receipt, :despatch, :stock)
-                """), {"forge_pn": fpn, "receipt": rcpt, "despatch": dspt, "stock": stk})
+                try:
+                    db.execute(text("""
+                        INSERT INTO raw_materials (forge_pn, opening_stock, receipt, despatch, stock)
+                        VALUES (:forge_pn, 0, :receipt, :despatch, :stock)
+                    """), {"forge_pn": fpn, "receipt": rcpt, "despatch": dspt, "stock": stk})
+                except Exception:
+                    db.execute(text("""
+                        INSERT INTO raw_materials (forge_pn, receipt, despatch, stock)
+                        VALUES (:forge_pn, :receipt, :despatch, :stock)
+                    """), {"forge_pn": fpn, "receipt": rcpt, "despatch": dspt, "stock": stk})
                 existing_rms.add(fpn.upper())
                 changed = True
         if changed:
@@ -4188,36 +4199,173 @@ def sync_partmaster_forge_pns_to_rawmaterials(db: Session):
         db.rollback()
 
 @app.get("/api/rawmaterials")
-def get_raw_materials(db: Session = Depends(get_db)):
+def get_raw_materials(month: Optional[str] = Query(None), db: Session = Depends(get_db)):
     sync_partmaster_forge_pns_to_rawmaterials(db)
+    
+    target_month = (month or "").strip()
+    if not target_month or target_month.lower() == "all":
+        target_month = datetime.date.today().strftime("%Y-%m")
+
     try:
-        rows = db.execute(text("SELECT id, forge_pn, receipt, despatch, stock FROM raw_materials ORDER BY forge_pn ASC;")).mappings().all()
-        return [{
-            "id": r["id"],
-            "forge_pn": r["forge_pn"],
-            "receipt": int(r["receipt"] or 0),
-            "despatch": int(r["despatch"] or 0),
-            "stock": int(r["stock"] or 0)
-        } for r in rows]
-    except Exception:
+        try:
+            rows = db.execute(text("SELECT id, forge_pn, COALESCE(opening_stock, 0) as opening_stock, receipt, despatch, stock FROM raw_materials ORDER BY forge_pn ASC;")).mappings().all()
+        except Exception:
+            rows = db.execute(text("SELECT id, forge_pn, 0 as opening_stock, receipt, despatch, stock FROM raw_materials ORDER BY forge_pn ASC;")).mappings().all()
+
+        # Fetch all logs grouped by fpn and month
+        from collections import defaultdict
+        logs_by_fpn_month = defaultdict(lambda: defaultdict(lambda: {"receipt": 0, "despatch": 0}))
+        logged_fpns = set()
+        
+        log_rows = db.execute(text("""
+            SELECT UPPER(TRIM(forge_pn)) as fpn, type, qty, SUBSTR(TRIM(date), 1, 7) as log_month
+            FROM raw_material_logs
+            WHERE date IS NOT NULL AND TRIM(date) != ''
+        """)).mappings().all()
+
+        for l in log_rows:
+            fpn = l.get("fpn")
+            m = l.get("log_month")
+            if not fpn or not m or len(m) != 7:
+                continue
+            logged_fpns.add(fpn)
+            t = (l.get("type") or "").strip().lower()
+            q = int(float(l.get("qty") or 0))
+            if t in ("receipt", "despatch"):
+                logs_by_fpn_month[fpn][m][t] += q
+
+        # Fetch manual monthly opening stock overrides
+        overrides = {}
+        try:
+            override_rows = db.execute(text("""
+                SELECT UPPER(TRIM(forge_pn)) as fpn, month, opening_stock
+                FROM raw_material_monthly_opening
+            """)).mappings().all()
+            for r in override_rows:
+                if r.get("fpn") and r.get("month"):
+                    overrides[(r["fpn"], r["month"])] = int(r["opening_stock"] or 0)
+        except Exception:
+            pass
+
+        results = []
+        for r in rows:
+            fpn = (r.get("forge_pn") or "").strip().upper()
+            base_opening = int(r.get("opening_stock") or 0)
+            
+            rcpt_target = logs_by_fpn_month[fpn][target_month]["receipt"]
+            dspt_target = logs_by_fpn_month[fpn][target_month]["despatch"]
+
+            relevant_overrides = {m: val for (f, m), val in overrides.items() if f == fpn and m <= target_month}
+            if relevant_overrides:
+                latest_override_m = max(relevant_overrides.keys())
+                override_val = relevant_overrides[latest_override_m]
+                if latest_override_m == target_month:
+                    op_target = override_val
+                else:
+                    rcpt_between = sum(logs_by_fpn_month[fpn][m]["receipt"] for m in logs_by_fpn_month[fpn] if latest_override_m <= m < target_month)
+                    dspt_between = sum(logs_by_fpn_month[fpn][m]["despatch"] for m in logs_by_fpn_month[fpn] if latest_override_m <= m < target_month)
+                    op_target = override_val + rcpt_between - dspt_between
+            else:
+                if fpn in logged_fpns:
+                    rcpt_prior = sum(logs_by_fpn_month[fpn][m]["receipt"] for m in logs_by_fpn_month[fpn] if m < target_month)
+                    dspt_prior = sum(logs_by_fpn_month[fpn][m]["despatch"] for m in logs_by_fpn_month[fpn] if m < target_month)
+                    op_target = base_opening + rcpt_prior - dspt_prior
+                else:
+                    legacy_stock = int(r.get("stock") or 0)
+                    op_target = base_opening if base_opening != 0 else legacy_stock
+
+            stk_target = op_target + rcpt_target - dspt_target
+            results.append({
+                "id": r["id"],
+                "forge_pn": r["forge_pn"],
+                "month": target_month,
+                "opening_stock": op_target,
+                "receipt": rcpt_target,
+                "despatch": dspt_target,
+                "stock": stk_target
+            })
+        return results
+    except Exception as ex:
+        print("get_raw_materials error:", ex)
         db.rollback()
         rms = db.query(models.RawMaterial).order_by(models.RawMaterial.forge_pn.asc()).all()
         return [{
             "id": r.id,
             "forge_pn": r.forge_pn,
+            "month": target_month,
+            "opening_stock": getattr(r, "opening_stock", 0) or 0,
             "receipt": r.receipt or 0,
             "despatch": r.despatch or 0,
             "stock": r.stock or 0
         } for r in rms]
+
+@app.post("/api/rawmaterials/opening_stock")
+def update_rm_opening_stock(data: dict, db: Session = Depends(get_db)):
+    fpn = (data.get("forge_pn") or "").strip()
+    month = (data.get("month") or "").strip()
+    if not fpn:
+        raise HTTPException(status_code=400, detail="Forge PN is required")
+    if not month:
+        raise HTTPException(status_code=400, detail="Month is required")
+    opening_stock = int(data.get("opening_stock") if data.get("opening_stock") is not None else 0)
+
+    try:
+        try:
+            models.Base.metadata.create_all(bind=engine)
+        except Exception:
+            pass
+
+        existing = db.execute(text("""
+            SELECT id FROM raw_material_monthly_opening 
+            WHERE UPPER(TRIM(forge_pn)) = UPPER(TRIM(:fpn)) AND month = :month
+        """), {"fpn": fpn, "month": month}).mappings().first()
+
+        if existing:
+            db.execute(text("""
+                UPDATE raw_material_monthly_opening 
+                SET opening_stock = :op 
+                WHERE id = :id
+            """), {"op": opening_stock, "id": existing["id"]})
+        else:
+            db.execute(text("""
+                INSERT INTO raw_material_monthly_opening (forge_pn, month, opening_stock)
+                VALUES (:fpn, :month, :op)
+            """), {"fpn": fpn, "month": month, "op": opening_stock})
+
+        curr_month = datetime.date.today().strftime("%Y-%m")
+        if month == curr_month:
+            logs = db.execute(text("""
+                SELECT type, qty FROM raw_material_logs 
+                WHERE UPPER(TRIM(forge_pn)) = UPPER(TRIM(:fpn)) AND SUBSTR(TRIM(date), 1, 7) = :month
+            """), {"fpn": fpn, "month": month}).mappings().all()
+            rcpt = sum(int(float(l["qty"] or 0)) for l in logs if (l.get("type") or "").strip().lower() == "receipt")
+            dspt = sum(int(float(l["qty"] or 0)) for l in logs if (l.get("type") or "").strip().lower() == "despatch")
+            stk = opening_stock + rcpt - dspt
+            try:
+                db.execute(text("""
+                    UPDATE raw_materials 
+                    SET opening_stock = :op, stock = :stk 
+                    WHERE UPPER(TRIM(forge_pn)) = UPPER(TRIM(:fpn))
+                """), {"op": opening_stock, "stk": stk, "fpn": fpn})
+            except Exception:
+                pass
+
+        db.commit()
+        return {"message": "Opening stock updated successfully", "forge_pn": fpn, "month": month, "opening_stock": opening_stock}
+    except Exception as ex:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update opening stock: {ex}")
 
 @app.post("/api/rawmaterials")
 def create_raw_material(data: dict, db: Session = Depends(get_db)):
     fpn = (data.get("forge_pn") or "").strip()
     if not fpn:
         raise HTTPException(status_code=400, detail="Forge PN is required")
-    receipt = int(data.get("receipt") or data.get("quantity") or 0)
+    opening_stock = int(data.get("opening_stock") if data.get("opening_stock") is not None else (data.get("quantity") or 0))
+    receipt = int(data.get("receipt") or 0)
     despatch = int(data.get("despatch") or 0)
-    stock = int(data.get("stock") if data.get("stock") is not None else (receipt - despatch))
+    stock = int(data.get("stock") if data.get("stock") is not None else (opening_stock + receipt - despatch))
+    month = (data.get("month") or datetime.date.today().strftime("%Y-%m")).strip()
 
     try:
         db.execute(text("SELECT setval(pg_get_serial_sequence('raw_materials', 'id'), coalesce(max(id),0) + 1, false) FROM raw_materials;"))
@@ -4226,10 +4374,26 @@ def create_raw_material(data: dict, db: Session = Depends(get_db)):
         db.rollback()
 
     try:
-        db.execute(text("""
-            INSERT INTO raw_materials (forge_pn, receipt, despatch, stock)
-            VALUES (:forge_pn, :receipt, :despatch, :stock)
-        """), {"forge_pn": fpn, "receipt": receipt, "despatch": despatch, "stock": stock})
+        try:
+            db.execute(text("""
+                INSERT INTO raw_materials (forge_pn, opening_stock, receipt, despatch, stock)
+                VALUES (:forge_pn, :opening_stock, :receipt, :despatch, :stock)
+            """), {"forge_pn": fpn, "opening_stock": opening_stock, "receipt": receipt, "despatch": despatch, "stock": stock})
+        except Exception:
+            db.execute(text("""
+                INSERT INTO raw_materials (forge_pn, receipt, despatch, stock)
+                VALUES (:forge_pn, :receipt, :despatch, :stock)
+            """), {"forge_pn": fpn, "receipt": receipt, "despatch": despatch, "stock": stock})
+        
+        if opening_stock > 0 and month:
+            try:
+                db.execute(text("""
+                    INSERT INTO raw_material_monthly_opening (forge_pn, month, opening_stock)
+                    VALUES (:fpn, :month, :op)
+                """), {"fpn": fpn, "month": month, "op": opening_stock})
+            except Exception:
+                pass
+
         db.commit()
     except Exception as ex:
         db.rollback()
@@ -4239,15 +4403,42 @@ def create_raw_material(data: dict, db: Session = Depends(get_db)):
 @app.put("/api/rawmaterials/{rm_id}")
 def update_raw_material(rm_id: int, data: dict, db: Session = Depends(get_db)):
     fpn = (data.get("forge_pn") or "").strip()
-    receipt = int(data.get("receipt") or data.get("quantity") or 0)
+    opening_stock = int(data.get("opening_stock") if data.get("opening_stock") is not None else (data.get("quantity") or 0))
+    receipt = int(data.get("receipt") or 0)
     despatch = int(data.get("despatch") or 0)
-    stock = int(data.get("stock") if data.get("stock") is not None else (receipt - despatch))
+    stock = int(data.get("stock") if data.get("stock") is not None else (opening_stock + receipt - despatch))
+    month = (data.get("month") or datetime.date.today().strftime("%Y-%m")).strip()
 
     try:
-        db.execute(text("""
-            UPDATE raw_materials SET forge_pn = :forge_pn, receipt = :receipt, despatch = :despatch, stock = :stock
-            WHERE id = :id
-        """), {"id": rm_id, "forge_pn": fpn, "receipt": receipt, "despatch": despatch, "stock": stock})
+        try:
+            db.execute(text("""
+                UPDATE raw_materials SET forge_pn = :forge_pn, opening_stock = :opening_stock, receipt = :receipt, despatch = :despatch, stock = :stock
+                WHERE id = :id
+            """), {"id": rm_id, "forge_pn": fpn, "opening_stock": opening_stock, "receipt": receipt, "despatch": despatch, "stock": stock})
+        except Exception:
+            db.execute(text("""
+                UPDATE raw_materials SET forge_pn = :forge_pn, receipt = :receipt, despatch = :despatch, stock = :stock
+                WHERE id = :id
+            """), {"id": rm_id, "forge_pn": fpn, "receipt": receipt, "despatch": despatch, "stock": stock})
+
+        if month:
+            try:
+                existing = db.execute(text("""
+                    SELECT id FROM raw_material_monthly_opening 
+                    WHERE UPPER(TRIM(forge_pn)) = UPPER(TRIM(:fpn)) AND month = :month
+                """), {"fpn": fpn, "month": month}).mappings().first()
+                if existing:
+                    db.execute(text("""
+                        UPDATE raw_material_monthly_opening SET opening_stock = :op WHERE id = :id
+                    """), {"op": opening_stock, "id": existing["id"]})
+                else:
+                    db.execute(text("""
+                        INSERT INTO raw_material_monthly_opening (forge_pn, month, opening_stock)
+                        VALUES (:fpn, :month, :op)
+                    """), {"fpn": fpn, "month": month, "op": opening_stock})
+            except Exception:
+                pass
+
         db.commit()
     except Exception as ex:
         db.rollback()
