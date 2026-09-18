@@ -1941,6 +1941,7 @@ document.addEventListener('DOMContentLoaded', () => {
             closeOperatorModal(); 
             await fetchOperators();
             if (typeof populateDeburOperators === 'function') populateDeburOperators();
+            if (typeof populateFinalInspOperators === 'function') populateFinalInspOperators();
         } catch (err) {
             console.error(err);
             alert('Failed to save operator: ' + err.message);
@@ -1960,6 +1961,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (typeof cachedOperatorsForAtt !== 'undefined') cachedOperatorsForAtt = [];
                 await fetchOperators();
                 if (typeof populateDeburOperators === 'function') populateDeburOperators();
+                if (typeof populateFinalInspOperators === 'function') populateFinalInspOperators();
             } catch (err) {
                 console.error(err);
                 alert('Error deleting operator.');
@@ -6593,7 +6595,56 @@ document.addEventListener('DOMContentLoaded', () => {
     let inspOperatorsLoaded = false;
     let savedInspectionReasons = new Set();
 
-    document.getElementById('inspDeptSelect').addEventListener('change', fetchInspectionStatus);
+    document.getElementById('inspDeptSelect').addEventListener('change', () => {
+        fetchInspectionStatus();
+        populateFinalInspOperators();
+    });
+
+    async function populateFinalInspOperators() {
+        const sel = document.getElementById('inspOperator');
+        if (!sel) return;
+
+        try {
+            const opRes = await fetch('/api/operators');
+            const operators = await opRes.json();
+
+            const norm = (str) => (str || '').replace(/[\s\-_]/g, '').toUpperCase();
+
+            // Filter for operators belonging to QC department
+            const qcOps = (operators || []).filter(o => {
+                const opDept = norm(o.dept || o.department || '');
+                return opDept === 'QC' || opDept.includes('QC') || opDept.includes('QUALITY');
+            });
+
+            qcOps.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+            const currentVal = sel.value;
+            sel.innerHTML = '<option value="">-- Select Operator --</option>';
+            if (qcOps.length === 0) {
+                const noOpt = document.createElement('option');
+                noOpt.value = '';
+                noOpt.textContent = 'No QC operators found';
+                noOpt.disabled = true;
+                sel.appendChild(noOpt);
+            } else {
+                qcOps.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o.name;
+                    opt.textContent = o.name;
+                    sel.appendChild(opt);
+                });
+            }
+
+            if (currentVal && qcOps.some(o => o.name === currentVal)) {
+                sel.value = currentVal;
+            } else {
+                sel.value = '';
+            }
+        } catch (e) {
+            console.error('Error loading QC operators for inspection', e);
+        }
+    }
+    window.populateFinalInspOperators = populateFinalInspOperators;
 
     async function loadPastInspectionReasons() {
         try {
@@ -7238,24 +7289,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     inspAllParts = await partsRes.json();
                 } catch(e) { inspAllParts = []; }
             }
-            if (!inspOperatorsLoaded) {
-                try {
-                    const opRes = await fetch('/api/operators');
-                    const operators = await opRes.json();
-                    operators.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-                    const sel = document.getElementById('inspOperator');
-                    if (sel) {
-                        sel.innerHTML = '<option value="">-- Select Operator --</option>';
-                        operators.forEach(o => {
-                            const opt = document.createElement('option');
-                            opt.value = o.name;
-                            opt.textContent = o.name;
-                            sel.appendChild(opt);
-                        });
-                    }
-                    inspOperatorsLoaded = true;
-                } catch(e) { console.error('Error loading insp operators', e); }
-            }
+            await populateFinalInspOperators();
             
             loadPastInspectionReasons();
             initInspectionRows();
@@ -7270,6 +7304,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
                 if (deptSelect.value) {
+                    await populateFinalInspOperators();
                     fetchInspectionStatus();
                 }
             }
@@ -7280,6 +7315,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function fetchInspectionStatus() {
         const dept = document.getElementById('inspDeptSelect').value;
+        populateFinalInspOperators();
         const tbody = document.getElementById('inspPartsBody');
         if (!tbody) return;
         tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted); text-align:center;"><i class="fas fa-spinner fa-spin"></i> Loading pending parts...</td></tr>';
