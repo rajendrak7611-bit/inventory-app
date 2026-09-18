@@ -2440,11 +2440,25 @@
                     <div style="flex: 1 1 500px; min-width: 500px; border-left: 1px solid var(--border-color); padding-left: 1.5rem;">
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
                             <h2 style="margin: 0; font-size: 1.2rem;">Existing Schedules</h2>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <label for="scheduleFilterDept" style="font-weight: 600; font-size: 0.85rem; margin: 0; color: var(--text-main);">Dept Filter:</label>
-                                <select id="scheduleFilterDept" style="padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; font-weight: 500; color: var(--text-main); background-color: var(--card-bg);">
-                                    <option value="">All Depts</option>
-                                </select>
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <label for="scheduleFilterDept" style="font-weight: 600; font-size: 0.85rem; margin: 0; color: var(--text-main);">Dept:</label>
+                                    <select id="scheduleFilterDept" style="padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; font-weight: 500; color: var(--text-main); background-color: var(--card-bg);">
+                                        <option value="">All Depts</option>
+                                    </select>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <label for="scheduleFilterPartNo" style="font-weight: 600; font-size: 0.85rem; margin: 0; color: var(--text-main);">Part No:</label>
+                                    <input type="text" id="scheduleFilterPartNo" placeholder="Filter Part No..." style="padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; color: var(--text-main); background-color: var(--card-bg); width: 130px;">
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <label for="scheduleFilterTargetDate" style="font-weight: 600; font-size: 0.85rem; margin: 0; color: var(--text-main);">Target Date:</label>
+                                    <select id="scheduleFilterTargetDate" style="padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; font-weight: 500; color: var(--text-main); background-color: var(--card-bg);">
+                                        <option value="">All Dates</option>
+                                    </select>
+                                    <input type="date" id="scheduleFilterTargetDateCustom" title="Or pick specific date" style="padding: 0.35rem 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; color: var(--text-main); background-color: var(--card-bg); font-family: 'Inter', sans-serif;">
+                                </div>
+                                <button type="button" id="scheduleClearFiltersBtn" class="btn btn-outline btn-sm" style="padding: 0.35rem 0.6rem; font-size: 0.8rem; display: none; color: #ef4444; border-color: #ef4444;">Clear</button>
                             </div>
                         </div>
                         <div style="max-height: calc(100vh - 160px); min-height: 550px; overflow-y: auto; padding-right: 5px;">
@@ -5830,6 +5844,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10101"></script>
+    <script src="/static/app.js?v=10102"></script>
 </body>
 </html>

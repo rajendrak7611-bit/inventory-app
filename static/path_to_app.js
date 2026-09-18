@@ -4007,10 +4007,93 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    let cachedAllSchedules = [];
+
+    function renderFilteredSchedules() {
+        if (!cachedAllSchedules) return;
+
+        const filterDeptSel = document.getElementById('scheduleFilterDept');
+        const filterPartNoInput = document.getElementById('scheduleFilterPartNo');
+        const filterDateSel = document.getElementById('scheduleFilterTargetDate');
+        const filterDateCustom = document.getElementById('scheduleFilterTargetDateCustom');
+        const clearBtn = document.getElementById('scheduleClearFiltersBtn');
+
+        const selectedDept = filterDeptSel ? (filterDeptSel.value || '').trim().toLowerCase() : '';
+        const selectedPartNo = filterPartNoInput ? (filterPartNoInput.value || '').trim().toLowerCase() : '';
+        const selectedDate = (filterDateCustom && filterDateCustom.value)
+            ? filterDateCustom.value.trim()
+            : (filterDateSel ? (filterDateSel.value || '').trim() : '');
+
+        if (clearBtn) {
+            clearBtn.style.display = (selectedDept || selectedPartNo || selectedDate) ? 'inline-block' : 'none';
+        }
+
+        let filteredSchedules = cachedAllSchedules;
+        if (selectedDept) {
+            filteredSchedules = filteredSchedules.filter(s => (s.department || '').trim().toLowerCase() === selectedDept);
+        }
+        if (selectedPartNo) {
+            filteredSchedules = filteredSchedules.filter(s => {
+                const p = (s.partno || '').toLowerCase();
+                const cleanP = p.replace(/[\s\-_#]/g, '');
+                const cleanFilter = selectedPartNo.replace(/[\s\-_#]/g, '');
+                return p.includes(selectedPartNo) || cleanP.includes(cleanFilter);
+            });
+        }
+        if (selectedDate) {
+            filteredSchedules = filteredSchedules.filter(s => {
+                const td = (s.target_date || '').trim();
+                return td === selectedDate || td.startsWith(selectedDate);
+            });
+        }
+
+        const tbody = document.getElementById('scheduleListBody');
+        if (tbody) {
+            tbody.innerHTML = '';
+            if (filteredSchedules.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:1rem;">No schedules found.</td></tr>';
+            } else {
+                // Sort by newest first assuming higher ID means newer
+                filteredSchedules.sort((a, b) => b.id - a.id);
+                filteredSchedules.forEach((s, idx) => {
+                    const partKey = (s.partno || '').trim().toUpperCase();
+                    const partObj = (allPartMasters || []).find(p => (p.partno || '').trim().toUpperCase() === partKey);
+                    
+                    const rateNum = parseFloat(s.rate || (partObj ? (partObj.va || partObj.rate) : 0)) || 0;
+                    const qtyNum = parseInt(s.qty) || 0;
+                    const valNum = rateNum * qtyNum;
+
+                    const rateStr = rateNum > 0 ? rateNum.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '0';
+                    const valStr = valNum > 0 ? valNum.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '0';
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${idx + 1}</td>
+                        <td><strong>${s.department || ''}</strong></td>
+                        <td>${s.partno}</td>
+                        <td>${s.target_date}</td>
+                        <td>${qtyNum}</td>
+                        <td>${rateStr}</td>
+                        <td><strong>${valStr}</strong></td>
+                        <td><span style="padding: 2px 8px; background-color: rgba(59, 130, 246, 0.1); color: var(--primary); border-radius: 12px; font-size: 0.85em;">${s.status || 'Pending'}</span></td>
+                        <td>
+                            <button onclick="editSchedule(${s.id})" style="background: none; border: none; color: var(--primary); cursor: pointer; margin-right: 8px;">Edit</button>
+                            <button onclick="deleteSchedule(${s.id})" style="background: none; border: none; color: #ef4444; cursor: pointer;">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        renderScheduleSummaryReport(filteredSchedules);
+    }
+
     async function fetchSchedulesForList() {
         try {
             const res = await fetch('/api/schedule');
             const schedules = await res.json();
+            cachedAllSchedules = schedules;
 
             if (!allPartMasters || allPartMasters.length === 0) {
                 try {
@@ -4029,53 +4112,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            const selectedDept = filterDeptSel ? (filterDeptSel.value || '').trim().toLowerCase() : '';
-
-            let filteredSchedules = schedules;
-            if (selectedDept) {
-                filteredSchedules = schedules.filter(s => (s.department || '').trim().toLowerCase() === selectedDept);
-            }
-
-            const tbody = document.getElementById('scheduleListBody');
-            if (tbody) {
-                tbody.innerHTML = '';
-                if (filteredSchedules.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:1rem;">No schedules found.</td></tr>';
-                } else {
-                    // Sort by newest first assuming higher ID means newer
-                    filteredSchedules.sort((a, b) => b.id - a.id);
-                    filteredSchedules.forEach((s, idx) => {
-                        const partKey = (s.partno || '').trim().toUpperCase();
-                        const partObj = (allPartMasters || []).find(p => (p.partno || '').trim().toUpperCase() === partKey);
-                        
-                        const rateNum = parseFloat(s.rate || (partObj ? (partObj.va || partObj.rate) : 0)) || 0;
-                        const qtyNum = parseInt(s.qty) || 0;
-                        const valNum = rateNum * qtyNum;
-
-                        const rateStr = rateNum > 0 ? rateNum.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '0';
-                        const valStr = valNum > 0 ? valNum.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '0';
-
-                        const tr = document.createElement('tr');
-                        tr.innerHTML = `
-                            <td>${idx + 1}</td>
-                            <td><strong>${s.department || ''}</strong></td>
-                            <td>${s.partno}</td>
-                            <td>${s.target_date}</td>
-                            <td>${qtyNum}</td>
-                            <td>${rateStr}</td>
-                            <td><strong>${valStr}</strong></td>
-                            <td><span style="padding: 2px 8px; background-color: rgba(59, 130, 246, 0.1); color: var(--primary); border-radius: 12px; font-size: 0.85em;">${s.status || 'Pending'}</span></td>
-                            <td>
-                                <button onclick="editSchedule(${s.id})" style="background: none; border: none; color: var(--primary); cursor: pointer; margin-right: 8px;">Edit</button>
-                                <button onclick="deleteSchedule(${s.id})" style="background: none; border: none; color: #ef4444; cursor: pointer;">Delete</button>
-                            </td>
-                        `;
-                        tbody.appendChild(tr);
-                    });
+            const filterDateSel = document.getElementById('scheduleFilterTargetDate');
+            if (filterDateSel) {
+                const currentDateFilter = filterDateSel.value;
+                const uniqueDates = Array.from(new Set(schedules.map(s => (s.target_date || '').trim()).filter(Boolean))).sort().reverse();
+                filterDateSel.innerHTML = '<option value="">All Dates</option>' + uniqueDates.map(d => `<option value="${d}">${d}</option>`).join('');
+                if (uniqueDates.includes(currentDateFilter)) {
+                    filterDateSel.value = currentDateFilter;
                 }
             }
 
-            renderScheduleSummaryReport(filteredSchedules);
+            renderFilteredSchedules();
         } catch (e) {
             console.error('Error fetching schedules:', e);
         }
@@ -4169,7 +4216,57 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     document.getElementById('scheduleFilterDept')?.addEventListener('change', () => {
-        fetchSchedulesForList();
+        renderFilteredSchedules();
+    });
+
+    document.getElementById('scheduleFilterPartNo')?.addEventListener('input', () => {
+        renderFilteredSchedules();
+    });
+
+    document.getElementById('scheduleFilterTargetDate')?.addEventListener('change', (e) => {
+        const customDateInput = document.getElementById('scheduleFilterTargetDateCustom');
+        if (customDateInput) {
+            customDateInput.value = e.target.value;
+        }
+        renderFilteredSchedules();
+    });
+
+    document.getElementById('scheduleFilterTargetDateCustom')?.addEventListener('change', (e) => {
+        const dateSelect = document.getElementById('scheduleFilterTargetDate');
+        if (dateSelect) {
+            const val = e.target.value;
+            if (Array.from(dateSelect.options).some(o => o.value === val)) {
+                dateSelect.value = val;
+            } else {
+                dateSelect.value = '';
+            }
+        }
+        renderFilteredSchedules();
+    });
+
+    document.getElementById('scheduleFilterTargetDateCustom')?.addEventListener('input', (e) => {
+        const dateSelect = document.getElementById('scheduleFilterTargetDate');
+        if (dateSelect) {
+            const val = e.target.value;
+            if (Array.from(dateSelect.options).some(o => o.value === val)) {
+                dateSelect.value = val;
+            } else {
+                dateSelect.value = '';
+            }
+        }
+        renderFilteredSchedules();
+    });
+
+    document.getElementById('scheduleClearFiltersBtn')?.addEventListener('click', () => {
+        const deptSel = document.getElementById('scheduleFilterDept');
+        const partInput = document.getElementById('scheduleFilterPartNo');
+        const dateSel = document.getElementById('scheduleFilterTargetDate');
+        const dateCustom = document.getElementById('scheduleFilterTargetDateCustom');
+        if (deptSel) deptSel.value = '';
+        if (partInput) partInput.value = '';
+        if (dateSel) dateSel.value = '';
+        if (dateCustom) dateCustom.value = '';
+        renderFilteredSchedules();
     });
 
     let editingScheduleId = null;
