@@ -3093,7 +3093,10 @@ def clear_all_schedules_endpoint(db: Session = Depends(get_db)):
 @app.get("/api/schedule/run")
 def get_schedule_run(dept: Optional[str] = None, month: Optional[str] = None, start_time: Optional[str] = None, db: Session = Depends(get_db)):
     try:
+        from datetime import datetime as dt_cls, timedelta as td_cls
+
         # 1. Fetch active schedules (status != 'Completed')
+        sched_rows = []
         try:
             sched_rows = db.execute(text("SELECT id, department, partno, target_date, qty, completed_qty, status FROM schedules WHERE LOWER(COALESCE(status, '')) != 'completed' ORDER BY id DESC")).mappings().all()
         except Exception:
@@ -3102,7 +3105,11 @@ def get_schedule_run(dept: Optional[str] = None, month: Optional[str] = None, st
                 sched_rows = db.execute(text("SELECT * FROM schedules WHERE status != 'Completed' ORDER BY id DESC")).mappings().all()
             except Exception:
                 db.rollback()
-                sched_rows = []
+                try:
+                    sched_rows = db.execute(text("SELECT id, '' AS department, part_no AS partno, '' AS target_date, total_sch_qty AS qty, qty_disp AS completed_qty, 'Pending' AS status FROM production_schedules ORDER BY id DESC")).mappings().all()
+                except Exception:
+                    db.rollback()
+                    sched_rows = []
 
         # 2. Fetch Part Master records (check part_masters first, fallback to parts)
         pm_rows = []
@@ -3255,12 +3262,12 @@ def get_schedule_run(dept: Optional[str] = None, month: Optional[str] = None, st
             while rem_min > 0:
                 cur = _normalize_work(cur)
                 if cur.hour >= 6:
-                    end_w = (cur + timedelta(days=1)).replace(hour=3, minute=0, second=0, microsecond=0)
+                    end_w = (cur + td_cls(days=1)).replace(hour=3, minute=0, second=0, microsecond=0)
                 else:
                     end_w = cur.replace(hour=3, minute=0, second=0, microsecond=0)
                 win_min = int((end_w - cur).total_seconds() // 60)
                 if rem_min <= win_min:
-                    cur += timedelta(minutes=rem_min)
+                    cur += td_cls(minutes=rem_min)
                     rem_min = 0
                 else:
                     rem_min -= win_min
@@ -3270,20 +3277,34 @@ def get_schedule_run(dept: Optional[str] = None, month: Optional[str] = None, st
         now_ist = get_now_ist()
         current_ym = now_ist.strftime("%Y-%m")
         target_month_filter = str(month).strip() if month and str(month).strip() else None
-        target_dept_filter = str(dept).strip().lower() if dept and str(dept).strip().lower() not in ["", "all", "all departments"] else None
+        target_dept_filter = str(dept).strip().lower() if dept and str(dept).strip().lower() not in ["", "all", "all departments", "undefined", "null"] else None
+
+        def _extract_month(d_str):
+            if not d_str:
+                return current_ym
+            s = str(d_str).strip()
+            if len(s) >= 7 and s[4] == '-':
+                return s[:7]
+            parts = re.split(r'[\/\-]', s)
+            if len(parts) == 3:
+                if len(parts[0]) == 4:
+                    return f"{parts[0]}-{parts[1].zfill(2)}"
+                elif len(parts[2]) == 4:
+                    return f"{parts[2]}-{parts[1].zfill(2)}"
+            return s[:7] if len(s) >= 7 else current_ym
 
         # Determine base start time
         if start_time and str(start_time).strip():
             st_str = str(start_time).strip().replace("T", " ")
             try:
                 if len(st_str) == 16:
-                    base_start_time = datetime.strptime(st_str, "%Y-%m-%d %H:%M")
+                    base_start_time = dt_cls.strptime(st_str, "%Y-%m-%d %H:%M")
                 elif len(st_str) == 19:
-                    base_start_time = datetime.strptime(st_str, "%Y-%m-%d %H:%M:%S")
+                    base_start_time = dt_cls.strptime(st_str, "%Y-%m-%d %H:%M:%S")
                 elif len(st_str) == 10:
-                    base_start_time = datetime.strptime(st_str, "%Y-%m-%d").replace(hour=6, minute=0)
+                    base_start_time = dt_cls.strptime(st_str, "%Y-%m-%d").replace(hour=6, minute=0)
                 else:
-                    base_start_time = datetime.fromisoformat(st_str)
+                    base_start_time = dt_cls.fromisoformat(st_str)
             except Exception:
                 base_start_time = now_ist.replace(minute=(0 if now_ist.minute < 30 else 30), second=0, microsecond=0)
         else:
@@ -3292,7 +3313,7 @@ def get_schedule_run(dept: Optional[str] = None, month: Optional[str] = None, st
             else:
                 try:
                     y, m = [int(x) for x in target_month_filter.split("-")[:2]]
-                    base_start_time = datetime(y, m, 1, 6, 0)
+                    base_start_time = dt_cls(y, m, 1, 6, 0)
                 except Exception:
                     base_start_time = now_ist.replace(minute=(0 if now_ist.minute < 30 else 30), second=0, microsecond=0)
 
@@ -3310,12 +3331,12 @@ def get_schedule_run(dept: Optional[str] = None, month: Optional[str] = None, st
                 continue
             sched_dept = str(s.get("department") or s.get("dept") or "").strip()
             target_date = str(s.get("target_date") or "").strip()
-            sched_month = target_date[:7] if len(target_date) >= 7 else current_ym
+            sched_month = _extract_month(target_date)
 
             if target_dept_filter and sched_dept.lower() != target_dept_filter:
                 continue
 
-            if target_month_filter and sched_month != target_month_filter:
+            if target_month_filter and sched_month and sched_month != target_month_filter:
                 continue
 
             try:
@@ -3402,6 +3423,8 @@ def get_schedule_run(dept: Optional[str] = None, month: Optional[str] = None, st
 
         return run_items
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print("get_schedule_run error:", e)
         db.rollback()
         return []
