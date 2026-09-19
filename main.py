@@ -3091,7 +3091,7 @@ def clear_all_schedules_endpoint(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/schedule/run")
-def get_schedule_run(dept: Optional[str] = None, month: Optional[str] = None, db: Session = Depends(get_db)):
+def get_schedule_run(dept: Optional[str] = None, month: Optional[str] = None, start_time: Optional[str] = None, db: Session = Depends(get_db)):
     try:
         # 1. Fetch active schedules (status != 'Completed')
         try:
@@ -3107,39 +3107,50 @@ def get_schedule_run(dept: Optional[str] = None, month: Optional[str] = None, db
         # 2. Fetch Part Master records (check part_masters first, fallback to parts)
         pm_rows = []
         try:
-            pm_rows = db.execute(text("SELECT id, partno, department FROM part_masters")).mappings().all()
+            pm_rows = db.execute(text("SELECT id, department, customer, family, forge_pn, part_prefix, partno, va FROM part_masters")).mappings().all()
         except Exception:
             db.rollback()
             try:
-                pm_rows = db.execute(text("SELECT id, part_no AS partno, dept AS department FROM parts")).mappings().all()
+                pm_rows = db.execute(text("SELECT id, dept AS department, customer, family, forge_pn, '' AS part_prefix, part_no AS partno, va FROM parts")).mappings().all()
             except Exception:
                 db.rollback()
 
-        pm_map = {}
-        for r in pm_rows:
-            pno = str(r.get("partno") or "").strip().upper()
-            if pno:
-                if pno not in pm_map:
-                    pm_map[pno] = []
-                pm_map[pno].append(dict(r))
-
-        # 3. Fetch operations (check part_operations first, fallback to operations)
-        opn_rows = []
+        # 3. Fetch operations (from part_operations and operations)
+        part_ops_rows = []
         try:
-            opn_rows = db.execute(text("SELECT id, part_id, opn_no, description, machine, cycle_time FROM part_operations ORDER BY id ASC")).mappings().all()
+            part_ops_rows = db.execute(text("SELECT id, part_id, opn_no, description, machine, cycle_time FROM part_operations ORDER BY id ASC")).mappings().all()
         except Exception:
             db.rollback()
-            try:
-                opn_rows = db.execute(text("SELECT id, part_id, opn_no, description, machine_name AS machine, cycle_time FROM operations ORDER BY id ASC")).mappings().all()
-            except Exception:
-                db.rollback()
 
-        ops_by_part_id = {}
-        for op in opn_rows:
-            pid = op.get("part_id")
-            if pid not in ops_by_part_id:
-                ops_by_part_id[pid] = []
-            ops_by_part_id[pid].append(dict(op))
+        ops_table_rows = []
+        try:
+            ops_table_rows = db.execute(text("SELECT id, part_id, opn_no, description, machine_name AS machine, cycle_time FROM operations ORDER BY id ASC")).mappings().all()
+        except Exception:
+            db.rollback()
+
+        # Index operations by multiple possible part_id keys (str and int)
+        ops_by_pid = {}
+        for o in part_ops_rows:
+            raw_pid = o.get("part_id")
+            o_dict = dict(o)
+            keys = [str(raw_pid).strip().upper()]
+            try:
+                keys.append(int(raw_pid))
+            except Exception:
+                pass
+            for k in keys:
+                if k not in ops_by_pid:
+                    ops_by_pid[k] = []
+                ops_by_pid[k].append(o_dict)
+
+        for o in ops_table_rows:
+            raw_pid = o.get("part_id")
+            o_dict = dict(o)
+            keys = [f"PARTS_{raw_pid}", f"PARTS_{str(raw_pid).strip().upper()}"]
+            for k in keys:
+                if k not in ops_by_pid:
+                    ops_by_pid[k] = []
+                ops_by_pid[k].append(o_dict)
 
         def _sort_op(o):
             raw = str(o.get("opn_no") or "0").strip()
@@ -3148,8 +3159,64 @@ def get_schedule_run(dept: Optional[str] = None, month: Optional[str] = None, db
             except Exception:
                 return (1, raw)
 
-        for pid in ops_by_part_id:
-            ops_by_part_id[pid].sort(key=_sort_op)
+        for k in ops_by_pid:
+            ops_by_pid[k].sort(key=_sort_op)
+
+        def _clean(s):
+            return re.sub(r'[^A-Z0-9]', '', str(s or '').upper())
+
+        def _resolve_ops(sched_partno, dept_name=None):
+            sp = str(sched_partno or '').strip().upper()
+            sp_clean = _clean(sp)
+            if not sp:
+                return []
+
+            # Direct match in ops_by_pid
+            if sp in ops_by_pid:
+                return ops_by_pid[sp]
+
+            # Exact match in part_masters
+            for pm in pm_rows:
+                if dept_name and pm.get('department') and str(pm.get('department')).strip().upper() != str(dept_name).strip().upper():
+                    continue
+                pno = str(pm.get('partno') or '').strip().upper()
+                if pno and pno == sp:
+                    pid = pm.get('id')
+                    if str(pid) in ops_by_pid: return ops_by_pid[str(pid)]
+                    if pid in ops_by_pid: return ops_by_pid[pid]
+
+            # Cleaned string match in part_masters
+            for pm in pm_rows:
+                if dept_name and pm.get('department') and str(pm.get('department')).strip().upper() != str(dept_name).strip().upper():
+                    continue
+                pno = str(pm.get('partno') or '').strip().upper()
+                prefix = str(pm.get('part_prefix') or '').strip().upper()
+                if (pno and _clean(pno) == sp_clean) or (prefix and _clean(prefix) == sp_clean):
+                    pid = pm.get('id')
+                    if str(pid) in ops_by_pid: return ops_by_pid[str(pid)]
+                    if pid in ops_by_pid: return ops_by_pid[pid]
+
+            # Containment match in part_masters (e.g. 393645 in prefix, or forge_pn M5#01A in sched_partno)
+            for pm in pm_rows:
+                if dept_name and pm.get('department') and str(pm.get('department')).strip().upper() != str(dept_name).strip().upper():
+                    continue
+                pno = str(pm.get('partno') or '').strip().upper()
+                prefix = str(pm.get('part_prefix') or '').strip().upper()
+                forge = str(pm.get('forge_pn') or '').strip().upper()
+                if (pno and _clean(pno) in sp_clean) or (forge and _clean(forge) in sp_clean) or (prefix and sp_clean in _clean(prefix)):
+                    pid = pm.get('id')
+                    if str(pid) in ops_by_pid: return ops_by_pid[str(pid)]
+                    if pid in ops_by_pid: return ops_by_pid[pid]
+
+            # Check if part is in parts table directly
+            for pm in pm_rows:
+                pno = str(pm.get('partno') or '').strip().upper()
+                if pno and _clean(pno) == sp_clean:
+                    parts_k = f"PARTS_{pm.get('id')}"
+                    if parts_k in ops_by_pid:
+                        return ops_by_pid[parts_k]
+
+            return []
 
         # 4. Fetch production logs for calculating produced quantities during the month
         prod_logs = []
@@ -3164,36 +3231,90 @@ def get_schedule_run(dept: Optional[str] = None, month: Optional[str] = None, db
 
         prod_map = {}
         for l in prod_logs:
-            lp = str(l.get("partno") or "").strip().upper()
+            lp = _clean(l.get("partno") or l.get("part_no") or "")
             lo = str(l.get("opn_no") or "").strip().lower()
-            ld = str(l.get("date") or "").strip()
+            ld = str(l.get("date") or l.get("log_date") or "").strip()
             lmonth = ld[:7] if len(ld) >= 7 else ""
             try:
-                lqty = float(l.get("prod_qty") or 0.0)
+                lqty = float(l.get("prod_qty") or l.get("qty_produced") or 0.0)
             except Exception:
                 lqty = 0.0
             if lp and lo and lmonth:
                 k = (lp, lo, lmonth)
                 prod_map[k] = prod_map.get(k, 0.0) + lqty
 
-        run_items = []
+        # Working hours calendar logic: 21 hrs per day (06:00 to 03:00 next day, 03:00-06:00 downtime)
+        def _normalize_work(dt):
+            if dt.hour >= 3 and dt.hour < 6:
+                return dt.replace(hour=6, minute=0, second=0, microsecond=0)
+            return dt
+
+        def _add_work_hours(start_dt, hours_to_add):
+            cur = _normalize_work(start_dt)
+            rem_min = int(round(hours_to_add * 60))
+            while rem_min > 0:
+                cur = _normalize_work(cur)
+                if cur.hour >= 6:
+                    end_w = (cur + timedelta(days=1)).replace(hour=3, minute=0, second=0, microsecond=0)
+                else:
+                    end_w = cur.replace(hour=3, minute=0, second=0, microsecond=0)
+                win_min = int((end_w - cur).total_seconds() // 60)
+                if rem_min <= win_min:
+                    cur += timedelta(minutes=rem_min)
+                    rem_min = 0
+                else:
+                    rem_min -= win_min
+                    cur = end_w.replace(hour=6, minute=0, second=0, microsecond=0)
+            return cur
+
+        now_ist = get_now_ist()
+        current_ym = now_ist.strftime("%Y-%m")
         target_month_filter = str(month).strip() if month and str(month).strip() else None
         target_dept_filter = str(dept).strip().lower() if dept and str(dept).strip().lower() not in ["", "all", "all departments"] else None
-        current_ym = get_now_ist().strftime("%Y-%m")
+
+        # Determine base start time
+        if start_time and str(start_time).strip():
+            st_str = str(start_time).strip().replace("T", " ")
+            try:
+                if len(st_str) == 16:
+                    base_start_time = datetime.strptime(st_str, "%Y-%m-%d %H:%M")
+                elif len(st_str) == 19:
+                    base_start_time = datetime.strptime(st_str, "%Y-%m-%d %H:%M:%S")
+                elif len(st_str) == 10:
+                    base_start_time = datetime.strptime(st_str, "%Y-%m-%d").replace(hour=6, minute=0)
+                else:
+                    base_start_time = datetime.fromisoformat(st_str)
+            except Exception:
+                base_start_time = now_ist.replace(minute=(0 if now_ist.minute < 30 else 30), second=0, microsecond=0)
+        else:
+            if not target_month_filter or target_month_filter == current_ym:
+                base_start_time = now_ist.replace(minute=(0 if now_ist.minute < 30 else 30), second=0, microsecond=0)
+            else:
+                try:
+                    y, m = [int(x) for x in target_month_filter.split("-")[:2]]
+                    base_start_time = datetime(y, m, 1, 6, 0)
+                except Exception:
+                    base_start_time = now_ist.replace(minute=(0 if now_ist.minute < 30 else 30), second=0, microsecond=0)
+
+        base_start_time = _normalize_work(base_start_time)
+
+        machine_avail = {}
+        machine_last_part = {}
+        part_last_finish = {}
+
+        run_items = []
 
         for s in sched_rows:
-            partno = str(s.get("partno") or "").strip()
+            partno = str(s.get("partno") or s.get("part_no") or "").strip()
             if not partno:
                 continue
             sched_dept = str(s.get("department") or s.get("dept") or "").strip()
             target_date = str(s.get("target_date") or "").strip()
             sched_month = target_date[:7] if len(target_date) >= 7 else current_ym
 
-            # Dept filtering
             if target_dept_filter and sched_dept.lower() != target_dept_filter:
                 continue
 
-            # Month filtering
             if target_month_filter and sched_month != target_month_filter:
                 continue
 
@@ -3202,17 +3323,7 @@ def get_schedule_run(dept: Optional[str] = None, month: Optional[str] = None, db
             except Exception:
                 sched_qty = 0.0
 
-            # Match part operations
-            pms = pm_map.get(partno.upper(), [])
-            ops = []
-            for pm in pms:
-                pid = pm.get("id")
-                if pid in ops_by_part_id:
-                    ops = ops_by_part_id[pid]
-                    break
-
-            start_date = f"{sched_month}-01" if sched_month else target_date
-            end_date = target_date
+            ops = _resolve_ops(partno, sched_dept)
 
             if ops:
                 for o in ops:
@@ -3224,39 +3335,71 @@ def get_schedule_run(dept: Optional[str] = None, month: Optional[str] = None, db
                     except Exception:
                         cyc = 0.0
 
-                    produced_in_month = prod_map.get((partno.upper(), opn_no.lower(), sched_month), 0.0)
+                    produced_in_month = prod_map.get((_clean(partno), opn_no.lower(), sched_month), 0.0)
                     pending_qty = max(0.0, sched_qty - produced_in_month)
+                    runtime_hrs = round((pending_qty * cyc) / 60.0, 2)
 
-                    if pending_qty > 0:
-                        runtime_hrs = round((pending_qty * cyc) / 60.0, 2)
-                        run_items.append({
-                            "department": sched_dept,
-                            "partno": partno,
-                            "opn_no": opn_no,
-                            "description": desc,
-                            "machine": machine,
-                            "qty": int(pending_qty),
-                            "cycle_time": cyc,
-                            "runtime": runtime_hrs,
-                            "start_date": start_date,
-                            "end_date": end_date,
-                            "month": sched_month
-                        })
-            else:
-                if sched_qty > 0:
+                    # Machine scheduling with 2 hours setting time between parts
+                    mc_key = machine.upper() if machine else "GENERAL"
+                    earliest_mc = machine_avail.get(mc_key, base_start_time)
+
+                    last_p = machine_last_part.get(mc_key)
+                    if machine:
+                        if last_p is not None and last_p != partno.upper():
+                            earliest_mc = _add_work_hours(earliest_mc, 2.0)
+                        elif last_p is None:
+                            earliest_mc = _add_work_hours(earliest_mc, 2.0)
+
+                    part_prev_finish = part_last_finish.get(partno.upper(), base_start_time)
+                    op_start = max(earliest_mc, part_prev_finish)
+                    op_end = _add_work_hours(op_start, runtime_hrs) if runtime_hrs > 0 else op_start
+
+                    if machine:
+                        machine_avail[mc_key] = op_end
+                        machine_last_part[mc_key] = partno.upper()
+                    part_last_finish[partno.upper()] = op_end
+
                     run_items.append({
                         "department": sched_dept,
                         "partno": partno,
-                        "opn_no": "10",
-                        "description": "General Machining",
-                        "machine": "",
+                        "opn_no": opn_no,
+                        "description": desc,
+                        "machine": machine,
+                        "sched_qty": int(sched_qty),
                         "qty": int(sched_qty),
-                        "cycle_time": 0.0,
-                        "runtime": 0.0,
-                        "start_date": start_date,
-                        "end_date": end_date,
+                        "pending_qty": int(pending_qty),
+                        "cycle_time": cyc,
+                        "runtime": runtime_hrs,
+                        "start_date": op_start.strftime("%Y-%m-%d %H:%M"),
+                        "end_date": op_end.strftime("%Y-%m-%d %H:%M"),
                         "month": sched_month
                     })
+            else:
+                produced_in_month = prod_map.get((_clean(partno), "10", sched_month), 0.0)
+                pending_qty = max(0.0, sched_qty - produced_in_month)
+                runtime_hrs = 0.0
+
+                part_prev_finish = part_last_finish.get(partno.upper(), base_start_time)
+                op_start = part_prev_finish
+                op_end = op_start
+                part_last_finish[partno.upper()] = op_end
+
+                run_items.append({
+                    "department": sched_dept,
+                    "partno": partno,
+                    "opn_no": "10",
+                    "description": "General Machining",
+                    "machine": "",
+                    "sched_qty": int(sched_qty),
+                    "qty": int(sched_qty),
+                    "pending_qty": int(pending_qty),
+                    "cycle_time": 0.0,
+                    "runtime": 0.0,
+                    "start_date": op_start.strftime("%Y-%m-%d %H:%M"),
+                    "end_date": op_end.strftime("%Y-%m-%d %H:%M"),
+                    "month": sched_month
+                })
+
         return run_items
     except Exception as e:
         print("get_schedule_run error:", e)

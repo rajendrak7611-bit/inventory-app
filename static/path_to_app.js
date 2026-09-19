@@ -4409,9 +4409,27 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const deptSelect = document.getElementById('scheduleRunDeptSelect');
             const monthInput = document.getElementById('scheduleRunMonthSelect');
+            const startTimeInput = document.getElementById('scheduleRunStartTime');
 
             let dept = deptSelect ? deptSelect.value : '';
             let month = monthInput ? monthInput.value : '';
+            let startTime = startTimeInput ? startTimeInput.value : '';
+
+            // Default month to current month if not set
+            const now = new Date();
+            if (!month && monthInput) {
+                const curMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                monthInput.value = curMonth;
+                month = curMonth;
+            }
+
+            // Default start time to current datetime if not set
+            if (!startTime && startTimeInput) {
+                const pad = (n) => String(n).padStart(2, '0');
+                const curDateTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+                startTimeInput.value = curDateTime;
+                startTime = curDateTime;
+            }
 
             // Populate departments in scheduleRunDeptSelect if not yet populated
             if (deptSelect && deptSelect.options.length <= 1) {
@@ -4440,6 +4458,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const params = new URLSearchParams();
             if (dept) params.append('dept', dept);
             if (month) params.append('month', month);
+            if (startTime) params.append('start_time', startTime);
 
             const url = `/api/schedule/run${params.toString() ? '?' + params.toString() : ''}`;
             const res = await fetch(url);
@@ -4451,30 +4470,34 @@ document.addEventListener('DOMContentLoaded', () => {
             if (tfoot) tfoot.innerHTML = '';
             
             if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:1.5rem;">No pending schedules found to run.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:1.5rem;">No pending schedules found to run.</td></tr>';
                 return;
             }
             
-            let totalQty = 0;
+            let totalSchedQty = 0;
+            let totalPendingQty = 0;
             let totalRuntime = 0;
 
             data.forEach(item => {
-                const qtyVal = Number(item.qty) || 0;
+                const schedQtyVal = Number(item.sched_qty !== undefined ? item.sched_qty : item.qty) || 0;
+                const pendingQtyVal = Number(item.pending_qty !== undefined ? item.pending_qty : item.qty) || 0;
                 const runtimeVal = Number(item.runtime) || 0;
-                totalQty += qtyVal;
+                totalSchedQty += schedQtyVal;
+                totalPendingQty += pendingQtyVal;
                 totalRuntime += runtimeVal;
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td style="font-weight: 500;">${item.partno || ''}</td>
-                    <td>${item.opn_no || ''}</td>
+                    <td style="font-weight: 600;">${item.partno || ''}</td>
+                    <td style="text-align: center; font-weight: 500;">${item.opn_no || ''}</td>
                     <td>${item.description || ''}</td>
-                    <td>${item.machine || ''}</td>
-                    <td style="text-align: right; font-weight: 600;">${qtyVal.toLocaleString()}</td>
+                    <td><span style="font-weight: 500; color: #0284c7;">${item.machine || ''}</span></td>
+                    <td style="text-align: right; font-weight: 600;">${schedQtyVal.toLocaleString()}</td>
+                    <td style="text-align: right; font-weight: 600; color: ${pendingQtyVal > 0 ? '#b91c1c' : '#15803d'};">${pendingQtyVal.toLocaleString()}</td>
                     <td style="text-align: right;">${item.cycle_time !== undefined && item.cycle_time !== null ? item.cycle_time : ''}</td>
                     <td style="text-align: right; font-weight: 600;">${runtimeVal.toFixed(2)}</td>
-                    <td style="text-align: center;"><span style="font-weight: 500;">${item.start_date || ''}</span></td>
-                    <td style="text-align: center;"><span style="font-weight: 500;">${item.end_date || ''}</span></td>
+                    <td style="text-align: center; font-size: 0.85rem;"><span style="font-weight: 500;">${item.start_date || ''}</span></td>
+                    <td style="text-align: center; font-size: 0.85rem;"><span style="font-weight: 500;">${item.end_date || ''}</span></td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -4483,7 +4506,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 tfoot.innerHTML = `
                     <tr>
                         <td colspan="4" style="text-align: right; font-weight: bold; padding: 0.6rem;">Total:</td>
-                        <td style="text-align: right; font-weight: bold; padding: 0.6rem;">${totalQty.toLocaleString()}</td>
+                        <td style="text-align: right; font-weight: bold; padding: 0.6rem;">${totalSchedQty.toLocaleString()}</td>
+                        <td style="text-align: right; font-weight: bold; padding: 0.6rem; color: #b91c1c;">${totalPendingQty.toLocaleString()}</td>
                         <td style="text-align: right; font-weight: bold; padding: 0.6rem;">-</td>
                         <td style="text-align: right; font-weight: bold; padding: 0.6rem;">${totalRuntime.toFixed(2)} hrs</td>
                         <td colspan="2"></td>
@@ -4502,6 +4526,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const runMonthSel = document.getElementById('scheduleRunMonthSelect');
     if (runMonthSel) {
         runMonthSel.addEventListener('change', () => fetchRunSchedule());
+    }
+    const runStartTimeInput = document.getElementById('scheduleRunStartTime');
+    if (runStartTimeInput) {
+        runStartTimeInput.addEventListener('change', () => fetchRunSchedule());
+    }
+    const genRunBtn = document.getElementById('generateRunReportBtn');
+    if (genRunBtn) {
+        genRunBtn.addEventListener('click', () => fetchRunSchedule());
     }
 
     // --- SCHEDULE STATUS LOGIC ---
