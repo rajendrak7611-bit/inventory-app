@@ -4407,35 +4407,101 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchRunSchedule() {
         try {
-            const res = await fetch('/api/schedule/run');
+            const deptSelect = document.getElementById('scheduleRunDeptSelect');
+            const monthInput = document.getElementById('scheduleRunMonthSelect');
+
+            let dept = deptSelect ? deptSelect.value : '';
+            let month = monthInput ? monthInput.value : '';
+
+            // Populate departments in scheduleRunDeptSelect if not yet populated
+            if (deptSelect && deptSelect.options.length <= 1) {
+                try {
+                    const deptsRes = await fetch('/api/departments');
+                    if (deptsRes.ok) {
+                        const depts = await deptsRes.json();
+                        const currentVal = deptSelect.value;
+                        deptSelect.innerHTML = '<option value="">All Departments</option>';
+                        depts.forEach(d => {
+                            const name = typeof d === 'string' ? d : (d.name || d.dept || '');
+                            if (name) {
+                                const opt = document.createElement('option');
+                                opt.value = name;
+                                opt.textContent = name;
+                                deptSelect.appendChild(opt);
+                            }
+                        });
+                        deptSelect.value = currentVal;
+                    }
+                } catch (err) {
+                    console.error('Error loading depts for schedule run:', err);
+                }
+            }
+
+            const params = new URLSearchParams();
+            if (dept) params.append('dept', dept);
+            if (month) params.append('month', month);
+
+            const url = `/api/schedule/run${params.toString() ? '?' + params.toString() : ''}`;
+            const res = await fetch(url);
             const data = await res.json();
             const tbody = document.getElementById('scheduleRunBody');
+            const tfoot = document.getElementById('scheduleRunFoot');
             if (!tbody) return;
             tbody.innerHTML = '';
+            if (tfoot) tfoot.innerHTML = '';
             
-            if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">No pending schedules found to run.</td></tr>';
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:1.5rem;">No pending schedules found to run.</td></tr>';
                 return;
             }
             
+            let totalQty = 0;
+            let totalRuntime = 0;
+
             data.forEach(item => {
+                const qtyVal = Number(item.qty) || 0;
+                const runtimeVal = Number(item.runtime) || 0;
+                totalQty += qtyVal;
+                totalRuntime += runtimeVal;
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${item.partno}</td>
-                    <td>${item.opn_no}</td>
-                    <td>${item.description}</td>
-                    <td>${item.machine}</td>
-                    <td>${item.qty}</td>
-                    <td>${item.cycle_time}</td>
-                    <td>${item.runtime}</td>
-                    <td><span style="font-weight: 500;">${item.start_date}</span></td>
-                    <td><span style="font-weight: 500;">${item.end_date}</span></td>
+                    <td style="font-weight: 500;">${item.partno || ''}</td>
+                    <td>${item.opn_no || ''}</td>
+                    <td>${item.description || ''}</td>
+                    <td>${item.machine || ''}</td>
+                    <td style="text-align: right; font-weight: 600;">${qtyVal.toLocaleString()}</td>
+                    <td style="text-align: right;">${item.cycle_time !== undefined && item.cycle_time !== null ? item.cycle_time : ''}</td>
+                    <td style="text-align: right; font-weight: 600;">${runtimeVal.toFixed(2)}</td>
+                    <td style="text-align: center;"><span style="font-weight: 500;">${item.start_date || ''}</span></td>
+                    <td style="text-align: center;"><span style="font-weight: 500;">${item.end_date || ''}</span></td>
                 `;
                 tbody.appendChild(tr);
             });
+
+            if (tfoot) {
+                tfoot.innerHTML = `
+                    <tr>
+                        <td colspan="4" style="text-align: right; font-weight: bold; padding: 0.6rem;">Total:</td>
+                        <td style="text-align: right; font-weight: bold; padding: 0.6rem;">${totalQty.toLocaleString()}</td>
+                        <td style="text-align: right; font-weight: bold; padding: 0.6rem;">-</td>
+                        <td style="text-align: right; font-weight: bold; padding: 0.6rem;">${totalRuntime.toFixed(2)} hrs</td>
+                        <td colspan="2"></td>
+                    </tr>
+                `;
+            }
         } catch (e) {
             console.error('Error fetching run schedule:', e);
         }
+    }
+
+    const runDeptSel = document.getElementById('scheduleRunDeptSelect');
+    if (runDeptSel) {
+        runDeptSel.addEventListener('change', () => fetchRunSchedule());
+    }
+    const runMonthSel = document.getElementById('scheduleRunMonthSelect');
+    if (runMonthSel) {
+        runMonthSel.addEventListener('change', () => fetchRunSchedule());
     }
 
     // --- SCHEDULE STATUS LOGIC ---

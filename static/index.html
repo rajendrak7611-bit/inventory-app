@@ -2534,30 +2534,53 @@
             </div>
             
             <div class="table-container" id="scheduleRunSection" style="display: none;">
-                <div style="margin-bottom: 10px; display: flex; justify-content: flex-end;">
-                    <button id="exportRunBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                        Export Excel
-                    </button>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                        <h2 style="margin: 0; font-size: 1.3rem;">Schedule Run</h2>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label for="scheduleRunDeptSelect" style="font-weight: 600; font-size: 0.9rem; margin: 0; color: var(--text-main);">Dept:</label>
+                            <select id="scheduleRunDeptSelect" style="padding: 0.4rem 0.8rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem; font-weight: 600; color: var(--text-main); background-color: var(--card-bg);">
+                                <option value="">All Departments</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label for="scheduleRunMonthSelect" style="font-weight: 600; font-size: 0.9rem; margin: 0; color: var(--text-main);">Month:</label>
+                            <input type="month" id="scheduleRunMonthSelect" style="padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; color: var(--text-main); background-color: var(--card-bg); font-family: 'Inter', sans-serif;">
+                        </div>
+                        <span id="scheduleRunBadge" style="background-color: #0284c7; color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">
+                            Operation-wise Pending
+                        </span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <button id="exportRunBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; display: flex; align-items: center; gap: 4px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            Export Excel
+                        </button>
+                    </div>
                 </div>
-                <table id="scheduleRunTable">
-                    <thead>
-                        <tr>
-                            <th>Part No</th>
-                            <th>Opn No</th>
-                            <th>Description</th>
-                            <th>Machine</th>
-                            <th>Qty</th>
-                            <th>Cycle Time</th>
-                            <th>Runtime (Hrs)</th>
-                            <th>Start Date</th>
-                            <th>End Date</th>
-                        </tr>
-                    </thead>
-                    <tbody id="scheduleRunBody">
-                        <!-- Populated by JS -->
-                    </tbody>
-                </table>
+                <div style="max-height: calc(100vh - 170px); overflow-y: auto;">
+                    <table id="scheduleRunTable">
+                        <thead>
+                            <tr>
+                                <th>Part No</th>
+                                <th>Opn No</th>
+                                <th>Description</th>
+                                <th>Machine</th>
+                                <th>Qty</th>
+                                <th>Cycle Time</th>
+                                <th>Runtime (Hrs)</th>
+                                <th>Start Date</th>
+                                <th>End Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scheduleRunBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                        <tfoot id="scheduleRunFoot" style="font-weight: bold; background: rgba(2, 132, 199, 0.08); border-top: 2px solid var(--border-color);">
+                            <!-- Populated by JS -->
+                        </tfoot>
+                    </table>
+                </div>
             </div>
             
             <div class="table-container" id="scheduleStatusSection" style="display: none; padding: 2rem; color: var(--text-main);">
@@ -5844,6 +5867,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=10102"></script>
+    <script src="/static/app.js?v=10103"></script>
 </body>
 </html>

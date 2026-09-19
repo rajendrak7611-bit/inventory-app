@@ -3091,56 +3091,176 @@ def clear_all_schedules_endpoint(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/schedule/run")
-def get_schedule_run(db: Session = Depends(get_db)):
+def get_schedule_run(dept: Optional[str] = None, month: Optional[str] = None, db: Session = Depends(get_db)):
     try:
-        schedules = db.execute(text("SELECT * FROM schedules WHERE status != 'Completed' ORDER BY id DESC")).mappings().all()
-        pm_rows = db.execute(text("SELECT id, partno FROM part_masters")).mappings().all()
-        pm_id_map = {str(r.get("partno") or "").strip().upper(): r.get("id") for r in pm_rows if r.get("partno")}
-        
-        opn_rows = db.execute(text("SELECT part_id, opn_no, opn_name, machine, cycletime FROM part_operations")).mappings().all()
-        opns_by_part = {}
+        # 1. Fetch active schedules (status != 'Completed')
+        try:
+            sched_rows = db.execute(text("SELECT id, department, partno, target_date, qty, completed_qty, status FROM schedules WHERE LOWER(COALESCE(status, '')) != 'completed' ORDER BY id DESC")).mappings().all()
+        except Exception:
+            db.rollback()
+            try:
+                sched_rows = db.execute(text("SELECT * FROM schedules WHERE status != 'Completed' ORDER BY id DESC")).mappings().all()
+            except Exception:
+                db.rollback()
+                sched_rows = []
+
+        # 2. Fetch Part Master records (check part_masters first, fallback to parts)
+        pm_rows = []
+        try:
+            pm_rows = db.execute(text("SELECT id, partno, department FROM part_masters")).mappings().all()
+        except Exception:
+            db.rollback()
+            try:
+                pm_rows = db.execute(text("SELECT id, part_no AS partno, dept AS department FROM parts")).mappings().all()
+            except Exception:
+                db.rollback()
+
+        pm_map = {}
+        for r in pm_rows:
+            pno = str(r.get("partno") or "").strip().upper()
+            if pno:
+                if pno not in pm_map:
+                    pm_map[pno] = []
+                pm_map[pno].append(dict(r))
+
+        # 3. Fetch operations (check part_operations first, fallback to operations)
+        opn_rows = []
+        try:
+            opn_rows = db.execute(text("SELECT id, part_id, opn_no, description, machine, cycle_time FROM part_operations ORDER BY id ASC")).mappings().all()
+        except Exception:
+            db.rollback()
+            try:
+                opn_rows = db.execute(text("SELECT id, part_id, opn_no, description, machine_name AS machine, cycle_time FROM operations ORDER BY id ASC")).mappings().all()
+            except Exception:
+                db.rollback()
+
+        ops_by_part_id = {}
         for op in opn_rows:
             pid = op.get("part_id")
-            if pid not in opns_by_part:
-                opns_by_part[pid] = []
-            opns_by_part[pid].append(op)
+            if pid not in ops_by_part_id:
+                ops_by_part_id[pid] = []
+            ops_by_part_id[pid].append(dict(op))
+
+        def _sort_op(o):
+            raw = str(o.get("opn_no") or "0").strip()
+            try:
+                return (0, float(raw))
+            except Exception:
+                return (1, raw)
+
+        for pid in ops_by_part_id:
+            ops_by_part_id[pid].sort(key=_sort_op)
+
+        # 4. Fetch production logs for calculating produced quantities during the month
+        prod_logs = []
+        try:
+            prod_logs = db.execute(text("SELECT partno, opn_no, prod_qty, date FROM production_logs")).mappings().all()
+        except Exception:
+            db.rollback()
+            try:
+                prod_logs = db.execute(text("SELECT part_no AS partno, opn_no, qty_produced AS prod_qty, log_date AS date FROM production_logs")).mappings().all()
+            except Exception:
+                db.rollback()
+
+        prod_map = {}
+        for l in prod_logs:
+            lp = str(l.get("partno") or "").strip().upper()
+            lo = str(l.get("opn_no") or "").strip().lower()
+            ld = str(l.get("date") or "").strip()
+            lmonth = ld[:7] if len(ld) >= 7 else ""
+            try:
+                lqty = float(l.get("prod_qty") or 0.0)
+            except Exception:
+                lqty = 0.0
+            if lp and lo and lmonth:
+                k = (lp, lo, lmonth)
+                prod_map[k] = prod_map.get(k, 0.0) + lqty
 
         run_items = []
-        for s in schedules:
+        target_month_filter = str(month).strip() if month and str(month).strip() else None
+        target_dept_filter = str(dept).strip().lower() if dept and str(dept).strip().lower() not in ["", "all", "all departments"] else None
+        current_ym = get_now_ist().strftime("%Y-%m")
+
+        for s in sched_rows:
             partno = str(s.get("partno") or "").strip()
-            qty = float(s.get("qty") or 0)
-            pid = pm_id_map.get(partno.upper())
-            ops = opns_by_part.get(pid, []) if pid else []
+            if not partno:
+                continue
+            sched_dept = str(s.get("department") or s.get("dept") or "").strip()
+            target_date = str(s.get("target_date") or "").strip()
+            sched_month = target_date[:7] if len(target_date) >= 7 else current_ym
+
+            # Dept filtering
+            if target_dept_filter and sched_dept.lower() != target_dept_filter:
+                continue
+
+            # Month filtering
+            if target_month_filter and sched_month != target_month_filter:
+                continue
+
+            try:
+                sched_qty = float(s.get("qty") or 0.0)
+            except Exception:
+                sched_qty = 0.0
+
+            # Match part operations
+            pms = pm_map.get(partno.upper(), [])
+            ops = []
+            for pm in pms:
+                pid = pm.get("id")
+                if pid in ops_by_part_id:
+                    ops = ops_by_part_id[pid]
+                    break
+
+            start_date = f"{sched_month}-01" if sched_month else target_date
+            end_date = target_date
+
             if ops:
                 for o in ops:
-                    cyc = float(o.get("cycletime") or 0)
-                    runtime_hrs = round((qty * cyc) / 60.0, 2)
-                    run_items.append({
-                        "partno": partno,
-                        "opn_no": o.get("opn_no") or "10",
-                        "description": o.get("opn_name") or "",
-                        "machine": o.get("machine") or "",
-                        "qty": int(qty),
-                        "cycle_time": cyc,
-                        "runtime": runtime_hrs,
-                        "start_date": s.get("target_date") or "",
-                        "end_date": s.get("target_date") or ""
-                    })
+                    opn_no = str(o.get("opn_no") or "").strip()
+                    desc = str(o.get("description") or "").strip()
+                    machine = str(o.get("machine") or "").strip()
+                    try:
+                        cyc = float(o.get("cycle_time") or 0.0)
+                    except Exception:
+                        cyc = 0.0
+
+                    produced_in_month = prod_map.get((partno.upper(), opn_no.lower(), sched_month), 0.0)
+                    pending_qty = max(0.0, sched_qty - produced_in_month)
+
+                    if pending_qty > 0:
+                        runtime_hrs = round((pending_qty * cyc) / 60.0, 2)
+                        run_items.append({
+                            "department": sched_dept,
+                            "partno": partno,
+                            "opn_no": opn_no,
+                            "description": desc,
+                            "machine": machine,
+                            "qty": int(pending_qty),
+                            "cycle_time": cyc,
+                            "runtime": runtime_hrs,
+                            "start_date": start_date,
+                            "end_date": end_date,
+                            "month": sched_month
+                        })
             else:
-                run_items.append({
-                    "partno": partno,
-                    "opn_no": "10",
-                    "description": "General Machining",
-                    "machine": "",
-                    "qty": int(qty),
-                    "cycle_time": 0,
-                    "runtime": 0,
-                    "start_date": s.get("target_date") or "",
-                    "end_date": s.get("target_date") or ""
-                })
+                if sched_qty > 0:
+                    run_items.append({
+                        "department": sched_dept,
+                        "partno": partno,
+                        "opn_no": "10",
+                        "description": "General Machining",
+                        "machine": "",
+                        "qty": int(sched_qty),
+                        "cycle_time": 0.0,
+                        "runtime": 0.0,
+                        "start_date": start_date,
+                        "end_date": end_date,
+                        "month": sched_month
+                    })
         return run_items
     except Exception as e:
         print("get_schedule_run error:", e)
+        db.rollback()
         return []
 
 @app.get("/api/production/bc_status")
