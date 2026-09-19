@@ -707,6 +707,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             addBtn.style.display = 'none';
             if (typeof fetchDepartments === 'function') fetchDepartments();
+            const rmReqMonth = document.getElementById('rmReqMonth');
+            if (rmReqMonth && !rmReqMonth.value) {
+                rmReqMonth.value = new Date().toISOString().slice(0, 7);
+            }
             fetchRmRequirement();
         }},
         'sidebarScheduleCreate': { tab: 'schedule_create', action: () => {
@@ -10636,31 +10640,47 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- RM REQUIREMENT REPORT ---
     async function fetchRmRequirement() {
         try {
-            const [schedRes, pmRes, rmRes] = await Promise.all([
+            const monthInput = document.getElementById('rmReqMonth');
+            if (monthInput && !monthInput.value) {
+                monthInput.value = new Date().toISOString().slice(0, 7);
+            }
+            const monthVal = (monthInput ? monthInput.value : '') || new Date().toISOString().slice(0, 7);
+
+            const [schedRes, pmRes, rmRes, rmLogsRes] = await Promise.all([
                 fetch('/api/schedule'),
                 fetch('/api/partmaster'),
-                fetch('/api/rawmaterials')
+                fetch(monthVal ? `/api/rawmaterials?month=${encodeURIComponent(monthVal)}` : '/api/rawmaterials'),
+                fetch('/api/rawmateriallogs')
             ]);
             
             const schedules = await schedRes.json();
             const partMasters = await pmRes.json();
             const rawMaterials = await rmRes.json();
+            const rawMaterialLogs = rmLogsRes.ok ? await rmLogsRes.json() : [];
             
             const selectedDept = (document.getElementById('rmReqDept')?.value || '').trim().toUpperCase();
             const searchForgePn = (document.getElementById('rmReqForgePnInput')?.value || '').trim().toUpperCase();
 
             const reqs = {};
-            // Only consider Pending schedules for requirement calculation
-            const pendingSchedules = schedules.filter(s => s.status === 'Pending' || !s.status);
+            // Filter pending schedules (and matching month if target_date has month specified)
+            const pendingSchedules = schedules.filter(s => {
+                const isPending = s.status === 'Pending' || !s.status;
+                if (!isPending) return false;
+                if (monthVal && s.target_date) {
+                    const sMonth = String(s.target_date).trim().slice(0, 7);
+                    if (sMonth && sMonth !== monthVal) return false;
+                }
+                return true;
+            });
             
             pendingSchedules.forEach(sched => {
-                const part = partMasters.find(p => p.partno === sched.partno);
+                const part = partMasters.find(p => (p.partno || '').trim().toUpperCase() === (sched.partno || '').trim().toUpperCase());
                 if (part && part.forge_pn) {
                     const fpn = part.forge_pn.trim().toUpperCase();
                     const partDept = (part.department || '').trim().toUpperCase();
                     if (selectedDept && partDept !== selectedDept) return;
                     if (searchForgePn && !fpn.includes(searchForgePn)) return;
-                    reqs[fpn] = (reqs[fpn] || 0) + (sched.qty || 0);
+                    reqs[fpn] = (reqs[fpn] || 0) + (Number(sched.qty) || 0);
                 }
             });
             
@@ -10670,30 +10690,63 @@ document.addEventListener('DOMContentLoaded', () => {
                 const keys = Object.keys(reqs).sort();
                 
                 if (keys.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No matching pending schedules found for requirement report.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">No matching pending schedules found for requirement report.</td></tr>';
                     return;
                 }
                 
                 let count = 0;
                 keys.forEach(fpn => {
-                    const required = reqs[fpn];
+                    const required = reqs[fpn] || 0;
+
+                    // Finished parts mapped to this forge_pn
+                    const fpnParts = new Set(
+                        partMasters
+                            .filter(p => (p.forge_pn || '').trim().toUpperCase() === fpn && (!selectedDept || (p.department || '').trim().toUpperCase() === selectedDept))
+                            .map(p => (p.partno || '').trim().toUpperCase())
+                    );
+
+                    // Despatch during the month:
+                    // 1. From raw_materials target_month calculation
                     const rm = rawMaterials.find(r => (r.forge_pn || '').trim().toUpperCase() === fpn);
-                    const stock = rm ? (rm.stock || 0) : 0;
-                    const shortage = Math.max(0, required - stock);
+                    const rmDesp = rm ? (Number(rm.despatch) || 0) : 0;
+
+                    // 2. Cross-check with raw_material_logs for any despatch logged under finish_part_no or forge_pn in target month
+                    let logDesp = 0;
+                    if (Array.isArray(rawMaterialLogs)) {
+                        rawMaterialLogs.forEach(l => {
+                            if ((l.type || '').trim().toLowerCase() !== 'despatch') return;
+                            const lDate = String(l.date || '').trim().slice(0, 7);
+                            if (monthVal && lDate && lDate !== monthVal) return;
+
+                            const lFpn = (l.forge_pn || '').trim().toUpperCase();
+                            const lPart = (l.finish_part_no || '').trim().toUpperCase();
+
+                            if (lFpn === fpn || (lPart && fpnParts.has(lPart))) {
+                                logDesp += Number(l.qty || 0);
+                            }
+                        });
+                    }
+
+                    const despatch = Math.max(rmDesp, logDesp);
+                    const pendingReq = Math.max(0, required - despatch);
+                    const stock = rm ? (Number(rm.stock) || 0) : 0;
+                    const shortage = Math.max(0, pendingReq - stock);
                     
                     count++;
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td>${fpn}</td>
-                        <td>${required}</td>
-                        <td>${stock}</td>
-                        <td style="font-weight: 600; color: ${shortage > 0 ? '#ef4444' : 'inherit'};">${shortage}</td>
+                        <td style="font-weight: 600;">${escapeHtml(fpn)}</td>
+                        <td style="text-align: right;">${required.toLocaleString()}</td>
+                        <td style="text-align: right; color: ${despatch > 0 ? '#0284c7' : 'inherit'}; font-weight: ${despatch > 0 ? '600' : 'normal'};">${despatch.toLocaleString()}</td>
+                        <td style="text-align: right; font-weight: 600;">${pendingReq.toLocaleString()}</td>
+                        <td style="text-align: right;">${stock.toLocaleString()}</td>
+                        <td style="text-align: right; font-weight: 700; color: ${shortage > 0 ? '#ef4444' : 'inherit'};">${shortage.toLocaleString()}</td>
                     `;
                     tbody.appendChild(tr);
                 });
 
                 if (count === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted)">No shortages found.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">No shortages found.</td></tr>';
                 }
             }
         } catch(e) {
@@ -10703,6 +10756,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('generateRmReqBtn')?.addEventListener('click', fetchRmRequirement);
     document.getElementById('rmReqDept')?.addEventListener('change', fetchRmRequirement);
+    document.getElementById('rmReqMonth')?.addEventListener('change', fetchRmRequirement);
     document.getElementById('rmReqForgePnInput')?.addEventListener('input', fetchRmRequirement);
     
     const exportRmReqBtn = document.getElementById('exportRmReqBtn');
@@ -10710,8 +10764,9 @@ document.addEventListener('DOMContentLoaded', () => {
         exportRmReqBtn.addEventListener('click', () => {
             const table = document.getElementById('rmRequirementTable');
             if (table) {
+                const monthVal = document.getElementById('rmReqMonth')?.value || '';
                 const wb = XLSX.utils.table_to_book(table, { sheet: "RM Requirement" });
-                XLSX.writeFile(wb, "RM_Requirement_Report.xlsx");
+                XLSX.writeFile(wb, `RM_Requirement_Report_${monthVal || new Date().toISOString().slice(0, 7)}.xlsx`);
             }
         });
     }

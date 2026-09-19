@@ -3599,6 +3599,10 @@
                             <option value="">-- All Departments --</option>
                         </select>
                     </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <label for="rmReqMonth" style="display: block; margin-bottom: 5px; font-weight: 500;">Month</label>
+                        <input type="month" id="rmReqMonth" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
+                    </div>
                     <div style="flex: 1; min-width: 180px;">
                         <label for="rmReqForgePnInput" style="display: block; margin-bottom: 5px; font-weight: 500;">Search Forge PN</label>
                         <input type="text" id="rmReqForgePnInput" placeholder="Search Forge PN..." style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px;">
@@ -3611,10 +3615,12 @@
                     <table class="styled-table" id="rmRequirementTable">
                         <thead>
                             <tr>
-                                <th>Forge PN</th>
-                                <th>Required Qty</th>
-                                <th>Available Stock</th>
-                                <th>Shortage</th>
+                                <th style="text-align: left;">Forge PN</th>
+                                <th style="text-align: right;">Required Qty</th>
+                                <th style="text-align: right;">Despatch Qty</th>
+                                <th style="text-align: right;">Balance Req</th>
+                                <th style="text-align: right;">Available Stock</th>
+                                <th style="text-align: right;">Shortage</th>
                             </tr>
                         </thead>
                         <tbody id="rmRequirementBody"></tbody>
