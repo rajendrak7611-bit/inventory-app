@@ -60,6 +60,8 @@ def import_all_backup_tables():
                 for col in cols:
                     if col.lower() == "id":
                         col_defs.append(f"{col} SERIAL PRIMARY KEY" if is_postgres else f"{col} INTEGER PRIMARY KEY")
+                    elif col.lower() == "rfq_id":
+                        col_defs.append(f"{col} INTEGER")
                     else:
                         col_defs.append(f"{col} TEXT")
                 

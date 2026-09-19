@@ -609,8 +609,30 @@ def run_startup_migrations():
                 ensure_production_logs_columns()
             except Exception:
                 pass
-            # Align sequences to MAX(id) for PostgreSQL
+            # Standardize column types and align sequences to MAX(id) for PostgreSQL
             if "postgresql" in str(engine.url):
+                try:
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            BEGIN
+                                ALTER TABLE rfq_items ALTER COLUMN rfq_id TYPE INTEGER 
+                                USING (NULLIF(regexp_replace(rfq_id::text, '[^0-9]', '', 'g'), '')::integer);
+                            EXCEPTION WHEN OTHERS THEN
+                                NULL;
+                            END;
+                            BEGIN
+                                ALTER TABLE quote_records ALTER COLUMN rfq_id TYPE INTEGER 
+                                USING (NULLIF(regexp_replace(rfq_id::text, '[^0-9]', '', 'g'), '')::integer);
+                            EXCEPTION WHEN OTHERS THEN
+                                NULL;
+                            END;
+                        END $$;
+                    """))
+                    conn.commit()
+                except Exception:
+                    pass
+
                 for tbl in [
                     "part_masters", "parts", "operations", "part_operations", 
                     "machines", "operators", "departments", "shifts", "vendors", 
@@ -618,7 +640,8 @@ def run_startup_migrations():
                     "ht_logs", "ht_receipt_logs", "pc_logs", "pc_receipt_logs", 
                     "production_logs", "production_schedules", "customer_masters",
                     "drill_masters", "insert_masters", "tap_masters",
-                    "hr_shift_assignments", "shift_status_logs", "hourly_reports"
+                    "hr_shift_assignments", "shift_status_logs", "hourly_reports",
+                    "rfq_headers", "rfq_items", "quote_records"
                 ]:
                     try:
                         conn.execute(text(f"""
@@ -6652,26 +6675,34 @@ def get_rfqs(date_from: Optional[str] = None, date_to: Optional[str] = None, cus
         items = db.execute(text("SELECT * FROM rfq_items ORDER BY id ASC")).mappings().all()
         items_by_rfq = {}
         for it in items:
-            try:
-                rfq_id = int(it.get("rfq_id"))
-            except Exception:
-                rfq_id = it.get("rfq_id")
-            if rfq_id not in items_by_rfq:
-                items_by_rfq[rfq_id] = []
-            items_by_rfq[rfq_id].append({
+            raw_rfq_id = it.get("rfq_id")
+            it_obj = {
                 "id": int(it.get("id")) if it.get("id") is not None else None,
-                "rfq_id": rfq_id,
+                "rfq_id": raw_rfq_id,
                 "partno": it.get("partno") or "",
                 "description": it.get("description") or ""
-            })
+            }
+            if raw_rfq_id is not None:
+                str_key = str(raw_rfq_id).strip()
+                if str_key not in items_by_rfq:
+                    items_by_rfq[str_key] = []
+                items_by_rfq[str_key].append(it_obj)
+                try:
+                    int_key = int(str_key)
+                    if int_key not in items_by_rfq:
+                        items_by_rfq[int_key] = []
+                    items_by_rfq[int_key].append(it_obj)
+                except Exception:
+                    pass
 
         result = []
         for r in rfqs:
+            raw_id = r.get("id")
             try:
-                rfq_id = int(r.get("id"))
+                rfq_id = int(raw_id)
             except Exception:
-                rfq_id = r.get("id")
-            rfq_items_list = items_by_rfq.get(rfq_id, [])
+                rfq_id = raw_id
+            rfq_items_list = items_by_rfq.get(rfq_id) or items_by_rfq.get(str(raw_id)) or []
             
             if search:
                 s_lower = search.strip().lower()
@@ -6742,16 +6773,16 @@ def update_rfq(rfq_id: int, data: dict, db: Session = Depends(get_db)):
         db.execute(text("""
             UPDATE rfq_headers
             SET date = :date, rfqno = :rfqno, unit = :unit, customer = :customer
-            WHERE id = :id
+            WHERE CAST(id AS TEXT) = :id_str
         """), {
-            "id": rfq_id,
+            "id_str": str(rfq_id),
             "date": (data.get("date") or "").strip(),
             "rfqno": (data.get("rfqno") or "").strip(),
             "unit": (data.get("unit") or "").strip(),
             "customer": (data.get("customer") or "").strip()
         })
 
-        db.execute(text("DELETE FROM rfq_items WHERE rfq_id = :rfq_id"), {"rfq_id": rfq_id})
+        db.execute(text("DELETE FROM rfq_items WHERE CAST(rfq_id AS TEXT) = :rfq_id_str"), {"rfq_id_str": str(rfq_id)})
         items = data.get("items") or []
         for it in items:
             partno = (it.get("partno") or "").strip()
@@ -6771,8 +6802,8 @@ def update_rfq(rfq_id: int, data: dict, db: Session = Depends(get_db)):
 @app.delete("/api/rfq/{rfq_id}")
 def delete_rfq(rfq_id: int, db: Session = Depends(get_db)):
     try:
-        db.execute(text("DELETE FROM rfq_items WHERE rfq_id = :id"), {"id": rfq_id})
-        db.execute(text("DELETE FROM rfq_headers WHERE id = :id"), {"id": rfq_id})
+        db.execute(text("DELETE FROM rfq_items WHERE CAST(rfq_id AS TEXT) = :id_str"), {"id_str": str(rfq_id)})
+        db.execute(text("DELETE FROM rfq_headers WHERE CAST(id AS TEXT) = :id_str"), {"id_str": str(rfq_id)})
         db.commit()
     except Exception:
         db.rollback()
