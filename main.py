@@ -3870,6 +3870,130 @@ def get_wipro_status_endpoint(month: Optional[str] = None, db: Session = Depends
         db.rollback()
         raise HTTPException(status_code=500, detail=str(ex))
 
+@app.get("/api/production/wipro_prod")
+def get_wipro_prod_report(date: Optional[str] = None, db: Session = Depends(get_db)):
+    try:
+        if not date or not str(date).strip():
+            now_ist = get_now_ist()
+            target_date = now_ist.strftime("%Y-%m-%d")
+        else:
+            target_date = normalize_date_str(str(date).strip())
+
+        # Identify WIPRO parts and operation descriptions
+        wipro_parts = set()
+        po_map = {}
+        try:
+            po_rows = db.execute(text("""
+                SELECT p.partno, po.opn_no, po.description, p.department 
+                FROM part_operations po 
+                JOIN part_masters p ON po.part_id = p.id
+            """)).mappings().all()
+            for r in po_rows:
+                p_name = (r.get("partno") or "").strip().upper()
+                d_name = (r.get("department") or "").strip().upper()
+                if d_name == 'WIPRO':
+                    wipro_parts.add(p_name)
+                k = (p_name, str(r.get("opn_no") or "").strip().upper())
+                if k not in po_map and r.get("description"):
+                    po_map[k] = r.get("description").strip()
+        except Exception:
+            pass
+
+        try:
+            op_rows = db.execute(text("""
+                SELECT p.part_no, o.opn_no, o.description, p.dept 
+                FROM operations o 
+                JOIN parts p ON o.part_id = p.id
+            """)).mappings().all()
+            for r in op_rows:
+                p_name = (r.get("part_no") or "").strip().upper()
+                d_name = (r.get("dept") or "").strip().upper()
+                if d_name == 'WIPRO':
+                    wipro_parts.add(p_name)
+                k = (p_name, str(r.get("opn_no") or "").strip().upper())
+                if k not in po_map and r.get("description"):
+                    po_map[k] = r.get("description").strip()
+        except Exception:
+            pass
+
+        try:
+            pt_rows = db.execute(text("SELECT part_no, dept FROM parts WHERE UPPER(TRIM(dept)) = 'WIPRO'")).mappings().all()
+            for r in pt_rows:
+                wipro_parts.add((r.get("part_no") or "").strip().upper())
+        except Exception:
+            pass
+
+        try:
+            pm_rows = db.execute(text("SELECT partno, department FROM part_masters WHERE UPPER(TRIM(department)) = 'WIPRO'")).mappings().all()
+            for r in pm_rows:
+                wipro_parts.add((r.get("partno") or "").strip().upper())
+        except Exception:
+            pass
+
+        rows = db.execute(text("SELECT * FROM production_logs")).mappings().all()
+
+        grouped = {}
+        for r in rows:
+            d_norm = normalize_date_str(r.get("date") or r.get("log_date") or "")
+            if d_norm != target_date:
+                continue
+
+            pno = (r.get("partno") or r.get("part_no") or "").strip()
+            if not pno:
+                continue
+
+            d_dept = (r.get("dept") or "").strip().upper()
+            if d_dept:
+                if d_dept != 'WIPRO':
+                    continue
+            else:
+                if pno.upper() not in wipro_parts:
+                    continue
+
+            opn = str(r.get("opn_no") or "").strip()
+            key = (pno.upper(), opn.upper())
+            if key not in grouped:
+                desc = (r.get("description") or "").strip()
+                if not desc:
+                    desc = po_map.get(key, "")
+                grouped[key] = {
+                    "partno": pno,
+                    "opn_no": opn,
+                    "description": desc,
+                    "qty": 0
+                }
+            elif not grouped[key]["description"] and (r.get("description") or "").strip():
+                grouped[key]["description"] = (r.get("description") or "").strip()
+
+            try:
+                raw_q = r.get("prod_qty") if r.get("prod_qty") is not None else r.get("qty_produced")
+                q = int(float(raw_q or 0))
+            except Exception:
+                q = 0
+            grouped[key]["qty"] += q
+
+        def sort_key(item):
+            p = item["partno"].upper()
+            o_str = item["opn_no"]
+            try:
+                o_num = int(o_str)
+            except Exception:
+                o_num = 999999
+            return (p, o_num, o_str)
+
+        sorted_items = sorted(grouped.values(), key=sort_key)
+        total_qty = sum(item["qty"] for item in sorted_items)
+
+        return {
+            "date": target_date,
+            "items": sorted_items,
+            "total_qty": total_qty
+        }
+    except Exception as ex:
+        print("get_wipro_prod_report error:", ex)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(ex))
+
 @app.post("/api/schedules/import-excel")
 async def import_schedules_excel_upload(file: UploadFile = File(...), db: Session = Depends(get_db)):
     contents = await file.read()

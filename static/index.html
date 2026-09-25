@@ -123,6 +123,7 @@
                 <button class="sub-tab" id="sidebarMcUtil" data-screen="mc_util">M/c Util</button>
                 <button class="sub-tab" id="sidebarOperEff" data-screen="oper_eff">Oper Eff</button>
                 <button class="sub-tab" id="sidebarBcProd" data-screen="bc_prod">BC Prod</button>
+                <button class="sub-tab" id="sidebarWiproProd" data-screen="wipro_prod">Wipro Prod</button>
                 <button class="sub-tab" id="sidebarAttVsLogin" data-screen="att_vs_login">Att vs Login</button>
             </div>
             <div class="sub-group" id="submenuMaintenance" style="display: none;">
@@ -4230,6 +4231,57 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+
+            <!-- Wipro Prod Section -->
+            <div class="table-container" id="wiproProdSection" style="display: none; padding: 1.5rem; color: var(--text-main);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                    <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                        <h2 style="margin: 0; font-size: 1.3rem; color: var(--text-main);"><i class="fas fa-industry" style="margin-right: 8px; color: var(--primary);"></i>Wipro Production Report</h2>
+                        <div style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.04); padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <label for="wiproProdDate" style="font-weight: 600; font-size: 0.88rem; margin: 0; color: var(--text-main);">Date:</label>
+                            <input type="date" id="wiproProdDate" style="padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.9rem; font-weight: 600; color: var(--text-main); background: var(--card-bg);">
+                            <button id="wiproProdGenerateBtn" class="btn btn-primary" style="padding: 0.35rem 0.8rem; font-size: 0.85rem;">Generate</button>
+                        </div>
+                        <div style="min-width: 180px;">
+                            <input type="text" id="wiproProdSearchInput" placeholder="Search Part / Opn / Desc..." style="padding: 0.4rem 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.88rem; width: 220px; background: var(--card-bg); color: var(--text-main);">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button id="exportWiproProdBtn" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; display: flex; align-items: center; gap: 5px;">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            Export Excel
+                        </button>
+                        <button id="printWiproProdBtn" class="btn btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem; display: flex; align-items: center; gap: 5px; background-color: #0284c7; border-color: #0284c7;">
+                            <i class="fas fa-print"></i>
+                            Print Report
+                        </button>
+                    </div>
+                </div>
+
+                <div id="wiproProdPrintContainer" style="max-width: 900px; background: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 2px solid #000; padding-bottom: 8px;">
+                        <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: #000;">GRS ENGINEERING PVT LTD - WIPRO PRODUCTION</h3>
+                        <div id="wiproProdDateDisplay" style="font-weight: 700; font-size: 0.95rem; color: #0284c7;">Date: </div>
+                    </div>
+                    <table id="wiproProdTable" class="compact-table styled-table" style="width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif;">
+                        <thead>
+                            <tr style="background-color: #1e293b; color: #ffffff; text-align: left;">
+                                <th style="border: 1px solid #334155; padding: 8px 12px; font-weight: 700; width: 60px; text-align: center;">Sl No</th>
+                                <th style="border: 1px solid #334155; padding: 8px 12px; font-weight: 700; width: 200px;">Part No</th>
+                                <th style="border: 1px solid #334155; padding: 8px 12px; font-weight: 700; width: 100px; text-align: center;">Opn No</th>
+                                <th style="border: 1px solid #334155; padding: 8px 12px; font-weight: 700;">Description</th>
+                                <th style="border: 1px solid #334155; padding: 8px 12px; font-weight: 700; width: 180px; text-align: right;">Cumulative Qty Produced</th>
+                            </tr>
+                        </thead>
+                        <tbody id="wiproProdBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                        <tfoot id="wiproProdFoot" style="font-weight: 700; background: #f1f5f9;">
+                            <!-- Total Row -->
+                        </tfoot>
+                    </table>
                 </div>
             </div>
         </main>

@@ -171,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 (screen === 'hourly_report' && (accessibleScreens.includes('hourly_report') || accessibleScreens.includes('hourlyreport'))) ||
                 ((screen === 'bdslip' || screen === 'servicedetails') && (accessibleScreens.includes('maintenance') || accessibleScreens.includes('bdslip') || accessibleScreens.includes('servicedetails'))) ||
                 ((screen === 'insertmaster' || screen === 'drillmaster' || screen === 'tapmaster' || screen === 'insertreceipt' || screen === 'tapreceipt' || screen === 'insertissue' || screen === 'tapissue' || screen === 'insertcpc' || screen === 'insertstock') && (accessibleScreens.includes('products') || accessibleScreens.includes('toolcrib'))) ||
-                ((screen === 'rm_requirement' || screen === 'mc_util' || screen === 'oper_eff' || screen === 'reports' || screen === 'att_vs_login' || screen === 'bc_prod') && accessibleScreens.includes('reports'))
+                ((screen === 'rm_requirement' || screen === 'mc_util' || screen === 'oper_eff' || screen === 'reports' || screen === 'att_vs_login' || screen === 'bc_prod' || screen === 'wipro_prod') && accessibleScreens.includes('reports'))
             ));
             if (isAllowed) {
                 tab.style.display = 'inline-block';
@@ -194,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'inventory': ['inventory', 'rawmaterial', 'ht', 'pc'],
                     'production': ['schedule', 'status', 'prodlog', 'debur'],
                     'toolcrib': ['insertmaster', 'drillmaster', 'products', 'insertreceipt', 'insertissue', 'insertcpc', 'insertstock'],
-                    'reports': ['reports', 'rm_requirement', 'mc_util', 'oper_eff', 'bc_prod', 'att_vs_login'],
+                    'reports': ['reports', 'rm_requirement', 'mc_util', 'oper_eff', 'bc_prod', 'wipro_prod', 'att_vs_login'],
                     'maintenance': ['maintenance', 'bdslip', 'servicedetails'],
                     'hr': ['hr', 'attendance', 'hr_shift_list', 'shift_list', 'shiftlist'],
                     'service': ['service', 'service_setters', 'setters', 'shift_status', 'shiftstatus', 'hourly_report', 'hourlyreport'],
@@ -470,7 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function hideAllSections() {
         const sections = [
-            'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection', 'bcProdSection', 'attVsLoginSection',
+            'usersSection', 'reportsSection', 'rmRequirementSection', 'mcUtilSection', 'operEffSection', 'bcProdSection', 'wiproProdSection', 'attVsLoginSection',
             'rawMaterialsSection', 'rmReceiptSection', 'rmDespatchSection',
             'productsSection', 'insertMasterSection', 'drillMasterSection', 'tapMasterSection', 'insertReceiptSection', 'tapReceiptSection', 'insertIssueSection', 'tapIssueSection', 'insertCpcSection', 'insertConsumptionSection', 'insertStockSection', 'partMasterSection', 'machinesSection',
             'operatorsSection', 'departmentsSection', 'shiftsSection', 'vendorsSection', 'settersSection', 'suppliersSection', 'dbBackupSection', 'htSection', 'pcSection', 'scheduleCreateSection', 'resourceReqdSection', 'scheduleRunSection',
@@ -745,6 +745,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (sec) sec.style.display = 'block';
             addBtn.style.display = 'none';
             initBcProdReport();
+        }},
+        'sidebarWiproProd': { tab: 'wipro_prod', action: () => {
+            const sec = document.getElementById('wiproProdSection');
+            if (sec) sec.style.display = 'block';
+            addBtn.style.display = 'none';
+            if (importBtn) importBtn.style.display = 'none';
+            initWiproProdReport();
         }},
         'sidebarAttVsLogin': { tab: 'att_vs_login', action: () => {
             const sec = document.getElementById('attVsLoginSection');
@@ -18347,6 +18354,164 @@ document.addEventListener('DOMContentLoaded', () => {
         printWindow.focus();
         setTimeout(() => { printWindow.print(); }, 250);
     }
+
+    // --- WIPRO PRODUCTION REPORT ---
+    let wiproProdCurrentData = [];
+
+    function initWiproProdReport() {
+        const dateInput = document.getElementById('wiproProdDate');
+        const today = new Date().toISOString().split('T')[0];
+        if (dateInput && !dateInput.value) dateInput.value = today;
+        fetchWiproProdReport();
+    }
+
+    document.getElementById('wiproProdDate')?.addEventListener('change', fetchWiproProdReport);
+    document.getElementById('wiproProdGenerateBtn')?.addEventListener('click', fetchWiproProdReport);
+    document.getElementById('wiproProdSearchInput')?.addEventListener('input', renderWiproProdTable);
+
+    document.getElementById('exportWiproProdBtn')?.addEventListener('click', () => {
+        exportWiproProdExcel();
+    });
+
+    document.getElementById('printWiproProdBtn')?.addEventListener('click', () => {
+        printWiproProdReport();
+    });
+
+    async function fetchWiproProdReport() {
+        const dateInput = document.getElementById('wiproProdDate');
+        const today = new Date().toISOString().split('T')[0];
+        const targetDate = dateInput && dateInput.value ? dateInput.value : today;
+
+        const dateDisp = document.getElementById('wiproProdDateDisplay');
+        if (dateDisp) dateDisp.textContent = `Date: ${targetDate}`;
+
+        const tbody = document.getElementById('wiproProdBody');
+        const tfoot = document.getElementById('wiproProdFoot');
+        if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Loading Wipro Production Data...</td></tr>`;
+        if (tfoot) tfoot.innerHTML = '';
+
+        try {
+            const res = await fetch(`/api/production/wipro_prod?date=${encodeURIComponent(targetDate)}`);
+            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+            const data = await res.json();
+            wiproProdCurrentData = data.items || [];
+            renderWiproProdTable();
+        } catch (err) {
+            console.error('Error fetching Wipro production report:', err);
+            if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: red; padding: 20px;">Failed to load report: ${err.message}</td></tr>`;
+        }
+    }
+
+    function renderWiproProdTable() {
+        const tbody = document.getElementById('wiproProdBody');
+        const tfoot = document.getElementById('wiproProdFoot');
+        if (!tbody) return;
+
+        const safeStr = (s) => (s === null || s === undefined ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'));
+        const searchTerm = (document.getElementById('wiproProdSearchInput')?.value || '').trim().toLowerCase();
+
+        let filtered = wiproProdCurrentData;
+        if (searchTerm) {
+            filtered = wiproProdCurrentData.filter(item => {
+                return (item.partno && item.partno.toLowerCase().includes(searchTerm)) ||
+                       (item.opn_no && String(item.opn_no).toLowerCase().includes(searchTerm)) ||
+                       (item.description && item.description.toLowerCase().includes(searchTerm));
+            });
+        }
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px; color: #64748b;">No production records found for the selected date.</td></tr>`;
+            if (tfoot) tfoot.innerHTML = '';
+            return;
+        }
+
+        let totalQty = 0;
+        let html = '';
+        filtered.forEach((row, idx) => {
+            const qty = Number(row.qty) || 0;
+            totalQty += qty;
+            html += `
+                <tr style="border-bottom: 1px solid var(--border-color, #e2e8f0); ${idx % 2 === 1 ? 'background-color: rgba(0,0,0,0.015);' : ''}">
+                    <td style="border: 1px solid #cbd5e1; padding: 8px 12px; text-align: center; font-weight: 500;">${idx + 1}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 8px 12px; font-weight: 600; color: var(--primary, #0284c7);">${safeStr(row.partno || '')}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 8px 12px; text-align: center; font-weight: 600;">${safeStr(row.opn_no || '')}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 8px 12px; color: #334155;">${safeStr(row.description || '')}</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 8px 12px; text-align: right; font-weight: 700; color: #047857;">${qty.toLocaleString()}</td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+
+        if (tfoot) {
+            tfoot.innerHTML = `
+                <tr style="border-top: 2px solid #000; background-color: #f1f5f9; font-weight: 700;">
+                    <td colspan="4" style="border: 1px solid #cbd5e1; padding: 10px 12px; text-align: right; text-transform: uppercase;">Total Cumulative Qty Produced:</td>
+                    <td style="border: 1px solid #cbd5e1; padding: 10px 12px; text-align: right; font-size: 1.05rem; color: #047857;">${totalQty.toLocaleString()}</td>
+                </tr>
+            `;
+        }
+    }
+
+    function exportWiproProdExcel() {
+        const dateInput = document.getElementById('wiproProdDate');
+        const targetDate = dateInput && dateInput.value ? dateInput.value : new Date().toISOString().split('T')[0];
+
+        if (!wiproProdCurrentData || wiproProdCurrentData.length === 0) {
+            alert('No data to export.');
+            return;
+        }
+
+        const wb = XLSX.utils.book_new();
+        const wsData = [
+            ["GRS ENGINEERING PVT LTD - WIPRO PRODUCTION REPORT"],
+            [`Date: ${targetDate}`],
+            [],
+            ["Sl No", "Part No", "Opn No", "Description", "Cumulative Qty Produced"]
+        ];
+
+        let totalQty = 0;
+        wiproProdCurrentData.forEach((row, idx) => {
+            const qty = Number(row.qty) || 0;
+            totalQty += qty;
+            wsData.push([
+                idx + 1,
+                row.partno || '',
+                row.opn_no || '',
+                row.description || '',
+                qty
+            ]);
+        });
+
+        wsData.push([]);
+        wsData.push(["Total Cumulative Qty Produced", "", "", "", totalQty]);
+
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        XLSX.utils.book_append_sheet(wb, ws, "Wipro Prod");
+        XLSX.writeFile(wb, `Wipro_Production_Report_${targetDate}.xlsx`);
+    }
+
+    function printWiproProdReport() {
+        const printContents = document.getElementById('wiproProdPrintContainer')?.innerHTML;
+        const dateInput = document.getElementById('wiproProdDate');
+        const targetDate = dateInput && dateInput.value ? dateInput.value : new Date().toISOString().split('T')[0];
+
+        if (!printContents) return;
+
+        const printWindow = window.open('', '', 'height=700,width=900');
+        printWindow.document.write('<html><head><title>Wipro Production Report - ' + targetDate + '</title>');
+        printWindow.document.write('<style>');
+        printWindow.document.write('body { font-family: sans-serif; padding: 20px; color: #000; }');
+        printWindow.document.write('table { width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 20px; }');
+        printWindow.document.write('th, td { border: 1px solid #000; padding: 6px 10px; font-size: 13px; }');
+        printWindow.document.write('th { font-weight: bold; background-color: #f1f5f9; }');
+        printWindow.document.write('</style></head><body>');
+        printWindow.document.write(printContents);
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => { printWindow.print(); }, 250);
+    }
+
 
     // --- DB BACKUP LOGIC (ADMIN ONLY) ---
     document.getElementById('downloadJsonDbBackupBtn')?.addEventListener('click', async () => {
