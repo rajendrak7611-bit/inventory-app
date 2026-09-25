@@ -18392,13 +18392,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const res = await fetch(`/api/production/wipro_prod?date=${encodeURIComponent(targetDate)}`);
-            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+            if (!res.ok) {
+                let errText = `HTTP error! status: ${res.status}`;
+                try {
+                    const errData = await res.json();
+                    if (errData && errData.detail) errText = errData.detail;
+                } catch(e) {}
+                throw new Error(errText);
+            }
             const data = await res.json();
             wiproProdCurrentData = data.items || [];
             renderWiproProdTable();
         } catch (err) {
             console.error('Error fetching Wipro production report:', err);
-            if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: red; padding: 20px;">Failed to load report: ${err.message}</td></tr>`;
+            const safeStr = (s) => (s === null || s === undefined ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'));
+            if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: red; padding: 20px;">Failed to load report: ${safeStr(err.message)}</td></tr>`;
         }
     }
 

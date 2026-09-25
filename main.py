@@ -3877,64 +3877,81 @@ def get_wipro_prod_report(date: Optional[str] = None, db: Session = Depends(get_
             now_ist = get_now_ist()
             target_date = now_ist.strftime("%Y-%m-%d")
         else:
-            target_date = normalize_date_str(str(date).strip())
+            raw_d = str(date).strip().split('T')[0].split(' ')[0]
+            target_date = normalize_date_str(raw_d)
 
-        # Identify WIPRO parts and operation descriptions
+        # 1. Fetch WIPRO parts from part_masters and parts
         wipro_parts = set()
+        pm_id_to_partno = {}
+        try:
+            pm_rows = db.execute(text("SELECT id, partno, customer, department FROM part_masters WHERE UPPER(TRIM(department)) = 'WIPRO' ORDER BY partno;")).mappings().all()
+            for r in pm_rows:
+                p_name = (r.get("partno") or "").strip()
+                if p_name:
+                    wipro_parts.add(p_name.upper())
+                    pm_id_to_partno[str(r.get("id"))] = p_name.upper()
+        except Exception:
+            db.rollback()
+
+        try:
+            pt_rows = db.execute(text("SELECT id, part_no, dept FROM parts WHERE UPPER(TRIM(dept)) = 'WIPRO';")).mappings().all()
+            for r in pt_rows:
+                p_name = (r.get("part_no") or "").strip()
+                if p_name:
+                    wipro_parts.add(p_name.upper())
+                    pm_id_to_partno[str(r.get("id"))] = p_name.upper()
+        except Exception:
+            db.rollback()
+
+        # 2. Fetch operation descriptions (without SQL JOIN to avoid text=integer type mismatch)
         po_map = {}
         try:
-            po_rows = db.execute(text("""
-                SELECT p.partno, po.opn_no, po.description, p.department 
-                FROM part_operations po 
-                JOIN part_masters p ON po.part_id = p.id
-            """)).mappings().all()
+            po_rows = db.execute(text("SELECT part_id, opn_no, description FROM part_operations;")).mappings().all()
             for r in po_rows:
-                p_name = (r.get("partno") or "").strip().upper()
-                d_name = (r.get("department") or "").strip().upper()
-                if d_name == 'WIPRO':
-                    wipro_parts.add(p_name)
-                k = (p_name, str(r.get("opn_no") or "").strip().upper())
-                if k not in po_map and r.get("description"):
-                    po_map[k] = r.get("description").strip()
+                pid = str(r.get("part_id") or "").strip()
+                p_name = pm_id_to_partno.get(pid)
+                opn = str(r.get("opn_no") or "").strip().upper()
+                desc = (r.get("description") or "").strip()
+                if p_name and opn and desc:
+                    k = (p_name, opn)
+                    if k not in po_map:
+                        po_map[k] = desc
         except Exception:
-            pass
+            db.rollback()
 
         try:
-            op_rows = db.execute(text("""
-                SELECT p.part_no, o.opn_no, o.description, p.dept 
-                FROM operations o 
-                JOIN parts p ON o.part_id = p.id
-            """)).mappings().all()
+            op_rows = db.execute(text("SELECT part_id, opn_no, description FROM operations;")).mappings().all()
             for r in op_rows:
-                p_name = (r.get("part_no") or "").strip().upper()
-                d_name = (r.get("dept") or "").strip().upper()
-                if d_name == 'WIPRO':
-                    wipro_parts.add(p_name)
-                k = (p_name, str(r.get("opn_no") or "").strip().upper())
-                if k not in po_map and r.get("description"):
-                    po_map[k] = r.get("description").strip()
+                pid = str(r.get("part_id") or "").strip()
+                p_name = pm_id_to_partno.get(pid)
+                opn = str(r.get("opn_no") or "").strip().upper()
+                desc = (r.get("description") or "").strip()
+                if p_name and opn and desc:
+                    k = (p_name, opn)
+                    if k not in po_map:
+                        po_map[k] = desc
         except Exception:
-            pass
+            db.rollback()
 
+        # 3. Query production_logs safely
+        prod_rows = []
         try:
-            pt_rows = db.execute(text("SELECT part_no, dept FROM parts WHERE UPPER(TRIM(dept)) = 'WIPRO'")).mappings().all()
-            for r in pt_rows:
-                wipro_parts.add((r.get("part_no") or "").strip().upper())
+            prod_rows = db.execute(text("SELECT * FROM production_logs WHERE UPPER(TRIM(dept)) = 'WIPRO';")).mappings().all()
         except Exception:
-            pass
-
-        try:
-            pm_rows = db.execute(text("SELECT partno, department FROM part_masters WHERE UPPER(TRIM(department)) = 'WIPRO'")).mappings().all()
-            for r in pm_rows:
-                wipro_parts.add((r.get("partno") or "").strip().upper())
-        except Exception:
-            pass
-
-        rows = db.execute(text("SELECT * FROM production_logs")).mappings().all()
+            db.rollback()
+            try:
+                prod_rows = db.execute(text("SELECT * FROM production_logs;")).mappings().all()
+            except Exception:
+                db.rollback()
+                prod_rows = []
 
         grouped = {}
-        for r in rows:
-            d_norm = normalize_date_str(r.get("date") or r.get("log_date") or "")
+        for r in prod_rows:
+            raw_log_date = str(r.get("date") or r.get("log_date") or "").strip()
+            if not raw_log_date:
+                continue
+            d_part = raw_log_date.split('T')[0].split(' ')[0].strip()
+            d_norm = normalize_date_str(d_part)
             if d_norm != target_date:
                 continue
 
