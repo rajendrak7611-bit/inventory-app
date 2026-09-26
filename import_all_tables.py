@@ -51,7 +51,7 @@ def import_all_backup_tables():
         total_inserted = 0
         try:
             for table_name, rows in tables.items():
-                if not rows or table_name in ["production_logs", "users"]:
+                if not rows or table_name in ["users"]:
                     continue
                 
                 first_row = rows[0]
@@ -457,9 +457,9 @@ def import_all_backup_tables():
                                 except Exception:
                                     pass
 
-                    # Production Logs
+                    # Production Logs (Already fully created and restored in the dynamic table block)
                     prod_logs_data = tables.get("production_logs", [])
-                    if prod_logs_data:
+                    if False and prod_logs_data:
                         try:
                             conn2.execute(text("DELETE FROM production_logs WHERE id <= 4420;"))
                         except Exception:
