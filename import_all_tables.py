@@ -395,6 +395,14 @@ def import_all_backup_tables():
                     users_data = tables.get("users", [])
                     if users_data:
                         try:
+                            conn2.execute(text("ALTER TABLE users ADD COLUMN password_hash TEXT;"))
+                        except Exception:
+                            pass
+                        try:
+                            conn2.execute(text("ALTER TABLE users ADD COLUMN accessible_screens TEXT;"))
+                        except Exception:
+                            pass
+                        try:
                             conn2.execute(text("DELETE FROM users;"))
                         except Exception:
                             pass
@@ -402,27 +410,21 @@ def import_all_backup_tables():
                             uid = int(safe_float(u.get("id"), 0))
                             uname = (u.get("username") or "").strip()
                             pwhash = u.get("password_hash") or ""
-                            pw = u.get("password") or ""
+                            pw = u.get("password") or "123"
                             role = u.get("role") or "operator"
                             screens = u.get("accessible_screens") or "[]"
                             if uname:
-                                try:
-                                    if uid:
-                                        conn2.execute(text("""
-                                            INSERT INTO users (id, username, password, password_hash, role, accessible_screens)
-                                            VALUES (:id, :username, :password, :password_hash, :role, :accessible_screens);
-                                        """), {"id": uid, "username": uname, "password": pw, "password_hash": pwhash, "role": role, "accessible_screens": screens})
-                                    else:
-                                        conn2.execute(text("""
-                                            INSERT INTO users (username, password, password_hash, role, accessible_screens)
-                                            VALUES (:username, :password, :password_hash, :role, :accessible_screens);
-                                        """), {"username": uname, "password": pw, "password_hash": pwhash, "role": role, "accessible_screens": screens})
-                                except Exception:
+                                inserted_u = False
+                                for insert_try in [
+                                    "INSERT INTO users (id, username, password, password_hash, role, accessible_screens) VALUES (:id, :username, :password, :password_hash, :role, :accessible_screens);",
+                                    "INSERT INTO users (username, password, password_hash, role, accessible_screens) VALUES (:username, :password, :password_hash, :role, :accessible_screens);",
+                                    "INSERT INTO users (id, username, password, role) VALUES (:id, :username, :password, :role);",
+                                    "INSERT INTO users (username, password, role) VALUES (:username, :password, :role);"
+                                ]:
                                     try:
-                                        conn2.execute(text("""
-                                            INSERT INTO users (username, role, accessible_screens)
-                                            VALUES (:username, :role, :accessible_screens);
-                                        """), {"username": uname, "role": role, "accessible_screens": screens})
+                                        conn2.execute(text(insert_try), {"id": uid, "username": uname, "password": pw, "password_hash": pwhash, "role": role, "accessible_screens": screens})
+                                        inserted_u = True
+                                        break
                                     except Exception:
                                         pass
 
