@@ -97,11 +97,14 @@ def import_all_backup_tables():
 
             trans.commit()
             print(f"All {len(tables)} backup tables restored into database!")
+        except Exception as e:
+            trans.rollback()
+            print(f"Backup restoration error: {e}")
 
-            # Sync model tables (machines, operators, parts, production_schedules)
-            with engine.connect() as conn2:
-                t2 = conn2.begin()
-                try:
+    # Sync model tables (machines, operators, parts, production_schedules)
+    with engine.connect() as conn2:
+        t2 = conn2.begin()
+        try:
                     # Departments
                     departments_data = tables.get("departments", [])
                     if departments_data:
@@ -843,12 +846,9 @@ def import_all_backup_tables():
 
                     t2.commit()
                     print("Synced model tables successfully!")
-                except Exception as ex2:
-                    t2.rollback()
-                    print(f"Model tables sync notice: {ex2}")
-        except Exception as e:
-            trans.rollback()
-            print(f"Backup restoration error: {e}")
+        except Exception as ex2:
+            t2.rollback()
+            print(f"Model tables sync notice: {ex2}")
 
 if __name__ == "__main__":
     import_all_backup_tables()

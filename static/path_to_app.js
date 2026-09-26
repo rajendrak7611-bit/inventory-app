@@ -1357,7 +1357,12 @@ document.addEventListener('DOMContentLoaded', () => {
             globalPartMasters = Array.isArray(parts) ? parts : [];
             partMasterBody.innerHTML = '';
             if (parts.length === 0) {
-                partMasterBody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted)">No part masters found.</td></tr>';
+                partMasterBody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding: 30px; color:var(--text-muted)">
+                    <div style="font-size: 1.05rem; margin-bottom: 12px; font-weight: 600; color: #475569;">No part masters found. Database appears empty.</div>
+                    <button class="btn btn-primary" onclick="triggerRestoreFromBackup()" style="background-color: #ea580c; border-color: #ea580c; padding: 8px 18px; font-size: 0.95rem; border-radius: 6px; cursor: pointer;">
+                        <i class="fas fa-undo"></i> Restore All Data from System Backup
+                    </button>
+                </td></tr>`;
                 return;
             }
             parts.forEach(p => {
@@ -18600,6 +18605,34 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.innerHTML = origText;
         }
     });
+
+    window.triggerRestoreFromBackup = async function() {
+        if (!confirm('Are you sure you want to restore all 32 database tables from the system backup archive? This will reload all Part Masters, Operations, Machines, Operators, Schedules, Inventory, and Logs.')) return;
+        const btns = document.querySelectorAll('#restoreDbFromBackupBtn');
+        btns.forEach(b => {
+            b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Restoring All Tables...';
+            b.disabled = true;
+        });
+        try {
+            const res = await fetch('/api/restore-from-backup', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok && !data.error) {
+                alert(data.message || 'All 32 database tables restored successfully!');
+                window.location.reload();
+            } else {
+                alert('Restore notice: ' + (data.error || res.statusText));
+            }
+        } catch(e) {
+            alert('Failed to trigger restore: ' + e.message);
+        } finally {
+            btns.forEach(b => {
+                b.innerHTML = '<i class="fas fa-undo"></i> Restore Database From Backup';
+                b.disabled = false;
+            });
+        }
+    };
+    document.getElementById('restoreDbFromBackupBtn')?.addEventListener('click', window.triggerRestoreFromBackup);
+
 
     // --- ATTENDANCE VS LOGIN HOURS REPORT LOGIC ---
     let currentAttVsLoginData = null;

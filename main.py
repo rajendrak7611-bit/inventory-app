@@ -680,6 +680,30 @@ def run_startup_migrations():
                         pass
     except Exception as e:
         print("Startup migration note:", e)
+    
+    # Auto-restore all 32 tables from full_backup.json if database is currently empty
+    try:
+        with engine.connect() as chk_conn:
+            parts_count = 0
+            try:
+                parts_count = chk_conn.execute(text("SELECT COUNT(*) FROM part_masters;")).scalar() or 0
+            except Exception:
+                try:
+                    parts_count = chk_conn.execute(text("SELECT COUNT(*) FROM parts;")).scalar() or 0
+                except Exception:
+                    parts_count = 0
+
+            if parts_count == 0:
+                print("Empty database detected on startup! Automatically restoring all 32 tables from full_backup.json...")
+                try:
+                    import import_all_tables
+                    import_all_tables.import_all_backup_tables()
+                    print("All 32 tables restored successfully on startup!")
+                except Exception as e_res:
+                    print("Auto-restore notice on startup:", e_res)
+    except Exception as e_chk:
+        print("Database check notice:", e_chk)
+
     try:
         import_breakdown_excel()
     except Exception as e:
